@@ -1759,7 +1759,7 @@
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                         <div className="bg-slate-50 text-slate-700 border-b border-slate-200 text-center py-1.5 font-bold text-sm">라 인</div>
-                        <div className="p-2 space-y-1 overflow-y-auto" style={{maxHeight: '600px'}}>
+                        <div className="p-2 space-y-1">
                           <label className="flex items-center gap-1 text-xs cursor-pointer">
                             <input type="checkbox" checked={odSelectedLines.includes('ALL')} onChange={(e) => setOdSelectedLines(e.target.checked ? ['ALL'] : [])} />
                             <span className="font-bold">모두</span>
@@ -1774,7 +1774,7 @@
                       </div>
                       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                         <div className="bg-slate-50 text-slate-700 border-b border-slate-200 text-center py-1.5 font-bold text-sm">아이템</div>
-                        <div className="p-2 space-y-1 overflow-y-auto" style={{maxHeight: '600px'}}>
+                        <div className="p-2 space-y-1">
                           <label className="flex items-center gap-1 text-xs cursor-pointer">
                             <input type="checkbox" checked={odSelectedItems.includes('ALL')} onChange={(e) => setOdSelectedItems(e.target.checked ? ['ALL'] : [])} />
                             <span className="font-bold">모두</span>
@@ -2437,7 +2437,7 @@
                     </div>
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                       <div className="bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm">제품</div>
-                      <div className="p-3 space-y-1.5 max-h-72 overflow-y-auto">
+                      <div className="p-3 space-y-1.5">
                         <label className="flex items-center gap-2 text-xs cursor-pointer">
                           <input type="checkbox" checked={pmSelectedItems.includes('ALL')} onChange={(e) => setPmSelectedItems(e.target.checked ? ['ALL'] : [])} className="accent-indigo-600" />
                           <span className="font-bold">모두 선택</span>
