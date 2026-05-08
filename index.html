@@ -1033,8 +1033,9 @@
         { id: 'goodQty',        label: '양품수량',      group: '수량', desc: '최종 양품수량' },
         { id: 'defects',        label: '2차불량',       group: '수량', desc: '설정된 공정 및 유형의 2차불량' },
         { id: 'rework',         label: '1차불량',       group: '수량', desc: '설정된 공정 및 유형의 1차불량 (재작업)' },
-        { id: 'expectedOutput', label: 'CT수량',        group: '수량', desc: '작업시간 × Ideal CT ÷ 435분' },
-        { id: 'baseQty',        label: 'Ideal CT',      group: '수량', desc: '기준 CT 수량' },
+        { id: 'expectedOutput', label: 'CT수량',        group: '수량', desc: '작업시간(분) × 60 ÷ Ideal CT' },
+        { id: 'idealCT',        label: 'Ideal CT',      group: '수량', desc: '기준시간 × 60 ÷ 기본수량 (초/개)' },
+        { id: 'baseQty',        label: '기본수량',      group: '수량', desc: '기준시간 동안의 표준 생산량 (개)' },
         { id: 'totalQty',       label: '총수량',        group: '수량', desc: '양품수량 + 2차불량 (투입수량)' },
         { id: 'productionTime', label: '생산시간',      group: '시간', desc: '작업 시작~종료 시간 (분)' },
         { id: 'plannedDt',      label: '계획비가동',    group: '시간', desc: '계획 카테고리 비가동 합계 (분)' },
@@ -1564,9 +1565,11 @@
         const loadTime = productionTime - plannedDt;
         const operatingTime = Math.max(0, loadTime - unplannedDt);
         const goodQty = parseFloat(log.goodQuantity) || 0;
-        const expectedOutput = (baseQty && ctBaseMinutes > 0) ? (operatingTime / ctBaseMinutes) * baseQty : 0;
+        const baseQtyNum = parseFloat(baseQty) || 0;
+        const expectedOutput = (baseQtyNum && ctBaseMinutes > 0) ? (operatingTime / ctBaseMinutes) * baseQtyNum : 0;
+        const idealCT = (baseQtyNum > 0 && ctBaseMinutes > 0) ? (ctBaseMinutes * 60 / baseQtyNum) : 0;
         return { goodQty, defects, rework, loadTime, operatingTime, expectedOutput,
-                 productionTime, plannedDt, unplannedDt, baseQty: parseFloat(baseQty) || 0 };
+                 productionTime, plannedDt, unplannedDt, baseQty: baseQtyNum, idealCT };
       };
 
       // 수식 평가기: 토큰 배열 + values(변수 맵) → 숫자
@@ -2955,6 +2958,16 @@
               const endD = new Date(odEnd);
               endD.setHours(23,59,59,999);
 
+              // OEE 미포함 아이템 체크 헬퍼
+              const isItemExcluded = (section, itemName) => {
+                if (!itemName) return false;
+                const data = section === 'TCP' ? tcpData : feData;
+                const items = data?.settings?.[section]?.items;
+                if (!Array.isArray(items)) return false;
+                const itemDef = items.find(i => i.item === itemName);
+                return itemDef?.excludeFromOEE === true;
+              };
+
               // Filter logs by date range and section
               const baseLogs = allLogs.filter(l => {
                 const d = new Date(l.productionDate);
@@ -2962,6 +2975,7 @@
                 if (!odSections.includes(l.section)) return false;
                 if (l.section === 'TCP' && !['1PC','2PC','Nospin'].includes(l.lineName)) return false;
                 if (l.section === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return false;
+                if (isItemExcluded(l.section, l.item)) return false;
                 const shift = l.shift || '주간';
                 if (!odShifts.includes(shift)) return false;
                 return true;
@@ -2974,6 +2988,7 @@
                   if (!odSections.includes(l.section)) return;
                   if (l.section === 'TCP' && !['1PC','2PC','Nospin'].includes(l.lineName)) return;
                   if (l.section === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return;
+                  if (isItemExcluded(l.section, l.item)) return;
                   s.add(l.lineName);
                 });
                 return Array.from(s).sort();
@@ -2987,6 +3002,7 @@
                   if (l.section === 'TCP' && !['1PC','2PC','Nospin'].includes(l.lineName)) return;
                   if (l.section === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return;
                   if (!odSelectedLines.includes('ALL') && !odSelectedLines.includes(l.lineName)) return;
+                  if (isItemExcluded(l.section, l.item)) return;
                   if (l.item) s.add(l.item);
                 });
                 return Array.from(s).sort();
