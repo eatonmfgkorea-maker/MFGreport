@@ -4618,6 +4618,23 @@
 
             {activeTab === 'achievement' && (() => {
               // TCP 엑셀 파싱
+              // Drive 자동 저장 (silent, fire-and-forget)
+              const autoSaveAchToDrive = (newAchPlanData) => {
+                fetch(GAS_URL, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                  body: JSON.stringify({
+                    filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
+                    data: {
+                      version: 4,
+                      exportedAt: new Date().toISOString(),
+                      oeeManual, ftfrConfig, formulaConfig,
+                      achPlanData: newAchPlanData
+                    }
+                  })
+                }).catch(() => {});
+              };
+              
               const handleTcpPlanUpload = async (file) => {
                 try {
                   if (typeof XLSX === 'undefined') { alert('엑셀 라이브러리 로딩 중입니다'); return; }
@@ -4716,8 +4733,10 @@
                     alert(`시트 ${sheetCount}개 발견했지만 데이터를 추출하지 못했습니다.\nR12(Total Plan)/R13(Total Actual) 행 형식을 확인해주세요.`);
                     return;
                   }
-                  saveAchPlanData({ ...achPlanData, tcp: { ...(achPlanData.tcp || {}), ...result } });
-                  alert(`TCP 계획 로드 완료: ${dateCount}일 (${sheetCount}개 시트)\n※ 기존 데이터에 병합됨`);
+                  const newAchData = { ...achPlanData, tcp: { ...(achPlanData.tcp || {}), ...result } };
+                  saveAchPlanData(newAchData);
+                  autoSaveAchToDrive(newAchData);
+                  alert(`TCP 계획 로드 완료: ${dateCount}일 (${sheetCount}개 시트)\n※ 기존 데이터에 병합됨\n※ Drive 자동 저장 중`);
                 } catch (err) {
                   alert('TCP 엑셀 파싱 오류: ' + err.message);
                 }
@@ -4804,8 +4823,10 @@
                     alert('FE 계획/실적 데이터를 찾지 못했습니다.\n"계획검토" 시트의 "계획합계"/"실적합계" 행을 확인해주세요.');
                     return;
                   }
-                  saveAchPlanData({ ...achPlanData, fe: { ...(achPlanData.fe || {}), ...result } });
-                  alert(`FE 계획 로드 완료: ${dateCount}일\n※ 기존 데이터에 병합됨`);
+                  const newAchData = { ...achPlanData, fe: { ...(achPlanData.fe || {}), ...result } };
+                  saveAchPlanData(newAchData);
+                  autoSaveAchToDrive(newAchData);
+                  alert(`FE 계획 로드 완료: ${dateCount}일\n※ 기존 데이터에 병합됨\n※ Drive 자동 저장 중`);
                 } catch (err) {
                   alert('FE 엑셀 파싱 오류: ' + err.message);
                 }
@@ -5096,7 +5117,13 @@
                         ))}
                       </div>
                       {(tcpDays > 0 || feDays > 0) && (
-                        <button onClick={() => { if (confirm('계획 데이터를 모두 삭제하시겠습니까?')) saveAchPlanData({tcp:{},fe:{}}); }}
+                        <button onClick={() => {
+                          if (confirm('계획 데이터를 모두 삭제하시겠습니까?\n(Drive에도 빈 상태로 저장됩니다)')) {
+                            const empty = {tcp:{},fe:{}};
+                            saveAchPlanData(empty);
+                            autoSaveAchToDrive(empty);
+                          }
+                        }}
                           className="px-3 py-1 rounded text-sm bg-rose-100 text-rose-700 hover:bg-rose-200">🗑️ 데이터 삭제</button>
                       )}
                     </div>
@@ -7049,16 +7076,82 @@
 
                     {/* Table view: monthly defect / rework by line (TCP+FE combined) */}
                     {fdViewMode === 'table' && (() => {
-                      // ===== Summary table by group (FEPC / FTIV / TCP) =====
-                      // Build per-group monthly aggregates: { good, defect, rework }
-                      const groupDefs = [
-                        { key: 'FEPC', label: 'FEPC', desc: 'FE excluding FTIV',
-                          match: (l) => l.section === 'FE' && l.lineName !== 'FTIV' && !isFtfrExcludedLine('FE', l.lineName) },
-                        { key: 'FTIV', label: 'FTIV', desc: 'FE FTIV only',
-                          match: (l) => l.section === 'FE' && l.lineName === 'FTIV' },
-                        { key: 'TCP', label: 'TCP', desc: 'TCP all',
-                          match: (l) => l.section === 'TCP' && !isFtfrExcludedLine('TCP', l.lineName) },
-                      ];
+                      // FE의 ICV 머지 (OLD ICV + NEW ICV → ICV)
+                      const feDisplayLine = (lineName) => {
+                        const resolved = resolveLineName('FE', lineName);
+                        if (resolved === 'OLD ICV' || resolved === 'NEW ICV') return 'ICV';
+                        return resolved;
+                      };
+                      
+                      // ===== Summary table by line group =====
+                      // 1) 총합계 그룹 먼저, 2) 라인별 세부 그룹
+                      const groupDefs = [];
+                      
+                      if (fdSections.includes('TCP')) {
+                        // TCP 총합계
+                        groupDefs.push({
+                          key: 'TCP/_total',
+                          label: '총합계',
+                          section: 'TCP',
+                          sectionLabel: 'TCP',
+                          isTotal: true,
+                          match: (l) => l.section === 'TCP' && ['1PC','2PC','Nospin'].includes(l.lineName) && !isFtfrExcludedLine('TCP', l.lineName)
+                        });
+                        // TCP 라인별
+                        ['1PC', '2PC', 'Nospin'].forEach(line => {
+                          if (isFtfrExcludedLine('TCP', line)) return;
+                          groupDefs.push({
+                            key: `TCP/${line}`,
+                            label: line,
+                            section: 'TCP',
+                            sectionLabel: 'TCP',
+                            match: (l) => l.section === 'TCP' && l.lineName === line
+                          });
+                        });
+                      }
+                      
+                      if (fdSections.includes('FE')) {
+                        // FE 총합계
+                        groupDefs.push({
+                          key: 'FE/_total',
+                          label: '총합계',
+                          section: 'FE',
+                          sectionLabel: 'FE',
+                          isTotal: true,
+                          match: (l) => l.section === 'FE' && !(l.lineName === 'ATV' || l.lineName === 'ATV M/C') && !isFtfrExcludedLine('FE', l.lineName)
+                        });
+                        // FE 라인별 (ICV 머지)
+                        const feLines = getSectionDisplayLines('FE');
+                        const lineSet = new Set();
+                        feLines.forEach(line => {
+                          if (line === 'ATV' || line === 'ATV M/C') return;
+                          if (isFtfrExcludedLine('FE', line)) return;
+                          if (line === 'OLD ICV' || line === 'NEW ICV') {
+                            lineSet.add('ICV');
+                          } else {
+                            lineSet.add(line);
+                          }
+                        });
+                        // 사용자 지정 순서: A/FLVV M/FLVV C/FLVV A/GVV M/GVV LVS ICV UCC MEMBRANE 그 외
+                        const FE_LINE_ORDER = ['A/FLVV', 'M/FLVV', 'C/FLVV', 'A/GVV', 'M/GVV', 'LVS', 'ICV', 'UCC', 'MEMBRANE'];
+                        const sortedFeLines = Array.from(lineSet).sort((a, b) => {
+                          const ai = FE_LINE_ORDER.indexOf(a);
+                          const bi = FE_LINE_ORDER.indexOf(b);
+                          if (ai !== -1 && bi !== -1) return ai - bi;
+                          if (ai !== -1) return -1;
+                          if (bi !== -1) return 1;
+                          return a.localeCompare(b);
+                        });
+                        sortedFeLines.forEach(line => {
+                          groupDefs.push({
+                            key: `FE/${line}`,
+                            label: line,
+                            section: 'FE',
+                            sectionLabel: 'FE',
+                            match: (l) => l.section === 'FE' && !(l.lineName === 'ATV' || l.lineName === 'ATV M/C') && feDisplayLine(l.lineName) === line
+                          });
+                        });
+                      }
 
                       // Initialize summary structure
                       const summary = {};
@@ -7067,7 +7160,10 @@
                         for (let m = 1; m <= 12; m++) summary[g.key][m] = { good: 0, defect: 0, rework: 0 };
                       });
 
-                      // Iterate all production logs in fdYear, classify into group, sum metrics
+                      // 총합계가 아닌 라인 그룹들만 로그 매칭에 사용
+                      const nonTotalGroups = groupDefs.filter(g => !g.isTotal);
+
+                      // Iterate all production logs in fdYear, classify into non-total group, sum metrics
                       const yearLogsAll = allLogs.filter(l => {
                         const d = new Date(l.productionDate);
                         return d.getFullYear() === fdYear;
@@ -7076,7 +7172,7 @@
                       const logToMonth = {}; // logId → month
                       yearLogsAll.forEach(l => {
                         const m = new Date(l.productionDate).getMonth() + 1;
-                        for (const g of groupDefs) {
+                        for (const g of nonTotalGroups) {
                           if (g.match(l)) {
                             logToGroup[l.id] = g.key;
                             logToMonth[l.id] = m;
@@ -7106,6 +7202,19 @@
                           summary[gk][m].rework += parseFloat(rw.quantity) || 0;
                         });
                       });
+                      
+                      // 총합계 그룹 계산 (같은 섹션의 개별 라인 합산)
+                      const totalGroups = groupDefs.filter(g => g.isTotal);
+                      totalGroups.forEach(tg => {
+                        const lineGroups = nonTotalGroups.filter(g => g.section === tg.section);
+                        for (let m = 1; m <= 12; m++) {
+                          lineGroups.forEach(lg => {
+                            summary[tg.key][m].good += summary[lg.key][m].good;
+                            summary[tg.key][m].defect += summary[lg.key][m].defect;
+                            summary[tg.key][m].rework += summary[lg.key][m].rework;
+                          });
+                        }
+                      });
 
                       const fmtNum = (v) => v > 0 ? Math.round(v).toLocaleString() : '-';
                       const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -7121,6 +7230,9 @@
                           ytd.input += c.good + c.defect;
                           ytd.scrap += c.defect;
                         }
+                        
+                        // 빈 그룹 (전체 YTD가 0) 스킵
+                        if (ytd.good === 0 && ytd.defect === 0 && ytd.rework === 0) return null;
 
                         const rows = [
                           { en: '# of Unit not pass first time final test', ko: '1차불량', getter: (m) => summary[g.key][m].rework, ytd: ytd.rework },
@@ -7129,10 +7241,20 @@
                           { en: 'total # of units tested',                  ko: '투입수량', getter: (m) => summary[g.key][m].good + summary[g.key][m].defect, ytd: ytd.input },
                           { en: '',                                          ko: '폐기수량', getter: (m) => summary[g.key][m].defect, ytd: ytd.scrap },
                         ];
+                        
+                        // 섹션별 색상
+                        const sectionColor = g.section === 'TCP' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700';
+                        // 총합계 그룹은 강조
+                        const containerCls = g.isTotal ? 'mb-4 ring-2 ring-slate-300 rounded-lg p-2' : 'mb-4';
+                        const labelCls = g.isTotal ? 'font-bold text-base text-slate-900' : 'text-sm';
 
                         return (
-                          <div key={g.key} className="mb-4">
-                            <div className="font-bold text-slate-800 text-sm mb-1.5 px-1">{g.label}</div>
+                          <div key={g.key} className={containerCls}>
+                            <div className={`text-slate-800 mb-1.5 px-1 flex items-center gap-2 font-bold ${labelCls}`}>
+                              <span className={`px-2 py-0.5 rounded text-xs ${sectionColor}`}>{g.sectionLabel}</span>
+                              <span>{g.label}</span>
+                              {g.isTotal && <span className="text-xs text-slate-500 font-normal">(전체 라인 합계)</span>}
+                            </div>
                             <div className="overflow-x-auto bg-white rounded-lg border border-slate-200">
                               <table className="w-full text-[11px] border-collapse">
                                 <thead>
@@ -7283,13 +7405,35 @@
                         </div>
                       );
 
+                      // 섹션별로 그룹 분류
+                      const tcpGroups = groupDefs.filter(g => g.section === 'TCP');
+                      const feGroups = groupDefs.filter(g => g.section === 'FE');
+                      
+                      const renderSection = (sectionLabel, sectionColor, groups) => {
+                        if (groups.length === 0) return null;
+                        // 빈 그룹 미리 필터링 (모두 0이면 섹션 자체를 안 보임)
+                        const renderedGroups = groups.map(g => renderSummaryGroup(g)).filter(x => x !== null);
+                        if (renderedGroups.length === 0) return null;
+                        return (
+                          <div key={sectionLabel} className="mb-6 last:mb-0">
+                            <div className={`${sectionColor} text-white px-3 py-2 rounded-t-lg font-bold text-sm`}>
+                              📂 {sectionLabel} 섹션
+                            </div>
+                            <div className="border border-t-0 border-slate-200 rounded-b-lg p-3 bg-slate-50/30">
+                              {renderedGroups}
+                            </div>
+                          </div>
+                        );
+                      };
+                      
                       return (
                         <div className="space-y-4">
-                          {/* Summary tables by group (FEPC / FTIV / TCP) */}
+                          {/* 섹션별 그룹 요약 */}
                           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                             <div className="bg-slate-700 text-white px-4 py-2.5 font-bold text-sm">📋 그룹별 월별 요약 ({fdYear}년)</div>
                             <div className="p-3">
-                              {groupDefs.map(g => renderSummaryGroup(g))}
+                              {renderSection('TCP', 'bg-blue-600', tcpGroups)}
+                              {renderSection('FE', 'bg-emerald-600', feGroups)}
                             </div>
                           </div>
                           {renderTable('defect', '🔴 불량', 'bg-rose-600')}
