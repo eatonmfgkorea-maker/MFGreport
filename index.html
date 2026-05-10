@@ -993,6 +993,27 @@
         setFtfrConfig(next);
         try { localStorage.setItem('mfg_ftfr_config', JSON.stringify(next)); } catch {}
       };
+      
+      // 달성율 탭 state — 엑셀에서 로드한 계획/실적 데이터
+      // 구조: { tcp: {'YYYY-MM-DD': {plan, actual}}, fe: {...} }
+      const [achPlanData, setAchPlanData] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mfg_ach_plan') || '{"tcp":{},"fe":{}}'); } catch { return {tcp:{},fe:{}}; }
+      });
+      const [achViewMode, setAchViewMode] = useState('daily'); // 'daily' | 'weekly' | 'monthly'
+      const [achStartDate, setAchStartDate] = useState(() => {
+        const d = new Date(); d.setDate(1);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      });
+      const [achEndDate, setAchEndDate] = useState(() => {
+        const d = new Date(); d.setMonth(d.getMonth()+1); d.setDate(0);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      });
+      const [achSections, setAchSections] = useState(['TCP','FE']);
+      const [achBreakdown, setAchBreakdown] = useState('total'); // 'total' | 'line' | 'item'
+      const saveAchPlanData = (next) => {
+        setAchPlanData(next);
+        try { localStorage.setItem('mfg_ach_plan', JSON.stringify(next)); } catch {}
+      };
 
       // Formula config — OEE/FTFR 수식 커스터마이즈
       // 각 수식은 토큰 배열: [{type:'field', id:'goodQty'}, {type:'op', op:'+'}, ...]
@@ -1114,7 +1135,7 @@
         try {
           const payload = {
             filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-            data: { version: 3, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig }
+            data: { version: 4, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData }
           };
           const res = await fetch(GAS_URL, {
             method: 'POST',
@@ -1122,7 +1143,7 @@
             body: JSON.stringify(payload)
           });
           const result = await res.json();
-          if (result.ok) alert(`설정 백업 완료\n${result.name}\n\n※ 백업 내용: OEE 수동입력, FTFR 집계 설정\n※ TCP/FE 데이터는 생산관리시스템에서 자동 로드됩니다`);
+          if (result.ok) alert(`설정 백업 완료\n${result.name}\n\n※ 백업 내용: OEE 수동입력, FTFR 집계 설정, 달성율 계획 데이터\n※ TCP/FE 데이터는 생산관리시스템에서 자동 로드됩니다`);
           else alert('백업 실패: ' + (result.error || 'unknown'));
         } catch (err) {
           alert('백업 오류: ' + err.message);
@@ -1167,8 +1188,12 @@
               setFormulaConfig(d.formulaConfig || DEFAULT_FORMULAS);
               try { localStorage.setItem('mfg_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS)); } catch {}
             }
+            if (d.achPlanData !== undefined) {
+              setAchPlanData(d.achPlanData || {tcp:{},fe:{}});
+              try { localStorage.setItem('mfg_ach_plan', JSON.stringify(d.achPlanData || {tcp:{},fe:{}})); } catch {}
+            }
             setShowDriveLoad(false);
-            alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식이 복원되었습니다');
+            alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성율 계획 데이터가 복원되었습니다');
           } else {
             alert('복원 실패: ' + (result.error || 'unknown'));
           }
@@ -1263,6 +1288,10 @@
                   if (d.formulaConfig !== undefined) {
                     setFormulaConfig(d.formulaConfig || DEFAULT_FORMULAS);
                     try { localStorage.setItem('mfg_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS)); } catch {}
+                  }
+                  if (d.achPlanData !== undefined) {
+                    setAchPlanData(d.achPlanData || {tcp:{},fe:{}});
+                    try { localStorage.setItem('mfg_ach_plan', JSON.stringify(d.achPlanData || {tcp:{},fe:{}})); } catch {}
                   }
                 }
               } catch {}
@@ -2229,6 +2258,7 @@
         { id: 'defect',    icon: '🔴', label: '불량' },
         { id: 'rework',    icon: '♻️', label: '재작업' },
         { id: 'downtime',  icon: '⏸️', label: '비가동' },
+        { id: 'achievement', icon: '🎯', label: '달성율' },
         { id: 'pcsmh',     icon: '👤', label: 'PCS/MH' },
         { id: 'tool',      icon: '🔧', label: 'Tool 교체' },
         { id: 'workhour',  icon: '⏱️', label: 'Working Hour' },
@@ -4582,6 +4612,570 @@
                       </>
                     )}
                   </div>
+                </div>
+              );
+            })()}
+
+            {activeTab === 'achievement' && (() => {
+              // TCP 엑셀 파싱
+              const handleTcpPlanUpload = async (file) => {
+                try {
+                  if (typeof XLSX === 'undefined') { alert('엑셀 라이브러리 로딩 중입니다'); return; }
+                  const buf = await file.arrayBuffer();
+                  const wb = XLSX.read(buf, { cellDates: false, cellNF: false });
+                  const result = {};
+                  let sheetCount = 0;
+                  
+                  wb.SheetNames.forEach(sn => {
+                    const m = sn.match(/^(\d{2})_(\d{1,2})월$/);
+                    if (!m) return;
+                    sheetCount++;
+                    const year = 2000 + parseInt(m[1]);
+                    const month = parseInt(m[2]);
+                    
+                    const ws = wb.Sheets[sn];
+                    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+                    if (aoa.length < 14) return;
+                    
+                    // R3(idx 2): 일자 헤더, K열(idx 10)부터
+                    const dateRow = aoa[2] || [];
+                    const planRow = aoa[11] || [];   // R12: Total Plan
+                    const actualRow = aoa[12] || []; // R13: Total Actual
+                    
+                    // 일자→컬럼 매핑
+                    const dateColMap = {}; // {dateStr: colIdx}
+                    for (let c = 10; c < dateRow.length; c++) {
+                      const dv = dateRow[c];
+                      let dateStr = null;
+                      if (dv instanceof Date) {
+                        dateStr = `${dv.getFullYear()}-${String(dv.getMonth()+1).padStart(2,'0')}-${String(dv.getDate()).padStart(2,'0')}`;
+                      } else if (typeof dv === 'number') {
+                        const d = XLSX.SSF.parse_date_code(dv);
+                        if (d) dateStr = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+                      } else if (typeof dv === 'string') {
+                        const mm = dv.match(/(\d{4})-(\d{2})-(\d{2})/);
+                        if (mm) dateStr = `${mm[1]}-${mm[2]}-${mm[3]}`;
+                      }
+                      if (!dateStr) continue;
+                      const [yy, mn] = dateStr.split('-').map(Number);
+                      if (yy !== year || mn !== month) continue;
+                      dateColMap[dateStr] = c;
+                    }
+                    
+                    // R12/R13에서 Total 추출
+                    Object.entries(dateColMap).forEach(([dateStr, c]) => {
+                      const plan = parseFloat(planRow[c]) || 0;
+                      const actual = parseFloat(actualRow[c]) || 0;
+                      if (!result[dateStr]) result[dateStr] = { plan: 0, actual: 0, items: [] };
+                      result[dateStr].plan = plan;
+                      result[dateStr].actual = actual;
+                    });
+                    
+                    // R19+ per P/No 데이터 추출
+                    // Column: P/No=idx 3, Line(Part)=idx 4, P/A=idx 6
+                    // 행 그룹: 같은 P/No의 plan 행들 합산, actual 행들 합산
+                    const itemAcc = {}; // {dateStr: {pno|line: {plan, actual, pno, line}}}
+                    for (let r = 18; r < aoa.length; r++) {  // 0-indexed 18 = R19
+                      const row = aoa[r];
+                      if (!row) continue;
+                      const pno = String(row[3] || '').trim();
+                      const line = String(row[4] || '').trim();
+                      const pa = String(row[6] || '').trim();
+                      if (!pno || !pa) continue;
+                      
+                      let kind = null;
+                      if (pa.includes('P/Plan')) kind = 'plan';
+                      else if (pa.includes('Actual')) kind = 'actual';
+                      else continue;
+                      
+                      Object.entries(dateColMap).forEach(([dateStr, c]) => {
+                        const v = parseFloat(row[c]) || 0;
+                        if (v === 0) return;
+                        if (!itemAcc[dateStr]) itemAcc[dateStr] = {};
+                        const key = `${pno}__${line}`;
+                        if (!itemAcc[dateStr][key]) {
+                          itemAcc[dateStr][key] = { pno, line, plan: 0, actual: 0 };
+                        }
+                        itemAcc[dateStr][key][kind] += v;
+                      });
+                    }
+                    
+                    // items 저장
+                    Object.entries(itemAcc).forEach(([dateStr, kvMap]) => {
+                      if (!result[dateStr]) result[dateStr] = { plan: 0, actual: 0, items: [] };
+                      result[dateStr].items = Object.values(kvMap).filter(it => it.plan > 0 || it.actual > 0);
+                    });
+                  });
+                  
+                  const dateCount = Object.keys(result).length;
+                  if (sheetCount === 0) {
+                    alert('TCP 월별 시트(예: 26_05월)를 찾지 못했습니다.');
+                    return;
+                  }
+                  if (dateCount === 0) {
+                    alert(`시트 ${sheetCount}개 발견했지만 데이터를 추출하지 못했습니다.\nR12(Total Plan)/R13(Total Actual) 행 형식을 확인해주세요.`);
+                    return;
+                  }
+                  saveAchPlanData({ ...achPlanData, tcp: { ...(achPlanData.tcp || {}), ...result } });
+                  alert(`TCP 계획 로드 완료: ${dateCount}일 (${sheetCount}개 시트)\n※ 기존 데이터에 병합됨`);
+                } catch (err) {
+                  alert('TCP 엑셀 파싱 오류: ' + err.message);
+                }
+              };
+              
+              // FE 엑셀 파싱
+              const handleFePlanUpload = async (file) => {
+                try {
+                  if (typeof XLSX === 'undefined') { alert('엑셀 라이브러리 로딩 중입니다'); return; }
+                  const buf = await file.arrayBuffer();
+                  const wb = XLSX.read(buf, { cellDates: false });
+                  if (!wb.SheetNames.includes('계획검토')) {
+                    alert('FE 파일에 "계획검토" 시트가 없습니다.');
+                    return;
+                  }
+                  const ws = wb.Sheets['계획검토'];
+                  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+                  if (aoa.length < 6) return;
+                  
+                  // R5(idx 4): 일자 헤더, N열(idx 13)부터
+                  // 컬럼: 대분류=idx 5, 중분류=idx 6, 품명=idx 7, 품번=idx 8, 라벨=idx 11
+                  const dateRow = aoa[4] || [];
+                  const dateColMap = {};
+                  for (let c = 13; c < dateRow.length; c++) {
+                    const dv = dateRow[c];
+                    let dateStr = null;
+                    if (dv instanceof Date) {
+                      dateStr = `${dv.getFullYear()}-${String(dv.getMonth()+1).padStart(2,'0')}-${String(dv.getDate()).padStart(2,'0')}`;
+                    } else if (typeof dv === 'number') {
+                      const d = XLSX.SSF.parse_date_code(dv);
+                      if (d) dateStr = `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+                    } else if (typeof dv === 'string') {
+                      const mm = dv.match(/(\d{4})-(\d{2})-(\d{2})/);
+                      if (mm) dateStr = `${mm[1]}-${mm[2]}-${mm[3]}`;
+                    }
+                    if (dateStr) dateColMap[dateStr] = c;
+                  }
+                  
+                  // 일자별 totals + per-item 누적
+                  const totals = {}; // {dateStr: {plan, actual}}
+                  const itemAcc = {}; // {dateStr: {pno: {pno, line, plan, actual}}}
+                  
+                  for (let r = 5; r < aoa.length; r++) {
+                    const row = aoa[r];
+                    if (!row) continue;
+                    const label = String(row[11] || '').trim();
+                    if (label !== '계획합계' && label !== '실적합계') continue;
+                    
+                    const line = String(row[5] || '').trim() || '(미지정)'; // 대분류
+                    const pno = String(row[8] || '').trim();
+                    if (!pno) continue;
+                    
+                    const kind = label === '계획합계' ? 'plan' : 'actual';
+                    
+                    Object.entries(dateColMap).forEach(([dateStr, c]) => {
+                      const v = parseFloat(row[c]) || 0;
+                      if (v === 0) return;
+                      
+                      // totals 누적
+                      if (!totals[dateStr]) totals[dateStr] = { plan: 0, actual: 0 };
+                      totals[dateStr][kind] += v;
+                      
+                      // per-item 누적
+                      if (!itemAcc[dateStr]) itemAcc[dateStr] = {};
+                      const key = `${pno}__${line}`;
+                      if (!itemAcc[dateStr][key]) {
+                        itemAcc[dateStr][key] = { pno, line, plan: 0, actual: 0 };
+                      }
+                      itemAcc[dateStr][key][kind] += v;
+                    });
+                  }
+                  
+                  const result = {};
+                  Object.entries(totals).forEach(([dateStr, t]) => {
+                    result[dateStr] = {
+                      plan: t.plan,
+                      actual: t.actual,
+                      items: Object.values(itemAcc[dateStr] || {}).filter(it => it.plan > 0 || it.actual > 0)
+                    };
+                  });
+                  
+                  const dateCount = Object.keys(result).length;
+                  if (dateCount === 0) {
+                    alert('FE 계획/실적 데이터를 찾지 못했습니다.\n"계획검토" 시트의 "계획합계"/"실적합계" 행을 확인해주세요.');
+                    return;
+                  }
+                  saveAchPlanData({ ...achPlanData, fe: { ...(achPlanData.fe || {}), ...result } });
+                  alert(`FE 계획 로드 완료: ${dateCount}일\n※ 기존 데이터에 병합됨`);
+                } catch (err) {
+                  alert('FE 엑셀 파싱 오류: ' + err.message);
+                }
+              };
+              
+              // 기간 내 날짜 목록
+              const getDatesInRange = (start, end) => {
+                const dates = [];
+                const sd = new Date(start);
+                const ed = new Date(end);
+                for (let d = new Date(sd); d <= ed; d.setDate(d.getDate()+1)) {
+                  dates.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+                }
+                return dates;
+              };
+              
+              // 일자별 합계
+              const getDailyData = () => {
+                const dates = getDatesInRange(achStartDate, achEndDate);
+                return dates.map(dateStr => {
+                  let plan = 0, actual = 0;
+                  if (achSections.includes('TCP')) {
+                    const t = achPlanData.tcp?.[dateStr];
+                    if (t) { plan += t.plan || 0; actual += t.actual || 0; }
+                  }
+                  if (achSections.includes('FE')) {
+                    const f = achPlanData.fe?.[dateStr];
+                    if (f) { plan += f.plan || 0; actual += f.actual || 0; }
+                  }
+                  return { date: dateStr, plan, actual, ach: plan > 0 ? (actual / plan * 100) : 0 };
+                });
+              };
+              
+              // 일자별 + 라인별 분해 (선택된 섹션의 모든 라인)
+              const getDailyByLine = () => {
+                const dates = getDatesInRange(achStartDate, achEndDate);
+                const rows = [];
+                dates.forEach(dateStr => {
+                  const lineMap = {}; // {section|line: {plan, actual}}
+                  ['TCP','FE'].forEach(sec => {
+                    if (!achSections.includes(sec)) return;
+                    const dayData = achPlanData[sec.toLowerCase()]?.[dateStr];
+                    if (!dayData?.items) return;
+                    dayData.items.forEach(it => {
+                      const key = `${sec}|${it.line || '(미지정)'}`;
+                      if (!lineMap[key]) lineMap[key] = { section: sec, line: it.line || '(미지정)', plan: 0, actual: 0 };
+                      lineMap[key].plan += it.plan || 0;
+                      lineMap[key].actual += it.actual || 0;
+                    });
+                  });
+                  Object.values(lineMap).forEach(lm => {
+                    rows.push({
+                      date: dateStr, section: lm.section, line: lm.line,
+                      plan: lm.plan, actual: lm.actual,
+                      ach: lm.plan > 0 ? (lm.actual / lm.plan * 100) : 0
+                    });
+                  });
+                });
+                return rows;
+              };
+              
+              // 일자별 + 아이템별 분해
+              const getDailyByItem = () => {
+                const dates = getDatesInRange(achStartDate, achEndDate);
+                const rows = [];
+                dates.forEach(dateStr => {
+                  ['TCP','FE'].forEach(sec => {
+                    if (!achSections.includes(sec)) return;
+                    const dayData = achPlanData[sec.toLowerCase()]?.[dateStr];
+                    if (!dayData?.items) return;
+                    dayData.items.forEach(it => {
+                      if ((it.plan || 0) === 0 && (it.actual || 0) === 0) return;
+                      rows.push({
+                        date: dateStr, section: sec, line: it.line || '(미지정)', pno: it.pno,
+                        plan: it.plan || 0, actual: it.actual || 0,
+                        ach: (it.plan || 0) > 0 ? ((it.actual || 0) / it.plan * 100) : 0
+                      });
+                    });
+                  });
+                });
+                return rows;
+              };
+              
+              // 주별 (월요일 시작) - 합계
+              const getWeeklyData = () => {
+                const daily = getDailyData();
+                const weekMap = {};
+                daily.forEach(d => {
+                  const dt = new Date(d.date);
+                  const dow = dt.getDay();
+                  const monOffset = dow === 0 ? -6 : 1 - dow;
+                  const monday = new Date(dt);
+                  monday.setDate(dt.getDate() + monOffset);
+                  const wkKey = `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,'0')}-${String(monday.getDate()).padStart(2,'0')}`;
+                  if (!weekMap[wkKey]) weekMap[wkKey] = { week: wkKey, plan: 0, actual: 0 };
+                  weekMap[wkKey].plan += d.plan;
+                  weekMap[wkKey].actual += d.actual;
+                });
+                return Object.values(weekMap)
+                  .map(w => ({ ...w, ach: w.plan > 0 ? (w.actual / w.plan * 100) : 0 }))
+                  .sort((a,b) => a.week.localeCompare(b.week));
+              };
+              
+              // 주별 + 라인별
+              const getWeeklyByLine = () => {
+                const lineRows = getDailyByLine();
+                const map = {};
+                lineRows.forEach(d => {
+                  const dt = new Date(d.date);
+                  const dow = dt.getDay();
+                  const monOffset = dow === 0 ? -6 : 1 - dow;
+                  const monday = new Date(dt);
+                  monday.setDate(dt.getDate() + monOffset);
+                  const wkKey = `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,'0')}-${String(monday.getDate()).padStart(2,'0')}`;
+                  const k = `${wkKey}|${d.section}|${d.line}`;
+                  if (!map[k]) map[k] = { week: wkKey, section: d.section, line: d.line, plan: 0, actual: 0 };
+                  map[k].plan += d.plan;
+                  map[k].actual += d.actual;
+                });
+                return Object.values(map)
+                  .map(w => ({ ...w, ach: w.plan > 0 ? (w.actual / w.plan * 100) : 0 }))
+                  .sort((a,b) => a.week.localeCompare(b.week) || a.section.localeCompare(b.section) || a.line.localeCompare(b.line));
+              };
+              
+              // 주별 + 아이템별
+              const getWeeklyByItem = () => {
+                const itemRows = getDailyByItem();
+                const map = {};
+                itemRows.forEach(d => {
+                  const dt = new Date(d.date);
+                  const dow = dt.getDay();
+                  const monOffset = dow === 0 ? -6 : 1 - dow;
+                  const monday = new Date(dt);
+                  monday.setDate(dt.getDate() + monOffset);
+                  const wkKey = `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,'0')}-${String(monday.getDate()).padStart(2,'0')}`;
+                  const k = `${wkKey}|${d.section}|${d.line}|${d.pno}`;
+                  if (!map[k]) map[k] = { week: wkKey, section: d.section, line: d.line, pno: d.pno, plan: 0, actual: 0 };
+                  map[k].plan += d.plan;
+                  map[k].actual += d.actual;
+                });
+                return Object.values(map)
+                  .map(w => ({ ...w, ach: w.plan > 0 ? (w.actual / w.plan * 100) : 0 }))
+                  .sort((a,b) => a.week.localeCompare(b.week) || a.section.localeCompare(b.section) || a.line.localeCompare(b.line) || a.pno.localeCompare(b.pno));
+              };
+              
+              // 월별 합계
+              const getMonthlyData = () => {
+                const daily = getDailyData();
+                const monthMap = {};
+                daily.forEach(d => {
+                  const mKey = d.date.slice(0,7);
+                  if (!monthMap[mKey]) monthMap[mKey] = { month: mKey, plan: 0, actual: 0 };
+                  monthMap[mKey].plan += d.plan;
+                  monthMap[mKey].actual += d.actual;
+                });
+                return Object.values(monthMap)
+                  .map(m => ({ ...m, ach: m.plan > 0 ? (m.actual / m.plan * 100) : 0 }))
+                  .sort((a,b) => a.month.localeCompare(b.month));
+              };
+              
+              // 월별 + 라인별
+              const getMonthlyByLine = () => {
+                const lineRows = getDailyByLine();
+                const map = {};
+                lineRows.forEach(d => {
+                  const mKey = d.date.slice(0,7);
+                  const k = `${mKey}|${d.section}|${d.line}`;
+                  if (!map[k]) map[k] = { month: mKey, section: d.section, line: d.line, plan: 0, actual: 0 };
+                  map[k].plan += d.plan;
+                  map[k].actual += d.actual;
+                });
+                return Object.values(map)
+                  .map(m => ({ ...m, ach: m.plan > 0 ? (m.actual / m.plan * 100) : 0 }))
+                  .sort((a,b) => a.month.localeCompare(b.month) || a.section.localeCompare(b.section) || a.line.localeCompare(b.line));
+              };
+              
+              // 월별 + 아이템별
+              const getMonthlyByItem = () => {
+                const itemRows = getDailyByItem();
+                const map = {};
+                itemRows.forEach(d => {
+                  const mKey = d.date.slice(0,7);
+                  const k = `${mKey}|${d.section}|${d.line}|${d.pno}`;
+                  if (!map[k]) map[k] = { month: mKey, section: d.section, line: d.line, pno: d.pno, plan: 0, actual: 0 };
+                  map[k].plan += d.plan;
+                  map[k].actual += d.actual;
+                });
+                return Object.values(map)
+                  .map(m => ({ ...m, ach: m.plan > 0 ? (m.actual / m.plan * 100) : 0 }))
+                  .sort((a,b) => a.month.localeCompare(b.month) || a.section.localeCompare(b.section) || a.line.localeCompare(b.line) || a.pno.localeCompare(b.pno));
+              };
+              
+              // 현재 표시할 데이터 선택
+              const rows = (() => {
+                if (achViewMode === 'daily') {
+                  if (achBreakdown === 'line') return getDailyByLine();
+                  if (achBreakdown === 'item') return getDailyByItem();
+                  return getDailyData();
+                }
+                if (achViewMode === 'weekly') {
+                  if (achBreakdown === 'line') return getWeeklyByLine();
+                  if (achBreakdown === 'item') return getWeeklyByItem();
+                  return getWeeklyData();
+                }
+                // monthly
+                if (achBreakdown === 'line') return getMonthlyByLine();
+                if (achBreakdown === 'item') return getMonthlyByItem();
+                return getMonthlyData();
+              })();
+              
+              const total = rows.reduce((acc, r) => ({
+                plan: acc.plan + r.plan,
+                actual: acc.actual + r.actual
+              }), { plan: 0, actual: 0 });
+              total.ach = total.plan > 0 ? (total.actual / total.plan * 100) : 0;
+              
+              const achColorClass = (pct) => {
+                if (pct >= 100) return 'text-emerald-600';
+                if (pct >= 80) return 'text-amber-600';
+                return 'text-rose-600';
+              };
+              
+              const tcpDays = Object.keys(achPlanData.tcp || {}).length;
+              const feDays = Object.keys(achPlanData.fe || {}).length;
+              
+              return (
+                <div className="space-y-4">
+                  {/* 헤더 + 업로드 + 필터 */}
+                  <div className="bg-white border rounded-lg p-4">
+                    <h2 className="text-lg font-bold text-slate-800 mb-3">🎯 계획 대비 실적 달성율</h2>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                      <div className="border rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-slate-700">📊 TCP 계획 엑셀</span>
+                          <span className="text-xs text-slate-500">{tcpDays}일 로드됨</span>
+                        </div>
+                        <input type="file" accept=".xlsx,.xls"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleTcpPlanUpload(f); e.target.value = ''; }}
+                          className="block w-full text-sm text-slate-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200" />
+                        <div className="text-xs text-slate-500 mt-1">시트명: 26_05월 형식. R12=Total Plan, R13=Total Actual · 모든 월 자동 인식 (누적 병합)</div>
+                      </div>
+                      <div className="border rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-slate-700">📊 FE 계획 엑셀</span>
+                          <span className="text-xs text-slate-500">{feDays}일 로드됨</span>
+                        </div>
+                        <input type="file" accept=".xlsx,.xls"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleFePlanUpload(f); e.target.value = ''; }}
+                          className="block w-full text-sm text-slate-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-emerald-100 file:text-emerald-700 hover:file:bg-emerald-200" />
+                        <div className="text-xs text-slate-500 mt-1">시트명: 계획검토. L열 라벨=계획합계/실적합계 · 매월 따로 업로드 (누적 병합)</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-3 pt-3 border-t">
+                      <label className="flex items-center gap-2 text-sm">
+                        <span className="text-slate-600">기간:</span>
+                        <input type="date" value={achStartDate} onChange={e => setAchStartDate(e.target.value)} className="border rounded px-2 py-1" />
+                        <span>~</span>
+                        <input type="date" value={achEndDate} onChange={e => setAchEndDate(e.target.value)} className="border rounded px-2 py-1" />
+                      </label>
+                      <div className="flex gap-1">
+                        {['TCP','FE'].map(s => (
+                          <button key={s}
+                            onClick={() => setAchSections(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])}
+                            className={`px-3 py-1 rounded text-sm ${achSections.includes(s) ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-1 ml-auto">
+                        {[['daily','일별'],['weekly','주별'],['monthly','월별']].map(([k,l]) => (
+                          <button key={k}
+                            onClick={() => setAchViewMode(k)}
+                            className={`px-3 py-1 rounded text-sm ${achViewMode === k ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-1">
+                        <span className="text-xs text-slate-500 self-center">분해:</span>
+                        {[['total','합계'],['line','라인별'],['item','아이템별']].map(([k,l]) => (
+                          <button key={k}
+                            onClick={() => setAchBreakdown(k)}
+                            className={`px-3 py-1 rounded text-sm ${achBreakdown === k ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      {(tcpDays > 0 || feDays > 0) && (
+                        <button onClick={() => { if (confirm('계획 데이터를 모두 삭제하시겠습니까?')) saveAchPlanData({tcp:{},fe:{}}); }}
+                          className="px-3 py-1 rounded text-sm bg-rose-100 text-rose-700 hover:bg-rose-200">🗑️ 데이터 삭제</button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {(tcpDays === 0 && feDays === 0) ? (
+                    <div className="bg-white border rounded-lg p-12 text-center text-slate-500">
+                      <div className="text-5xl mb-3">📂</div>
+                      <div className="font-semibold mb-1">계획 엑셀 파일을 업로드해주세요</div>
+                      <div className="text-sm">TCP / FE 파일을 각각 업로드하면 일별/주별/월별 달성율을 볼 수 있습니다</div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-white border rounded-lg p-4">
+                          <div className="text-xs text-slate-500">총 계획</div>
+                          <div className="text-2xl font-bold text-slate-800">{Math.round(total.plan).toLocaleString()}</div>
+                        </div>
+                        <div className="bg-white border rounded-lg p-4">
+                          <div className="text-xs text-slate-500">총 실적</div>
+                          <div className="text-2xl font-bold text-slate-800">{Math.round(total.actual).toLocaleString()}</div>
+                        </div>
+                        <div className="bg-white border rounded-lg p-4">
+                          <div className="text-xs text-slate-500">달성율</div>
+                          <div className={`text-2xl font-bold ${achColorClass(total.ach)}`}>{total.ach.toFixed(1)}%</div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white border rounded-lg overflow-hidden">
+                        <div className="overflow-x-auto max-h-[600px]">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-100 sticky top-0">
+                              <tr>
+                                <th className="px-4 py-2 text-left font-semibold text-slate-700">{achViewMode === 'daily' ? '일자' : achViewMode === 'weekly' ? '주(시작일)' : '월'}</th>
+                                {achBreakdown !== 'total' && <th className="px-4 py-2 text-left font-semibold text-slate-700">섹션</th>}
+                                {achBreakdown !== 'total' && <th className="px-4 py-2 text-left font-semibold text-slate-700">라인</th>}
+                                {achBreakdown === 'item' && <th className="px-4 py-2 text-left font-semibold text-slate-700">P/No</th>}
+                                <th className="px-4 py-2 text-right font-semibold text-slate-700">계획</th>
+                                <th className="px-4 py-2 text-right font-semibold text-slate-700">실적</th>
+                                <th className="px-4 py-2 text-right font-semibold text-slate-700">달성율</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.filter(r => r.plan > 0 || r.actual > 0).map((r, i) => {
+                                const key = r.date || r.week || r.month;
+                                const days = ['일','월','화','수','목','금','토'];
+                                let displayKey = key;
+                                if (achViewMode === 'daily') {
+                                  const dt = new Date(key);
+                                  displayKey = `${key} (${days[dt.getDay()]})`;
+                                } else if (achViewMode === 'weekly') {
+                                  const dt = new Date(key);
+                                  const end = new Date(dt); end.setDate(dt.getDate()+6);
+                                  displayKey = `${key} ~ ${end.getMonth()+1}/${end.getDate()}`;
+                                }
+                                return (
+                                  <tr key={i} className="border-t hover:bg-slate-50">
+                                    <td className="px-4 py-2 font-medium">{displayKey}</td>
+                                    {achBreakdown !== 'total' && <td className="px-4 py-2"><span className={`px-2 py-0.5 rounded text-xs font-semibold ${r.section === 'TCP' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>{r.section}</span></td>}
+                                    {achBreakdown !== 'total' && <td className="px-4 py-2 text-slate-700">{r.line}</td>}
+                                    {achBreakdown === 'item' && <td className="px-4 py-2 text-xs font-mono text-slate-600">{r.pno}</td>}
+                                    <td className="px-4 py-2 text-right">{Math.round(r.plan).toLocaleString()}</td>
+                                    <td className="px-4 py-2 text-right">{Math.round(r.actual).toLocaleString()}</td>
+                                    <td className={`px-4 py-2 text-right font-semibold ${achColorClass(r.ach)}`}>{r.ach.toFixed(1)}%</td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+                                <td className="px-4 py-2" colSpan={1 + (achBreakdown !== 'total' ? 2 : 0) + (achBreakdown === 'item' ? 1 : 0)}>합계</td>
+                                <td className="px-4 py-2 text-right">{Math.round(total.plan).toLocaleString()}</td>
+                                <td className="px-4 py-2 text-right">{Math.round(total.actual).toLocaleString()}</td>
+                                <td className={`px-4 py-2 text-right ${achColorClass(total.ach)}`}>{total.ach.toFixed(1)}%</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })()}
