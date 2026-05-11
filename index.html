@@ -34,6 +34,9 @@
       const [dateFrom, setDateFrom] = useState('');
       const [dateTo, setDateTo] = useState('');
       const [severityFilter, setSeverityFilter] = useState('all');
+      const [sortBy, setSortBy] = useState(null); // {col, dir}
+      const [colFilters, setColFilters] = useState({}); // {col: [allowed values]}
+      const [openDropdown, setOpenDropdown] = useState(null); // col
 
       // Helpers
       const parseHm = (hm) => {
@@ -467,16 +470,52 @@
       }, [planIssues, oeeIssues, workerIssues, timeIssues, ratioIssues]);
 
       const filteredIssues = useMemo(() => {
-        return allIssues.filter(i => {
+        let arr = allIssues.filter(i => {
           if (selectedCategory !== 'all' && i.category !== selectedCategory) return false;
           if (severityFilter !== 'all' && i.severity !== severityFilter) return false;
           return true;
-        }).sort((a,b) => {
-          const sOrder = { high: 0, mid: 1, low: 2 };
-          if (sOrder[a.severity] !== sOrder[b.severity]) return sOrder[a.severity] - sOrder[b.severity];
-          return (a.date || '').localeCompare(b.date || '');
         });
-      }, [allIssues, selectedCategory, severityFilter]);
+        
+        // 컬럼 필터 적용
+        const getColV = (iss, col) => {
+          if (col === 'severity') return iss.severity || '';
+          if (col === 'category') return iss.category || '';
+          if (col === 'date') return iss.date || '';
+          if (col === 'shift') return iss.shift || '';
+          if (col === 'section') return iss.section || '';
+          if (col === 'line') return iss.line || '';
+          if (col === 'item') return iss.item || '';
+          return '';
+        };
+        Object.entries(colFilters).forEach(([col, allowed]) => {
+          if (!allowed) return;
+          const allowedSet = new Set(allowed);
+          arr = arr.filter(i => allowedSet.has(getColV(i, col)));
+        });
+        
+        // 정렬 적용
+        const sOrder = { high: 0, mid: 1, low: 2 };
+        if (sortBy) {
+          arr = [...arr].sort((a, b) => {
+            let cmp;
+            if (sortBy.col === 'severity') {
+              cmp = (sOrder[a.severity] ?? 99) - (sOrder[b.severity] ?? 99);
+            } else {
+              const av = String(getColV(a, sortBy.col));
+              const bv = String(getColV(b, sortBy.col));
+              cmp = av.localeCompare(bv);
+            }
+            return sortBy.dir === 'asc' ? cmp : -cmp;
+          });
+        } else {
+          arr = [...arr].sort((a,b) => {
+            if (sOrder[a.severity] !== sOrder[b.severity]) return sOrder[a.severity] - sOrder[b.severity];
+            return (a.date || '').localeCompare(b.date || '');
+          });
+        }
+        
+        return arr;
+      }, [allIssues, selectedCategory, severityFilter, sortBy, colFilters]);
 
       const catStats = useMemo(() => {
         const counts = {
@@ -503,6 +542,137 @@
         { id: 'time', label: '시간 논리 이상', icon: '🕐', color: 'orange' },
         { id: 'ratio', label: '수량 비율 이상', icon: '⚖️', color: 'rose' },
       ];
+      
+      // 컬럼별 unique 값 (현재 displayIssues 기준으로 계산 가능하나 일관성 위해 allIssues 사용)
+      const uniqueValuesByCol = useMemo(() => {
+        const cols = ['severity', 'category', 'date', 'shift', 'section', 'line', 'item'];
+        const getV = (iss, col) => {
+          if (col === 'severity') return iss.severity || '';
+          if (col === 'category') return iss.category || '';
+          if (col === 'date') return iss.date || '';
+          if (col === 'shift') return iss.shift || '';
+          if (col === 'section') return iss.section || '';
+          if (col === 'line') return iss.line || '';
+          if (col === 'item') return iss.item || '';
+          return '';
+        };
+        const result = {};
+        cols.forEach(col => {
+          const s = new Set();
+          allIssues.forEach(iss => s.add(getV(iss, col)));
+          result[col] = Array.from(s).sort((a,b) => {
+            if (col === 'severity') {
+              const o = { high: 0, mid: 1, low: 2 };
+              return (o[a] ?? 99) - (o[b] ?? 99);
+            }
+            return String(a).localeCompare(String(b));
+          });
+        });
+        return result;
+      }, [allIssues]);
+      
+      const displayCellValue = (col, v) => {
+        if (col === 'severity') return { high: '🔴 심각', mid: '🟡 경고', low: '🔵 정보' }[v] || v;
+        if (col === 'category') return CATEGORIES.find(c => c.id === v)?.label || v;
+        return v || '(빈값)';
+      };
+      
+      const renderDropdown = (col) => {
+        const values = uniqueValuesByCol[col] || [];
+        const allowed = colFilters[col];
+        const allShown = !allowed || allowed.length === values.length;
+        const allNone = allowed && allowed.length === 0;
+        
+        const toggleVal = (v) => {
+          setColFilters(prev => {
+            const cur = (prev[col] !== undefined) ? [...prev[col]] : [...values];
+            const idx = cur.indexOf(v);
+            if (idx >= 0) cur.splice(idx, 1);
+            else cur.push(v);
+            // 전체 선택 상태면 필터 삭제
+            if (cur.length === values.length) {
+              const { [col]: _, ...rest } = prev;
+              return rest;
+            }
+            return { ...prev, [col]: cur };
+          });
+        };
+        
+        const toggleAll = () => {
+          setColFilters(prev => {
+            if (allShown) return { ...prev, [col]: [] }; // 전부 해제
+            const { [col]: _, ...rest } = prev;
+            return rest; // 전부 선택 (필터 삭제)
+          });
+        };
+        
+        return (
+          <div className="absolute top-full left-0 mt-1 bg-white border border-slate-300 rounded shadow-xl z-50 w-60 text-slate-700 font-normal">
+            <div className="border-b border-slate-200 p-1.5 space-y-0.5">
+              <button onClick={() => { setSortBy({col, dir: 'asc'}); setOpenDropdown(null); }}
+                className="block w-full text-left px-2 py-1 hover:bg-slate-100 text-xs rounded">▲ 오름차순 정렬</button>
+              <button onClick={() => { setSortBy({col, dir: 'desc'}); setOpenDropdown(null); }}
+                className="block w-full text-left px-2 py-1 hover:bg-slate-100 text-xs rounded">▼ 내림차순 정렬</button>
+              {sortBy?.col === col && (
+                <button onClick={() => { setSortBy(null); setOpenDropdown(null); }}
+                  className="block w-full text-left px-2 py-1 hover:bg-slate-100 text-xs rounded text-rose-600">↺ 정렬 해제</button>
+              )}
+            </div>
+            <div className="p-2 max-h-64 overflow-y-auto">
+              <label className="flex items-center gap-2 py-0.5 text-xs hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" checked={allShown}
+                  ref={el => { if (el) el.indeterminate = !allShown && !allNone; }}
+                  onChange={toggleAll} />
+                <span className="font-semibold">(전체 선택)</span>
+              </label>
+              {values.map(v => {
+                const checked = allowed ? allowed.includes(v) : true;
+                return (
+                  <label key={String(v)} className="flex items-center gap-2 py-0.5 text-xs hover:bg-slate-50 cursor-pointer">
+                    <input type="checkbox" checked={checked} onChange={() => toggleVal(v)} />
+                    <span className="truncate" title={String(v)}>{displayCellValue(col, v)}</span>
+                  </label>
+                );
+              })}
+              {values.length === 0 && <div className="text-xs text-slate-400 py-2 text-center">(값 없음)</div>}
+            </div>
+            <div className="border-t border-slate-200 p-1.5 flex gap-1">
+              {colFilters[col] !== undefined && (
+                <button onClick={() => { setColFilters(prev => { const n = {...prev}; delete n[col]; return n; }); }}
+                  className="flex-1 py-1 bg-rose-100 text-rose-700 rounded text-xs font-semibold">필터 해제</button>
+              )}
+              <button onClick={() => setOpenDropdown(null)}
+                className="flex-1 py-1 bg-slate-200 hover:bg-slate-300 rounded text-xs">닫기</button>
+            </div>
+          </div>
+        );
+      };
+      
+      const renderColHeader = (col, label) => {
+        const allowed = colFilters[col];
+        const isFiltered = allowed !== undefined && allowed.length < (uniqueValuesByCol[col]?.length || 0);
+        const isSorted = sortBy?.col === col;
+        return (
+          <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b relative whitespace-nowrap">
+            <button
+              onClick={() => setOpenDropdown(openDropdown === col ? null : col)}
+              className="inline-flex items-center gap-1 hover:bg-slate-200 px-1.5 py-0.5 rounded">
+              <span>{label}</span>
+              {isSorted && <span className="text-indigo-600 text-[10px]">{sortBy.dir === 'asc' ? '▲' : '▼'}</span>}
+              <span className={`text-[10px] ${isFiltered ? 'text-indigo-600' : 'text-slate-400'}`}>▾</span>
+            </button>
+            {openDropdown === col && renderDropdown(col)}
+          </th>
+        );
+      };
+      
+      const clearAllFilters = () => {
+        setSortBy(null);
+        setColFilters({});
+        setOpenDropdown(null);
+      };
+      
+      const anyColFilterActive = Object.keys(colFilters).length > 0 || sortBy !== null;
 
       return (
         <div className="space-y-5">
@@ -537,8 +707,14 @@
                   <option value="low">🔵 정보</option>
                 </select>
               </div>
-              <button onClick={() => { setDateFrom(''); setDateTo(''); setSelectedCategory('all'); setSeverityFilter('all'); }}
+              <button onClick={() => { setDateFrom(''); setDateTo(''); setSelectedCategory('all'); setSeverityFilter('all'); clearAllFilters(); }}
                 className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm hover:bg-slate-50">초기화</button>
+              {anyColFilterActive && (
+                <button onClick={clearAllFilters}
+                  className="px-3 py-1.5 border border-indigo-300 bg-indigo-50 text-indigo-700 rounded-lg text-sm hover:bg-indigo-100 font-semibold">
+                  🔍 컬럼 필터/정렬 해제 ({Object.keys(colFilters).length + (sortBy ? 1 : 0)})
+                </button>
+              )}
             </div>
           </div>
 
@@ -581,17 +757,17 @@
                 <div className="text-sm">이상 없음</div>
               </div>
             ) : (
-              <div className="overflow-x-auto" style={{maxHeight: '600px'}}>
+              <div className="overflow-visible">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 sticky top-0 z-10">
+                  <thead className="bg-slate-50">
                     <tr>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">심각도</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">카테고리</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">날짜</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">주야</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">섹션</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">라인</th>
-                      <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">아이템</th>
+                      {renderColHeader('severity', '심각도')}
+                      {renderColHeader('category', '카테고리')}
+                      {renderColHeader('date', '날짜')}
+                      {renderColHeader('shift', '주야')}
+                      {renderColHeader('section', '섹션')}
+                      {renderColHeader('line', '라인')}
+                      {renderColHeader('item', '아이템')}
                       <th className="px-3 py-2 text-left font-semibold text-slate-600 border-b">이상 내용</th>
                     </tr>
                   </thead>
@@ -994,7 +1170,7 @@
         try { localStorage.setItem('mfg_ftfr_config', JSON.stringify(next)); } catch {}
       };
       
-      // 달성율 탭 state — 엑셀에서 로드한 계획/실적 데이터
+      // 달성률 탭 state — 엑셀에서 로드한 계획/실적 데이터
       // 구조: { tcp: {'YYYY-MM-DD': {plan, actual}}, fe: {...} }
       const [achPlanData, setAchPlanData] = useState(() => {
         try { return JSON.parse(localStorage.getItem('mfg_ach_plan') || '{"tcp":{},"fe":{}}'); } catch { return {tcp:{},fe:{}}; }
@@ -1143,7 +1319,7 @@
             body: JSON.stringify(payload)
           });
           const result = await res.json();
-          if (result.ok) alert(`설정 백업 완료\n${result.name}\n\n※ 백업 내용: OEE 수동입력, FTFR 집계 설정, 달성율 계획 데이터\n※ TCP/FE 데이터는 생산관리시스템에서 자동 로드됩니다`);
+          if (result.ok) alert(`설정 백업 완료\n${result.name}\n\n※ 백업 내용: OEE 수동입력, FTFR 집계 설정, 달성률 계획 데이터\n※ TCP/FE 데이터는 생산관리시스템에서 자동 로드됩니다`);
           else alert('백업 실패: ' + (result.error || 'unknown'));
         } catch (err) {
           alert('백업 오류: ' + err.message);
@@ -1193,7 +1369,7 @@
               try { localStorage.setItem('mfg_ach_plan', JSON.stringify(d.achPlanData || {tcp:{},fe:{}})); } catch {}
             }
             setShowDriveLoad(false);
-            alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성율 계획 데이터가 복원되었습니다');
+            alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성률 계획 데이터가 복원되었습니다');
           } else {
             alert('복원 실패: ' + (result.error || 'unknown'));
           }
@@ -2258,7 +2434,7 @@
         { id: 'defect',    icon: '🔴', label: '불량' },
         { id: 'rework',    icon: '♻️', label: '재작업' },
         { id: 'downtime',  icon: '⏸️', label: '비가동' },
-        { id: 'achievement', icon: '🎯', label: '달성율' },
+        { id: 'achievement', icon: '🎯', label: '달성률' },
         { id: 'pcsmh',     icon: '👤', label: 'PCS/MH' },
         { id: 'tool',      icon: '🔧', label: 'Tool 교체' },
         { id: 'workhour',  icon: '⏱️', label: 'Working Hour' },
@@ -4698,7 +4874,10 @@
                       const pno = String(row[3] || '').trim();
                       const line = String(row[4] || '').trim();
                       const pa = String(row[6] || '').trim();
-                      if (!pno || !pa) continue;
+                      // P/No, line, P/A 셋 중 하나라도 비면 스킵
+                      if (!pno || !pa || !line) continue;
+                      // 합계 키워드 P/No 스킵
+                      if (/^(total|sum|합계|소계)$|\s+(total|sum|합계|소계)\s*$|^(total|sum|합계|소계)\s+/i.test(pno)) continue;
                       
                       let kind = null;
                       if (pa.includes('P/Plan')) kind = 'plan';
@@ -4785,9 +4964,10 @@
                     const label = String(row[11] || '').trim();
                     if (label !== '계획합계' && label !== '실적합계') continue;
                     
-                    const line = String(row[5] || '').trim() || '(미지정)'; // 대분류
+                    const line = String(row[5] || '').trim(); // 대분류
                     const pno = String(row[8] || '').trim();
-                    if (!pno) continue;
+                    // 대분류 또는 품번이 없으면 Sum/Total 행으로 간주하고 스킵
+                    if (!line || !pno) continue;
                     
                     const kind = label === '계획합계' ? 'plan' : 'actual';
                     
@@ -5056,7 +5236,7 @@
                 <div className="space-y-4">
                   {/* 헤더 + 업로드 + 필터 */}
                   <div className="bg-white border rounded-lg p-4">
-                    <h2 className="text-lg font-bold text-slate-800 mb-3">🎯 계획 대비 실적 달성율</h2>
+                    <h2 className="text-lg font-bold text-slate-800 mb-3">🎯 계획 대비 실적 달성률</h2>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                       <div className="border rounded p-3">
@@ -5098,7 +5278,7 @@
                         ))}
                       </div>
                       <div className="flex gap-1 ml-auto">
-                        {[['daily','일별'],['weekly','주별'],['monthly','월별']].map(([k,l]) => (
+                        {[['daily','일별'],['weekly','주별'],['monthly','월별'],['report','레포트']].map(([k,l]) => (
                           <button key={k}
                             onClick={() => setAchViewMode(k)}
                             className={`px-3 py-1 rounded text-sm ${achViewMode === k ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-600'}`}>
@@ -5133,7 +5313,7 @@
                     <div className="bg-white border rounded-lg p-12 text-center text-slate-500">
                       <div className="text-5xl mb-3">📂</div>
                       <div className="font-semibold mb-1">계획 엑셀 파일을 업로드해주세요</div>
-                      <div className="text-sm">TCP / FE 파일을 각각 업로드하면 일별/주별/월별 달성율을 볼 수 있습니다</div>
+                      <div className="text-sm">TCP / FE 파일을 각각 업로드하면 일별/주별/월별 달성률을 볼 수 있습니다</div>
                     </div>
                   ) : (
                     <>
@@ -5147,11 +5327,167 @@
                           <div className="text-2xl font-bold text-slate-800">{Math.round(total.actual).toLocaleString()}</div>
                         </div>
                         <div className="bg-white border rounded-lg p-4">
-                          <div className="text-xs text-slate-500">달성율</div>
+                          <div className="text-xs text-slate-500">달성률</div>
                           <div className={`text-2xl font-bold ${achColorClass(total.ach)}`}>{total.ach.toFixed(1)}%</div>
                         </div>
                       </div>
                       
+                      {achViewMode === 'report' ? (() => {
+                        // 레포트 뷰: 섹션 × 라인 행 × 주차 컬럼 피벗 표
+                        const dates = getDatesInRange(achStartDate, achEndDate);
+                        // 주차 컬럼 추출 (월요일 시작)
+                        const weekMap = {};
+                        dates.forEach(dateStr => {
+                          const dt = new Date(dateStr);
+                          const dow = dt.getDay();
+                          const monOffset = dow === 0 ? -6 : 1 - dow;
+                          const monday = new Date(dt);
+                          monday.setDate(dt.getDate() + monOffset);
+                          const wkKey = `${monday.getFullYear()}-${String(monday.getMonth()+1).padStart(2,'0')}-${String(monday.getDate()).padStart(2,'0')}`;
+                          if (!weekMap[wkKey]) {
+                            const end = new Date(monday); end.setDate(monday.getDate() + 5); // 월~토 (5일 + 시작일)
+                            weekMap[wkKey] = { start: new Date(monday), end, dates: [] };
+                          }
+                          weekMap[wkKey].dates.push(dateStr);
+                        });
+                        const sortedWeekKeys = Object.keys(weekMap).sort();
+                        
+                        // 주차 라벨 (1주차, 2주차 ...)
+                        const weekLabels = sortedWeekKeys.map((wk, idx) => {
+                          const w = weekMap[wk];
+                          const s = w.start, e = w.end;
+                          return {
+                            key: wk,
+                            label: `${idx+1}주차`,
+                            subLabel: `${s.getMonth()+1}/${s.getDate()}~${e.getMonth()+1}/${e.getDate()}`
+                          };
+                        });
+                        
+                        // 섹션별 라인 목록
+                        const FE_LINE_ORDER = ['A/FLVV', 'M/FLVV', 'C/FLVV', 'A/GVV', 'M/GVV', 'LVS', 'ICV', 'UCC', 'MEMBRANE'];
+                        const sectionLines = {};
+                        if (achSections.includes('TCP')) {
+                          sectionLines.TCP = ['1PC', '2PC', 'Nospin'];
+                        }
+                        if (achSections.includes('FE')) {
+                          // FE 데이터에서 실제 라인 추출 + 지정 순서 적용
+                          const feLineSet = new Set();
+                          Object.values(achPlanData.fe || {}).forEach(dayData => {
+                            (dayData.items || []).forEach(it => {
+                              const ln = (it.line === 'OLD ICV' || it.line === 'NEW ICV') ? 'ICV' : it.line;
+                              if (ln) feLineSet.add(ln);
+                            });
+                          });
+                          const feLines = Array.from(feLineSet).sort((a, b) => {
+                            const ai = FE_LINE_ORDER.indexOf(a);
+                            const bi = FE_LINE_ORDER.indexOf(b);
+                            if (ai !== -1 && bi !== -1) return ai - bi;
+                            if (ai !== -1) return -1;
+                            if (bi !== -1) return 1;
+                            return a.localeCompare(b);
+                          });
+                          if (feLines.length > 0) sectionLines.FE = feLines;
+                        }
+                        
+                        // 셀 데이터 계산: section, line, week → {plan, actual}
+                        const getCell = (section, line, weekDates) => {
+                          let plan = 0, actual = 0;
+                          const secData = achPlanData[section.toLowerCase()];
+                          if (!secData) return { plan, actual };
+                          weekDates.forEach(dateStr => {
+                            const d = secData[dateStr];
+                            if (!d) return;
+                            // TCP는 items가 있으면 라인별 분해, 없으면 total만
+                            if (d.items && d.items.length > 0) {
+                              d.items.forEach(it => {
+                                const itLine = (it.line === 'OLD ICV' || it.line === 'NEW ICV') ? 'ICV' : it.line;
+                                if (itLine === line) {
+                                  plan += it.plan || 0;
+                                  actual += it.actual || 0;
+                                }
+                              });
+                            }
+                          });
+                          return { plan, actual };
+                        };
+                        
+                        const fmt = (v) => v > 0 ? Math.round(v).toLocaleString() : '';
+                        
+                        return (
+                          <div className="bg-white border rounded-lg overflow-hidden">
+                            <div className="overflow-x-auto max-h-[700px]">
+                              <table className="text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-slate-100">
+                                    <th className="px-3 py-2 border border-slate-300 sticky left-0 bg-slate-100 z-10" colSpan={3}>구분</th>
+                                    {weekLabels.map(w => (
+                                      <th key={w.key} className="px-3 py-2 border border-slate-300 text-center min-w-[110px]">
+                                        <div className="font-bold">{w.label}</div>
+                                        <div className="text-[10px] font-normal text-slate-500">({w.subLabel})</div>
+                                      </th>
+                                    ))}
+                                    <th className="px-3 py-2 border border-slate-300 bg-amber-50 text-center min-w-[80px] font-bold">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {Object.entries(sectionLines).flatMap(([section, lines]) => 
+                                    lines.flatMap((line, lineIdx) => {
+                                      const metrics = ['계획', '실적', '달성률'];
+                                      return metrics.map((metric, mIdx) => {
+                                        const cells = weekLabels.map(w => {
+                                          const { plan, actual } = getCell(section, line, weekMap[w.key].dates);
+                                          if (metric === '계획') return plan;
+                                          if (metric === '실적') return actual;
+                                          return plan > 0 ? (actual / plan * 100) : 0;
+                                        });
+                                        // Total
+                                        const allDates = sortedWeekKeys.flatMap(wk => weekMap[wk].dates);
+                                        const { plan: tPlan, actual: tActual } = getCell(section, line, allDates);
+                                        let totalVal;
+                                        if (metric === '계획') totalVal = tPlan;
+                                        else if (metric === '실적') totalVal = tActual;
+                                        else totalVal = tPlan > 0 ? (tActual / tPlan * 100) : 0;
+                                        
+                                        const isAch = metric === '달성률';
+                                        const sectionColor = section === 'TCP' ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700';
+                                        
+                                        return (
+                                          <tr key={`${section}-${line}-${metric}`} className={mIdx === 2 ? 'border-b-2 border-slate-300' : ''}>
+                                            {/* Section (rowspan = number of lines × 3 metrics) */}
+                                            {lineIdx === 0 && mIdx === 0 && (
+                                              <td rowSpan={lines.length * 3} className={`px-3 py-2 border border-slate-300 text-center font-bold sticky left-0 z-10 ${sectionColor}`}>
+                                                {section}
+                                              </td>
+                                            )}
+                                            {/* Line (rowspan = 3) */}
+                                            {mIdx === 0 && (
+                                              <td rowSpan={3} className="px-3 py-2 border border-slate-300 text-center font-semibold bg-slate-50">
+                                                {line}
+                                              </td>
+                                            )}
+                                            {/* Metric */}
+                                            <td className={`px-3 py-2 border border-slate-300 text-center ${isAch ? 'font-semibold' : ''}`}>{metric}</td>
+                                            {/* Cells */}
+                                            {cells.map((v, ci) => (
+                                              <td key={ci} className={`px-3 py-2 border border-slate-300 text-right ${isAch && v > 0 ? achColorClass(v) + ' font-semibold' : ''}`}>
+                                                {isAch ? (v > 0 ? v.toFixed(1) + '%' : '') : fmt(v)}
+                                              </td>
+                                            ))}
+                                            {/* Total */}
+                                            <td className={`px-3 py-2 border border-slate-300 text-right bg-amber-50 ${isAch && totalVal > 0 ? achColorClass(totalVal) + ' font-bold' : 'font-semibold'}`}>
+                                              {isAch ? (totalVal > 0 ? totalVal.toFixed(1) + '%' : '') : fmt(totalVal)}
+                                            </td>
+                                          </tr>
+                                        );
+                                      });
+                                    })
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })() : (
                       <div className="bg-white border rounded-lg overflow-hidden">
                         <div className="overflow-x-auto max-h-[600px]">
                           <table className="w-full text-sm">
@@ -5163,7 +5499,7 @@
                                 {achBreakdown === 'item' && <th className="px-4 py-2 text-left font-semibold text-slate-700">P/No</th>}
                                 <th className="px-4 py-2 text-right font-semibold text-slate-700">계획</th>
                                 <th className="px-4 py-2 text-right font-semibold text-slate-700">실적</th>
-                                <th className="px-4 py-2 text-right font-semibold text-slate-700">달성율</th>
+                                <th className="px-4 py-2 text-right font-semibold text-slate-700">달성률</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -5201,6 +5537,7 @@
                           </table>
                         </div>
                       </div>
+                      )}
                     </>
                   )}
                 </div>
