@@ -1565,7 +1565,7 @@
         if (!hasData) return null;
 
         const availability = totalLoadTime > 0 ? Math.min(100, (totalOperatingTime / totalLoadTime) * 100) : 0;
-        const performance = totalExpectedOutput > 0 ? Math.min(100, (totalGoodQty / totalExpectedOutput) * 100) : 0;
+        const performance = totalExpectedOutput > 0 ? (totalGoodQty / totalExpectedOutput) * 100 : 0;
         const totalOutput = totalGoodQty + totalDefects;
         const quality = totalOutput > 0 ? Math.min(100, ((totalGoodQty - totalRework) / totalOutput) * 100) : 100;
         const oee = (availability / 100) * (performance / 100) * (quality / 100) * 100;
@@ -1691,7 +1691,7 @@
         });
 
         const availability = totalLoadTime > 0 ? Math.min(100, (totalOperatingTime / totalLoadTime) * 100) : 0;
-        const performance = totalExpectedOutput > 0 ? Math.min(100, (totalGoodQty / totalExpectedOutput) * 100) : 0;
+        const performance = totalExpectedOutput > 0 ? (totalGoodQty / totalExpectedOutput) * 100 : 0;
         const totalOutput = totalGoodQty + totalDefects;
         const quality = totalOutput > 0 ? Math.min(100, ((totalGoodQty - totalRework) / totalOutput) * 100) : 100;
         const oee = (availability / 100) * (performance / 100) * (quality / 100) * 100;
