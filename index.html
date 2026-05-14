@@ -1198,7 +1198,7 @@
       const [qdSection, setQdSection] = useState('TCP');
       const [qdYear, setQdYear] = useState(new Date().getFullYear());
       const [qdMonth, setQdMonth] = useState(new Date().getMonth() + 1);
-      const [qdLine, setQdLine] = useState('ALL');
+      const [qdLine, setQdLine] = useState('1PC');
       const [showDriveLoad, setShowDriveLoad] = useState(false);
       const [driveFiles, setDriveFiles] = useState([]);
       const [driveBusy, setDriveBusy] = useState(false);
@@ -1603,6 +1603,27 @@
         if (tcpData?.productionLogs) logs.push(...tcpData.productionLogs.map(l => ({ ...l, source: 'TCP' })));
         if (feData?.productionLogs) logs.push(...feData.productionLogs.map(l => ({ ...l, source: 'FE' })));
         return logs;
+      }, [tcpData, feData]);
+      
+      const allDowntimeLogs = useMemo(() => {
+        const arr = [];
+        if (tcpData?.downtimeLogs) arr.push(...tcpData.downtimeLogs);
+        if (feData?.downtimeLogs) arr.push(...feData.downtimeLogs);
+        return arr;
+      }, [tcpData, feData]);
+      
+      const allDefectLogs = useMemo(() => {
+        const arr = [];
+        if (tcpData?.defectLogs) arr.push(...tcpData.defectLogs);
+        if (feData?.defectLogs) arr.push(...feData.defectLogs);
+        return arr;
+      }, [tcpData, feData]);
+      
+      const allReworkLogs = useMemo(() => {
+        const arr = [];
+        if (tcpData?.reworkLogs) arr.push(...tcpData.reworkLogs);
+        if (feData?.reworkLogs) arr.push(...feData.reworkLogs);
+        return arr;
       }, [tcpData, feData]);
 
       const getLogsForMonth = (year, month, sectionType) => {
@@ -2822,11 +2843,40 @@
             )}
 
             {activeTab === 'qdetail' && (tcpData || feData) && (() => {
-              // Available lines for current section
+              // 라인 목록 (전체 제거됨)
               const qdLines = (() => {
                 if (qdSection === 'TCP') return ['1PC','2PC','Nospin'];
                 return getSectionDisplayLines('FE');
               })();
+              
+              // TCP/FE 섹션 변경 시 qdLine이 해당 섹션에 없으면 첫 라인으로 자동 변경
+              const effectiveQdLine = qdLines.includes(qdLine) ? qdLine : qdLines[0];
+
+              // 작업자 ID → 이름 매핑
+              const empMap = {};
+              [...(tcpData?.employees || []), ...(feData?.employees || [])].forEach(e => {
+                empMap[e.id] = e.name;
+              });
+              const getWorkerNames = (sw) => {
+                if (!Array.isArray(sw)) return '-';
+                const names = sw.map(w => {
+                  const id = typeof w === 'object' ? w.id : w;
+                  if (empMap[id]) return empMap[id];
+                  if (typeof w === 'string' && !w.match(/^\d+$/)) return w;
+                  return null;
+                }).filter(Boolean);
+                return names.length > 0 ? names.join(', ') : '-';
+              };
+
+              // 분 계산 함수
+              const minDiff = (start, end) => {
+                if (!start || !end) return 0;
+                const [sh, sm] = start.split(':').map(Number);
+                const [eh, em] = end.split(':').map(Number);
+                let s = sh*60+sm, e = eh*60+em;
+                if (e < s) e += 24*60;
+                return e - s;
+              };
 
               const logs = allLogs.filter(l => {
                 const d = new Date(l.productionDate);
@@ -2835,30 +2885,98 @@
                 if (qdSection === 'FE' && l.section !== 'FE') return false;
                 if (qdSection === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return false;
                 const displayLine = resolveLineName(qdSection, l.lineName);
-                if (qdLine !== 'ALL' && displayLine !== qdLine) return false;
+                if (displayLine !== effectiveQdLine) return false;
                 return true;
               });
 
-              // Group logs by day → shift → list items in start-time order
+              // productionLogId별 비가동/불량/재작업 매핑
+              const dtByLogId = {}, defByLogId = {}, rwByLogId = {};
+              allDowntimeLogs.forEach(d => {
+                if (d.productionLogId == null) return;
+                (dtByLogId[d.productionLogId] = dtByLogId[d.productionLogId] || []).push(d);
+              });
+              allDefectLogs.forEach(d => {
+                if (d.productionLogId == null) return;
+                (defByLogId[d.productionLogId] = defByLogId[d.productionLogId] || []).push(d);
+              });
+              allReworkLogs.forEach(r => {
+                if (r.productionLogId == null) return;
+                (rwByLogId[r.productionLogId] = rwByLogId[r.productionLogId] || []).push(r);
+              });
+
+              // 일자|주야별로 묶기
               const byDay = {};
               logs.forEach(l => {
                 const day = new Date(l.productionDate).getDate();
-                const shift = l.shift || (l.selectedShift) || '주간';
-                if (!byDay[day]) byDay[day] = { '주간': [], '야간': [] };
-                const bucket = byDay[day][shift] || byDay[day]['주간'];
-                bucket.push(l);
+                const shift = l.shift || '주간';
+                const key = `${day}|${shift}`;
+                (byDay[key] = byDay[key] || []).push(l);
               });
-              // Sort items within each bucket by startTime
-              Object.values(byDay).forEach(dd => {
-                ['주간','야간'].forEach(s => {
-                  (dd[s] || []).sort((a,b) => (a.startTime || '').localeCompare(b.startTime || ''));
+
+              // 한 일자/주야 안의 작업 + 교체 행 만들기
+              const buildRows = (logList, shift) => {
+                const rows = [];
+                logList.forEach(log => {
+                  const dts = dtByLogId[log.id] || [];
+                  // 교체 키워드 포함 → 별도 행
+                  const swapDts = dts.filter(d => /교체|change/i.test(d.downtimeType || ''));
+                  // 나머지 비가동 → 같은 작업 행의 비가동 컬럼에
+                  const otherDts = dts.filter(d => !/교체|change/i.test(d.downtimeType || ''));
+                  const defs = defByLogId[log.id] || [];
+                  const rws = rwByLogId[log.id] || [];
+
+                  // 작업 행
+                  rows.push({
+                    type: 'work',
+                    startTime: log.startTime || '',
+                    endTime: log.endTime || '',
+                    minutes: minDiff(log.startTime, log.endTime),
+                    item: log.item || '-',
+                    workers: getWorkerNames(log.selectedWorkers),
+                    good: parseFloat(log.goodQuantity) || 0,
+                    downtimes: otherDts.map(d => ({ name: d.downtimeType || '비가동', min: minDiff(d.startTime, d.endTime) || (d.duration || 0) })),
+                    defects: defs.map(d => ({ name: d.defectSubType || d.defectType || '불량', qty: parseFloat(d.quantity) || 0 })),
+                    reworks: rws.map(r => ({ name: r.reworkSubType || r.reworkType || '재작업', qty: parseFloat(r.quantity) || 0 }))
+                  });
+                  // 교체 비가동 → 별도 행
+                  swapDts.forEach(d => {
+                    // content에서 HH:MM~HH:MM 시간 패턴 제거
+                    const cleanContent = (d.content || '').replace(/\d{1,2}:\d{2}\s*[~\-]\s*\d{1,2}:\d{2}/g, '').trim();
+                    rows.push({
+                      type: 'swap',
+                      startTime: d.startTime || '',
+                      endTime: d.endTime || '',
+                      minutes: minDiff(d.startTime, d.endTime) || (d.duration || 0),
+                      label: d.downtimeType || '교체',
+                      content: cleanContent
+                    });
+                  });
                 });
-              });
+                // 정렬: 야간은 20:30 이후 시작 → 다음날 새벽은 +24h 보정
+                const sortKey = (t) => {
+                  if (!t) return 0;
+                  const [h, m] = t.split(':').map(Number);
+                  let mins = h*60 + m;
+                  // 야간조: 12:00 이전 시간은 자정 넘김 → +24h 가산
+                  if (shift === '야간' && mins < 12*60) mins += 24*60;
+                  return mins;
+                };
+                rows.sort((a,b) => sortKey(a.startTime) - sortKey(b.startTime));
+                
+                // 소계 계산
+                const totals = {
+                  minutes: rows.filter(r => r.type === 'work').reduce((s,r) => s + (r.minutes || 0), 0),
+                  good: rows.filter(r => r.type === 'work').reduce((s,r) => s + (r.good || 0), 0),
+                  downtimeMin: rows.filter(r => r.type === 'work').reduce((s,r) => s + r.downtimes.reduce((ss,d) => ss + (d.min || 0), 0), 0),
+                  swapMin: rows.filter(r => r.type === 'swap').reduce((s,r) => s + (r.minutes || 0), 0),
+                  defectQty: rows.filter(r => r.type === 'work').reduce((s,r) => s + r.defects.reduce((ss,d) => ss + (d.qty || 0), 0), 0),
+                  reworkQty: rows.filter(r => r.type === 'work').reduce((s,r) => s + r.reworks.reduce((ss,d) => ss + (d.qty || 0), 0), 0),
+                };
+                
+                return { rows, totals };
+              };
 
               const daysInMonth = new Date(qdYear, qdMonth, 0).getDate();
-              const fmtItems = (arr) => arr.map(l => `${l.item || '-'} ${Math.round(parseFloat(l.goodQuantity) || 0).toLocaleString()}`).join(' · ');
-              const sumGood = (arr) => arr.reduce((s,l) => s + (parseFloat(l.goodQuantity) || 0), 0);
-
               let grandTotal = 0;
 
               return (
@@ -2867,13 +2985,12 @@
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex bg-slate-100 rounded p-1">
                         {['TCP','FE'].map(s => (
-                          <button key={s} onClick={() => { setQdSection(s); setQdLine('ALL'); }} className={`px-4 py-1 rounded text-sm font-bold ${qdSection === s ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>{s}</button>
+                          <button key={s} onClick={() => { setQdSection(s); setQdLine(s === 'TCP' ? '1PC' : getSectionDisplayLines('FE')[0]); }} className={`px-4 py-1 rounded text-sm font-bold ${qdSection === s ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>{s}</button>
                         ))}
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        <button onClick={() => setQdLine('ALL')} className={`px-3 py-1 rounded text-xs font-bold ${qdLine === 'ALL' ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>전체</button>
                         {qdLines.map(line => (
-                          <button key={line} onClick={() => setQdLine(line)} className={`px-3 py-1 rounded text-xs font-bold ${qdLine === line ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{line}</button>
+                          <button key={line} onClick={() => setQdLine(line)} className={`px-3 py-1 rounded text-xs font-bold ${effectiveQdLine === line ? 'bg-sky-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{line}</button>
                         ))}
                       </div>
                       <div className="flex items-center gap-2">
@@ -2891,41 +3008,125 @@
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow-sm border border-slate-200 border border-slate-300 overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-100">
+                  <div className="bg-white rounded-lg shadow-sm border border-slate-300 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-100 text-slate-700">
                         <tr>
-                          <th className="px-3 py-2 w-16 text-center">일자</th>
-                          <th className="px-3 py-2 w-20 text-center">주야</th>
-                          <th className="px-3 py-2 text-left">아이템 (시간순)</th>
-                          <th className="px-3 py-2 w-28 text-right">양품 합계</th>
+                          <th className="px-2 py-2 w-14 text-center border-r">일자</th>
+                          <th className="px-2 py-2 w-14 text-center border-r">주야</th>
+                          <th className="px-2 py-2 w-28 text-center border-r">시간</th>
+                          <th className="px-2 py-2 w-14 text-center border-r">분</th>
+                          <th className="px-2 py-2 text-left border-r">아이템 / 교체</th>
+                          <th className="px-2 py-2 text-left border-r">인원</th>
+                          <th className="px-2 py-2 w-16 text-right border-r">양품</th>
+                          <th className="px-2 py-2 text-left border-r">비가동</th>
+                          <th className="px-2 py-2 text-left border-r">불량</th>
+                          <th className="px-2 py-2 text-left">재작업</th>
                         </tr>
                       </thead>
                       <tbody>
                         {Array.from({length: daysInMonth}, (_, i) => i+1).map(day => {
-                          const dd = byDay[day] || { '주간': [], '야간': [] };
-                          const dayTotal = sumGood(dd['주간']) + sumGood(dd['야간']);
-                          grandTotal += dayTotal;
                           const dow = new Date(qdYear, qdMonth-1, day).getDay();
                           const dayColor = dow === 0 ? 'text-red-600' : dow === 6 ? 'text-blue-600' : 'text-slate-800';
                           const dayBg = dow === 0 ? 'bg-red-50' : dow === 6 ? 'bg-blue-50' : 'bg-slate-50';
                           const dowLabel = ['일','월','화','수','목','금','토'][dow];
-                          return ['주간','야간'].map((shift, si) => {
-                            const arr = dd[shift] || [];
-                            const total = sumGood(arr);
-                            return (
-                              <tr key={`${day}-${shift}`} className={`border-t ${si === 0 ? 'border-t-2 border-t-gray-300' : 'border-slate-100'} ${arr.length === 0 ? 'text-slate-300' : ''}`}>
-                                {si === 0 && <td rowSpan={2} className={`px-3 py-2 text-center font-bold ${dayBg} ${dayColor} border-r align-middle`}>{day}일<div className="text-xs">({dowLabel})</div></td>}
-                                <td className={`px-3 py-2 text-center font-medium ${shift === '주간' ? 'bg-yellow-50' : 'bg-indigo-50'}`}>{shift}</td>
-                                <td className="px-3 py-2">{arr.length > 0 ? fmtItems(arr) : '-'}</td>
-                                <td className="px-3 py-2 text-right font-medium">{total > 0 ? Math.round(total).toLocaleString() : '-'}</td>
+                          
+                          // 주간/야간 행 묶음 생성
+                          const dayRowsBundles = ['주간','야간'].map(shift => {
+                            const logList = byDay[`${day}|${shift}`] || [];
+                            const { rows, totals } = buildRows(logList, shift);
+                            return { shift, rows, totals, logList };
+                          });
+                          
+                          const dayTotal = dayRowsBundles.reduce((s, b) => s + b.totals.good, 0);
+                          grandTotal += dayTotal;
+                          
+                          // 일자 셀 rowSpan: 각 shift의 (행 수 + 소계 1줄), 빈 shift는 1줄
+                          const totalRowsForDay = dayRowsBundles.reduce((s, b) => {
+                            return s + (b.rows.length > 0 ? b.rows.length + 1 : 1);
+                          }, 0);
+                          
+                          let dayCellRendered = false;
+                          
+                          return dayRowsBundles.map((bundle, si) => {
+                            const { shift, rows, totals } = bundle;
+                            const shiftBg = shift === '주간' ? 'bg-yellow-50' : 'bg-indigo-50';
+                            const subtotalBg = shift === '주간' ? 'bg-yellow-100' : 'bg-indigo-100';
+                            
+                            if (rows.length === 0) {
+                              const tr = (
+                                <tr key={`${day}-${shift}-empty`} className={`border-t ${si === 0 ? 'border-t-2 border-t-gray-300' : 'border-slate-100'} text-slate-300`}>
+                                  {!dayCellRendered && (
+                                    <td rowSpan={totalRowsForDay} className={`px-2 py-2 text-center font-bold ${dayBg} ${dayColor} border-r align-middle`}>
+                                      {day}일<div className="text-xs">({dowLabel})</div>
+                                    </td>
+                                  )}
+                                  <td className={`px-2 py-2 text-center font-medium ${shiftBg} border-r`}>{shift}</td>
+                                  <td colSpan="8" className="px-2 py-2 text-center text-slate-300">-</td>
+                                </tr>
+                              );
+                              dayCellRendered = true;
+                              return tr;
+                            }
+                            
+                            const dataRows = rows.map((row, ri) => {
+                              const isFirstRowOfShift = ri === 0;
+                              const tr = (
+                                <tr key={`${day}-${shift}-${ri}`} className={`border-t ${si === 0 && ri === 0 ? 'border-t-2 border-t-gray-300' : 'border-slate-100'} ${row.type === 'swap' ? 'bg-amber-50' : ''}`}>
+                                  {!dayCellRendered && (
+                                    <td rowSpan={totalRowsForDay} className={`px-2 py-2 text-center font-bold ${dayBg} ${dayColor} border-r align-middle`}>
+                                      {day}일<div className="text-xs">({dowLabel})</div>
+                                    </td>
+                                  )}
+                                  {isFirstRowOfShift && (
+                                    <td rowSpan={rows.length + 1} className={`px-2 py-2 text-center font-medium ${shiftBg} border-r align-middle`}>{shift}</td>
+                                  )}
+                                  <td className="px-2 py-2 text-center font-mono text-[11px] border-r whitespace-nowrap">
+                                    {row.type === 'work' && row.startTime && row.endTime ? `${row.startTime}~${row.endTime}` : '-'}
+                                  </td>
+                                  <td className="px-2 py-2 text-center border-r">{row.minutes > 0 ? row.minutes : '-'}</td>
+                                  {row.type === 'work' ? (
+                                    <>
+                                      <td className="px-2 py-2 border-r font-medium">{row.item}</td>
+                                      <td className="px-2 py-2 border-r text-slate-600">{row.workers}</td>
+                                      <td className="px-2 py-2 text-right border-r font-semibold text-indigo-700">{row.good > 0 ? Math.round(row.good).toLocaleString() : '-'}</td>
+                                      <td className="px-2 py-2 border-r text-orange-700 text-[11px]">{row.downtimes.length > 0 ? row.downtimes.map(d => `${d.name} ${d.min}분`).join(' · ') : '-'}</td>
+                                      <td className="px-2 py-2 border-r text-red-600 text-[11px]">{row.defects.length > 0 ? row.defects.map(d => `${d.name} ${d.qty}개`).join(' · ') : '-'}</td>
+                                      <td className="px-2 py-2 text-amber-700 text-[11px]">{row.reworks.length > 0 ? row.reworks.map(r => `${r.name} ${r.qty}개`).join(' · ') : '-'}</td>
+                                    </>
+                                  ) : (
+                                    <td colSpan="6" className="px-2 py-2 text-amber-800 font-medium">
+                                      🔧 {row.label}{row.content ? ` — ${row.content}` : ''}
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                              if (isFirstRowOfShift && !dayCellRendered) dayCellRendered = true;
+                              return tr;
+                            });
+                            
+                            // 소계 행 (주간 끝, 야간 끝 다음에 추가)
+                            const subtotalRow = (
+                              <tr key={`${day}-${shift}-subtotal`} className={`border-t border-slate-300 ${subtotalBg} font-semibold`}>
+                                <td className="px-2 py-1.5 text-center border-r text-[11px] text-slate-700">소계</td>
+                                <td className="px-2 py-1.5 text-center border-r text-slate-700">{totals.minutes}분</td>
+                                <td colSpan="2" className="px-2 py-1.5 border-r text-[11px] text-slate-500">
+                                  {totals.swapMin > 0 ? `교체 ${totals.swapMin}분` : ''}
+                                </td>
+                                <td className="px-2 py-1.5 text-right border-r text-indigo-700">{totals.good > 0 ? Math.round(totals.good).toLocaleString() : '-'}</td>
+                                <td className="px-2 py-1.5 text-right border-r text-orange-700 text-[11px]">{totals.downtimeMin > 0 ? `${totals.downtimeMin}분` : '-'}</td>
+                                <td className="px-2 py-1.5 text-right border-r text-red-600 text-[11px]">{totals.defectQty > 0 ? `${totals.defectQty}개` : '-'}</td>
+                                <td className="px-2 py-1.5 text-right text-amber-700 text-[11px]">{totals.reworkQty > 0 ? `${totals.reworkQty}개` : '-'}</td>
                               </tr>
                             );
+                            
+                            return [...dataRows, subtotalRow];
                           });
                         })}
                         <tr className="border-t-2 border-slate-500 bg-slate-100 font-bold">
-                          <td colSpan="3" className="px-3 py-2 text-right">월 합계</td>
+                          <td colSpan="6" className="px-3 py-2 text-right">월 합계</td>
                           <td className="px-3 py-2 text-right text-indigo-700">{Math.round(grandTotal).toLocaleString()}</td>
+                          <td colSpan="3"></td>
                         </tr>
                       </tbody>
                     </table>
