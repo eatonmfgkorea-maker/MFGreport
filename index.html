@@ -1199,6 +1199,21 @@
       const [qdYear, setQdYear] = useState(new Date().getFullYear());
       const [qdMonth, setQdMonth] = useState(new Date().getMonth() + 1);
       const [qdLine, setQdLine] = useState('1PC');
+      
+      // 데이터 출력 (export) state
+      const [exportYear, setExportYear] = useState(new Date().getFullYear());
+      const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
+      const [exportSection, setExportSection] = useState('ALL');
+      const [exportSheets, setExportSheets] = useState({
+        production: true,
+        downtime: true,
+        defect: true,
+        rework: true,
+        kpi: true,
+        qdetail: true,
+        workerHours: false,
+        downtimeStats: false,
+      });
       const [showDriveLoad, setShowDriveLoad] = useState(false);
       const [driveFiles, setDriveFiles] = useState([]);
       const [driveBusy, setDriveBusy] = useState(false);
@@ -1684,18 +1699,24 @@
         const hasData = totalGoodQty > 0 || totalDefects > 0 || totalLoadTime > 0;
         if (!hasData) return null;
 
-        const availability = totalLoadTime > 0 ? Math.min(100, (totalOperatingTime / totalLoadTime) * 100) : 0;
-        const performance = totalExpectedOutput > 0 ? (totalGoodQty / totalExpectedOutput) * 100 : 0;
+        // formulaConfig 기반 통합 계산 (OEE/FTFR 설정 반영)
+        const totals = {
+          goodQty: totalGoodQty,
+          defects: totalDefects,
+          rework: totalRework,
+          loadTime: totalLoadTime,
+          operatingTime: totalOperatingTime,
+          expectedOutput: totalExpectedOutput,
+        };
+        const metrics = computeMetricsFromTotals(totals);
         const totalOutput = totalGoodQty + totalDefects;
-        const quality = totalOutput > 0 ? Math.min(100, ((totalGoodQty - totalRework) / totalOutput) * 100) : 100;
-        const oee = (availability / 100) * (performance / 100) * (quality / 100) * 100;
         const fpy = totalOutput > 0 ? (totalGoodQty / totalOutput) * 100 : 100;
 
         return {
           goodQty: totalGoodQty,
           defects: totalDefects,
           rework: totalRework,
-          oee: Math.min(100, Math.max(0, oee)),
+          oee: metrics.OEE,
           fpy: Math.min(100, Math.max(0, fpy)),
           logCount
         };
@@ -1810,14 +1831,20 @@
           totalExpectedOutput += c.expectedOutput;
         });
 
-        const availability = totalLoadTime > 0 ? Math.min(100, (totalOperatingTime / totalLoadTime) * 100) : 0;
-        const performance = totalExpectedOutput > 0 ? (totalGoodQty / totalExpectedOutput) * 100 : 0;
+        // formulaConfig 기반 통합 계산 (OEE/FTFR 설정 반영)
+        const totals = {
+          goodQty: totalGoodQty,
+          defects: totalDefects,
+          rework: totalRework,
+          loadTime: totalLoadTime,
+          operatingTime: totalOperatingTime,
+          expectedOutput: totalExpectedOutput,
+        };
+        const metrics = computeMetricsFromTotals(totals);
         const totalOutput = totalGoodQty + totalDefects;
-        const quality = totalOutput > 0 ? Math.min(100, ((totalGoodQty - totalRework) / totalOutput) * 100) : 100;
-        const oee = (availability / 100) * (performance / 100) * (quality / 100) * 100;
         const fpy = totalOutput > 0 ? (totalGoodQty / totalOutput) * 100 : 100;
 
-        return { goodQty: totalGoodQty, defects: totalDefects, rework: totalRework, oee: Math.min(100, Math.max(0, oee)), fpy: Math.min(100, Math.max(0, fpy)), logCount: logs.length };
+        return { goodQty: totalGoodQty, defects: totalDefects, rework: totalRework, oee: metrics.OEE, fpy: Math.min(100, Math.max(0, fpy)), logCount: logs.length };
       };
 
       // ===== OEE tab helpers =====
@@ -2563,6 +2590,7 @@
         { id: 'validate',  icon: '🔎', label: '유효성검사' },
         { id: 'formula',   icon: '⚙️', label: 'OEE/FTFR 설정' },
         { id: 'upload',    icon: '📁', label: '데이터' },
+        { id: 'export',    icon: '📤', label: '데이터 출력' },
       ];
 
       return (
@@ -8142,6 +8170,395 @@
                 setShowFtfrConfig={setShowFtfrConfig}
               />
             )}
+
+            {activeTab === 'export' && (tcpData || feData) && (() => {
+              // 작업자 매핑
+              const empMap = {};
+              [...(tcpData?.employees || []), ...(feData?.employees || [])].forEach(e => {
+                empMap[e.id] = e.name;
+              });
+              const workerNames = (sw) => {
+                if (!Array.isArray(sw)) return '';
+                return sw.map(w => {
+                  const id = typeof w === 'object' ? w.id : w;
+                  if (empMap[id]) return empMap[id];
+                  if (typeof w === 'string' && !w.match(/^\d+$/)) return w;
+                  return null;
+                }).filter(Boolean).join(', ');
+              };
+
+              const minDiffExp = (start, end) => {
+                if (!start || !end) return 0;
+                const [sh, sm] = start.split(':').map(Number);
+                const [eh, em] = end.split(':').map(Number);
+                let s = sh*60+sm, e = eh*60+em;
+                if (e < s) e += 24*60;
+                return e - s;
+              };
+
+              const inRange = (l) => {
+                const d = new Date(l.productionDate);
+                if (d.getFullYear() !== exportYear) return false;
+                if (d.getMonth()+1 !== exportMonth) return false;
+                if (exportSection !== 'ALL' && l.section !== exportSection) return false;
+                return true;
+              };
+
+              const handleExport = () => {
+                if (typeof XLSX === 'undefined') {
+                  alert('엑셀 라이브러리 로딩 중입니다. 잠시 후 다시 시도해주세요.');
+                  return;
+                }
+                const wb = XLSX.utils.book_new();
+                const filteredLogs = allLogs.filter(inRange);
+                const logMap = {};
+                filteredLogs.forEach(l => { logMap[l.id] = l; });
+
+                // 1. 생산일지
+                if (exportSheets.production) {
+                  const data = filteredLogs.map(l => ({
+                    '일자': l.productionDate,
+                    '섹션': l.section,
+                    '라인': l.lineName,
+                    '아이템': l.item,
+                    'P/No': l.partNo || '',
+                    'Lot No': l.lotNo || '',
+                    '주야': l.shift,
+                    '시작': l.startTime,
+                    '종료': l.endTime,
+                    '시간(분)': minDiffExp(l.startTime, l.endTime),
+                    '양품수량': parseFloat(l.goodQuantity) || 0,
+                    '작업자': workerNames(l.selectedWorkers)
+                  }));
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '생산일지');
+                }
+
+                // 2. 비가동
+                if (exportSheets.downtime) {
+                  const data = allDowntimeLogs
+                    .filter(d => logMap[d.productionLogId])
+                    .map(d => {
+                      const l = logMap[d.productionLogId];
+                      return {
+                        '일자': l.productionDate, '섹션': l.section, '라인': l.lineName, '아이템': l.item, '주야': l.shift,
+                        '비가동 유형': d.downtimeType || '', '분류': d.downtimeCategory || '',
+                        '시작': d.startTime || '', '종료': d.endTime || '',
+                        '분': minDiffExp(d.startTime, d.endTime) || (parseFloat(d.duration) || 0),
+                        '사유': d.content || ''
+                      };
+                    });
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '비가동');
+                }
+
+                // 3. 불량
+                if (exportSheets.defect) {
+                  const data = allDefectLogs
+                    .filter(d => logMap[d.productionLogId])
+                    .map(d => {
+                      const l = logMap[d.productionLogId];
+                      return {
+                        '일자': l.productionDate, '섹션': l.section, '라인': l.lineName, '아이템': l.item, '주야': l.shift,
+                        '공정': d.station || '', '유형': d.defectType || '', '소분류': d.defectSubType || '',
+                        '수량': parseFloat(d.quantity) || 0
+                      };
+                    });
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '불량');
+                }
+
+                // 4. 재작업
+                if (exportSheets.rework) {
+                  const data = allReworkLogs
+                    .filter(r => logMap[r.productionLogId])
+                    .map(r => {
+                      const l = logMap[r.productionLogId];
+                      return {
+                        '일자': l.productionDate, '섹션': l.section, '라인': l.lineName, '아이템': l.item, '주야': l.shift,
+                        '공정': r.station || '', '유형': r.reworkType || '', '소분류': r.reworkSubType || '',
+                        '수량': parseFloat(r.quantity) || 0
+                      };
+                    });
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '재작업');
+                }
+
+                // 5. KPI 요약 (섹션×라인별)
+                if (exportSheets.kpi) {
+                  const groups = {};
+                  filteredLogs.forEach(l => {
+                    const sec = l.section;
+                    const line = resolveLineName(sec, l.lineName);
+                    const key = `${sec}|${line}`;
+                    if (!groups[key]) groups[key] = { section: sec, line, fg: 0, defectQty: 0, reworkQty: 0, workMin: 0, downtimeMin: 0 };
+                    groups[key].fg += parseFloat(l.goodQuantity) || 0;
+                    groups[key].workMin += minDiffExp(l.startTime, l.endTime);
+                  });
+                  allDefectLogs.filter(d => logMap[d.productionLogId]).forEach(d => {
+                    const l = logMap[d.productionLogId];
+                    const key = `${l.section}|${resolveLineName(l.section, l.lineName)}`;
+                    if (groups[key]) groups[key].defectQty += parseFloat(d.quantity) || 0;
+                  });
+                  allReworkLogs.filter(r => logMap[r.productionLogId]).forEach(r => {
+                    const l = logMap[r.productionLogId];
+                    const key = `${l.section}|${resolveLineName(l.section, l.lineName)}`;
+                    if (groups[key]) groups[key].reworkQty += parseFloat(r.quantity) || 0;
+                  });
+                  allDowntimeLogs.filter(d => logMap[d.productionLogId]).forEach(d => {
+                    const l = logMap[d.productionLogId];
+                    const key = `${l.section}|${resolveLineName(l.section, l.lineName)}`;
+                    if (groups[key]) groups[key].downtimeMin += minDiffExp(d.startTime, d.endTime) || (parseFloat(d.duration) || 0);
+                  });
+                  const data = Object.values(groups).map(g => {
+                    const input = g.fg + g.defectQty + g.reworkQty;
+                    const fpy = input > 0 ? ((input - g.defectQty - g.reworkQty) / input * 100) : 0;
+                    return {
+                      '섹션': g.section, '라인': g.line,
+                      '양품(FG)': Math.round(g.fg), '불량': Math.round(g.defectQty), '재작업': Math.round(g.reworkQty),
+                      '투입': Math.round(input), 'FPY(%)': fpy.toFixed(2),
+                      '작업시간(분)': g.workMin, '비가동시간(분)': g.downtimeMin
+                    };
+                  });
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'KPI 요약');
+                }
+
+                // 6. 수량(상세) — 시간순 (생산일지 + 교체 통합)
+                if (exportSheets.qdetail) {
+                  const dtByLogId = {};
+                  allDowntimeLogs.filter(d => logMap[d.productionLogId]).forEach(d => {
+                    (dtByLogId[d.productionLogId] = dtByLogId[d.productionLogId] || []).push(d);
+                  });
+                  const data = [];
+                  const byKey = {};
+                  filteredLogs.forEach(l => {
+                    const k = `${l.productionDate}|${l.shift}|${l.section}|${l.lineName}`;
+                    (byKey[k] = byKey[k] || []).push(l);
+                  });
+                  Object.entries(byKey).forEach(([k, logs]) => {
+                    const [date, shift, sec, line] = k.split('|');
+                    const rows = [];
+                    logs.forEach(log => {
+                      const dts = dtByLogId[log.id] || [];
+                      const swapDts = dts.filter(d => /교체|change/i.test(d.downtimeType || ''));
+                      const otherDts = dts.filter(d => !/교체|change/i.test(d.downtimeType || ''));
+                      rows.push({
+                        type: 'work', startTime: log.startTime, endTime: log.endTime,
+                        minutes: minDiffExp(log.startTime, log.endTime),
+                        item: log.item, workers: workerNames(log.selectedWorkers),
+                        good: parseFloat(log.goodQuantity) || 0,
+                        downtimes: otherDts.map(d => `${d.downtimeType}${minDiffExp(d.startTime,d.endTime)||d.duration||0}분`).join(', ')
+                      });
+                      swapDts.forEach(d => {
+                        rows.push({
+                          type: 'swap', startTime: d.startTime, endTime: d.endTime,
+                          minutes: minDiffExp(d.startTime, d.endTime) || (parseFloat(d.duration) || 0),
+                          item: `🔧 ${d.downtimeType}${d.content ? ' — ' + (d.content || '').replace(/\d{1,2}:\d{2}\s*[~\-]\s*\d{1,2}:\d{2}/g, '').trim() : ''}`,
+                          workers: '', good: 0, downtimes: ''
+                        });
+                      });
+                    });
+                    const sortKey = (t) => {
+                      if (!t) return 0;
+                      const [h, m] = t.split(':').map(Number);
+                      let mins = h*60 + m;
+                      if (shift === '야간' && mins < 12*60) mins += 24*60;
+                      return mins;
+                    };
+                    rows.sort((a,b) => sortKey(a.startTime) - sortKey(b.startTime));
+                    rows.forEach(r => {
+                      data.push({
+                        '일자': date, '주야': shift, '섹션': sec, '라인': line,
+                        '시작': r.type === 'work' ? r.startTime : '',
+                        '종료': r.type === 'work' ? r.endTime : '',
+                        '분': r.minutes,
+                        '아이템/교체': r.item, '인원': r.workers,
+                        '양품': r.type === 'work' ? r.good : '',
+                        '비가동': r.downtimes
+                      });
+                    });
+                  });
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '수량(상세)');
+                }
+
+                // 7. 작업자별 주차 시간 (52시간 점검용)
+                if (exportSheets.workerHours) {
+                  const getWeekNum = (d) => {
+                    const target = new Date(d.valueOf());
+                    const dayNr = (d.getDay() + 6) % 7;
+                    target.setDate(target.getDate() - dayNr + 3);
+                    const firstThursday = target.valueOf();
+                    target.setMonth(0, 1);
+                    if (target.getDay() !== 4) target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+                    return 1 + Math.ceil((firstThursday - target) / (7*24*3600*1000));
+                  };
+                  const mealsFor = (shift) => shift === '야간' ? [[1470,1530],[1770,1800]] : [[750,810],[1050,1080]];
+                  
+                  const workerDayIv = {};
+                  filteredLogs.forEach(log => {
+                    const sm = log.startTime ? log.startTime.split(':').map(Number).reduce((h,m) => h*60+m, 0) : 0;
+                    let em = log.endTime ? log.endTime.split(':').map(Number).reduce((h,m) => h*60+m, 0) : 0;
+                    const shift = log.shift || '주간';
+                    if (em < sm) em += 24*60;
+                    const ws = log.selectedWorkers || [];
+                    ws.forEach(w => {
+                      const id = typeof w === 'object' ? w.id : w;
+                      const name = empMap[id] || (typeof w === 'string' && !w.match(/^\d+$/) ? w : null);
+                      if (!name) return;
+                      const key = `${name}|${log.productionDate}|${shift}`;
+                      (workerDayIv[key] = workerDayIv[key] || []).push([sm, em]);
+                    });
+                  });
+                  
+                  const workerWeek = {};
+                  Object.entries(workerDayIv).forEach(([key, ivs]) => {
+                    const [name, dateStr, shift] = key.split('|');
+                    const week = getWeekNum(new Date(dateStr));
+                    const sorted = ivs.slice().sort((a,b) => a[0]-b[0]);
+                    const merged = [];
+                    for (const [s,e] of sorted) {
+                      if (merged.length && merged[merged.length-1][1] >= s) {
+                        merged[merged.length-1][1] = Math.max(merged[merged.length-1][1], e);
+                      } else merged.push([s,e]);
+                    }
+                    const ml = mealsFor(shift);
+                    let totalMin = 0;
+                    for (const [s,e] of merged) {
+                      let m = e - s;
+                      for (const [ms,me] of ml) m -= Math.max(0, Math.min(e, me) - Math.max(s, ms));
+                      totalMin += Math.max(0, m);
+                    }
+                    if (!workerWeek[name]) workerWeek[name] = {};
+                    workerWeek[name][week] = (workerWeek[name][week] || 0) + totalMin/60;
+                  });
+                  
+                  const weeks = Array.from(new Set(Object.values(workerWeek).flatMap(w => Object.keys(w).map(Number)))).sort((a,b) => a-b);
+                  const data = Object.entries(workerWeek).map(([name, w]) => {
+                    const row = { '작업자': name };
+                    weeks.forEach(wn => { row[`${wn}주차`] = (w[wn] || 0).toFixed(1); });
+                    return row;
+                  });
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '작업자별 시간');
+                }
+
+                // 8. 비가동 유형별 통계
+                if (exportSheets.downtimeStats) {
+                  const stats = {};
+                  allDowntimeLogs.filter(d => logMap[d.productionLogId]).forEach(d => {
+                    const l = logMap[d.productionLogId];
+                    const line = resolveLineName(l.section, l.lineName);
+                    const key = `${l.section}|${line}|${d.downtimeType || '미분류'}`;
+                    if (!stats[key]) stats[key] = { section: l.section, line, type: d.downtimeType || '미분류', count: 0, totalMin: 0 };
+                    stats[key].count += 1;
+                    stats[key].totalMin += minDiffExp(d.startTime, d.endTime) || (parseFloat(d.duration) || 0);
+                  });
+                  const data = Object.values(stats)
+                    .sort((a,b) => b.totalMin - a.totalMin)
+                    .map(s => ({
+                      '섹션': s.section, '라인': s.line, '비가동 유형': s.type,
+                      '발생 횟수': s.count, '총 분': s.totalMin,
+                      '평균 분': (s.totalMin / s.count).toFixed(1)
+                    }));
+                  if (data.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), '비가동 유형별');
+                }
+
+                if (wb.SheetNames.length === 0) {
+                  alert('출력할 데이터가 없습니다. 시트를 1개 이상 선택하고 데이터 범위를 확인해주세요.');
+                  return;
+                }
+                const filename = `MFG_Data_${exportSection}_${exportYear}-${String(exportMonth).padStart(2,'0')}.xlsx`;
+                XLSX.writeFile(wb, filename);
+              };
+
+              const filteredCount = allLogs.filter(inRange).length;
+
+              return (
+                <div className="space-y-4 max-w-4xl">
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="text-3xl">📤</span>
+                      <h2 className="text-2xl font-bold text-slate-800">데이터 출력</h2>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-6">기간/섹션 선택 후, 원하는 시트들을 골라 엑셀 파일로 내보냅니다.</p>
+
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-700 mb-2">📅 기간 선택</h3>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-600">Year</span>
+                            <select value={exportYear} onChange={(e) => setExportYear(Number(e.target.value))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                              {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-600">Month</span>
+                            <select value={exportMonth} onChange={(e) => setExportMonth(Number(e.target.value))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                              {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-slate-600">섹션</span>
+                            <div className="flex bg-slate-100 rounded p-1">
+                              {['ALL','TCP','FE'].map(s => (
+                                <button key={s} onClick={() => setExportSection(s)} className={`px-3 py-1 rounded text-sm font-bold ${exportSection === s ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>
+                                  {s === 'ALL' ? '모두' : s}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">📊 해당 기간 생산일지 <span className="font-semibold text-slate-700">{filteredCount.toLocaleString()}건</span> 대상</p>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-700 mb-2">📑 출력할 시트 (한 엑셀 파일에 시트별로)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {[
+                            { key: 'production', label: '1. 생산일지 (raw)', desc: '일자/라인/아이템/시간/양품/작업자' },
+                            { key: 'downtime', label: '2. 비가동 (raw)', desc: '유형/분/사유' },
+                            { key: 'defect', label: '3. 불량 (raw)', desc: '유형/소분류/수량' },
+                            { key: 'rework', label: '4. 재작업 (raw)', desc: '유형/소분류/수량' },
+                            { key: 'kpi', label: '5. KPI 요약', desc: '섹션×라인별 FG/FPY/시간' },
+                            { key: 'qdetail', label: '6. 수량(상세)', desc: '시간순 작업+교체 통합' },
+                            { key: 'workerHours', label: '7. 작업자별 주차 시간', desc: '52시간 점검용' },
+                            { key: 'downtimeStats', label: '8. 비가동 유형별 통계', desc: '횟수/총분/평균분' }
+                          ].map(item => (
+                            <label key={item.key} className="flex items-start gap-2 p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 border border-slate-200">
+                              <input
+                                type="checkbox"
+                                checked={exportSheets[item.key]}
+                                onChange={(e) => setExportSheets({...exportSheets, [item.key]: e.target.checked})}
+                                className="mt-0.5"
+                              />
+                              <div className="flex-1">
+                                <div className="text-sm font-medium text-slate-800">{item.label}</div>
+                                <div className="text-xs text-slate-500">{item.desc}</div>
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 mt-3 text-xs">
+                          <button onClick={() => setExportSheets(Object.keys(exportSheets).reduce((a,k) => ({...a, [k]: true}), {}))} className="text-indigo-600 hover:underline">모두 선택</button>
+                          <span className="text-slate-400">·</span>
+                          <button onClick={() => setExportSheets(Object.keys(exportSheets).reduce((a,k) => ({...a, [k]: false}), {}))} className="text-indigo-600 hover:underline">모두 해제</button>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-200">
+                        <button
+                          onClick={handleExport}
+                          disabled={filteredCount === 0 || !Object.values(exportSheets).some(v => v)}
+                          className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-lg shadow-sm transition flex items-center gap-2"
+                        >
+                          <span>📥</span>
+                          <span>엑셀 다운로드</span>
+                        </button>
+                        <p className="text-xs text-slate-400 mt-2">
+                          파일명: MFG_Data_{exportSection}_{exportYear}-{String(exportMonth).padStart(2,'0')}.xlsx
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {activeTab === 'dashboard' && !tcpData && !feData && autoLoadStatus === 'loading' && (
               <div className="bg-white border border-slate-200 rounded-xl p-16 text-center">
