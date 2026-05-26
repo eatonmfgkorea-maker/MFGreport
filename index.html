@@ -1217,9 +1217,14 @@
       const [showDriveLoad, setShowDriveLoad] = useState(false);
       const [driveFiles, setDriveFiles] = useState([]);
       const [driveBusy, setDriveBusy] = useState(false);
-      const todayStr = new Date().toISOString().split('T')[0];
-      const monthAgoStr = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
-      const [odStart, setOdStart] = useState(monthAgoStr);
+      // 오늘 + 이번 달 1일 (로컬 타임존 기준)
+      const _now = new Date();
+      const _y = _now.getFullYear();
+      const _m = String(_now.getMonth() + 1).padStart(2, '0');
+      const _d = String(_now.getDate()).padStart(2, '0');
+      const todayStr = `${_y}-${_m}-${_d}`;
+      const monthStartStr = `${_y}-${_m}-01`;
+      const [odStart, setOdStart] = useState(monthStartStr);
       const [odEnd, setOdEnd] = useState(todayStr);
       const [odSections, setOdSections] = useState(['TCP','FE']);
       const [odShifts, setOdShifts] = useState(['주간','야간']);
@@ -3601,11 +3606,17 @@
               };
 
               const toggleArr = (arr, val, all) => {
-                if (arr.includes('ALL')) return [val];
+                // ALL 상태에서 한 항목 클릭 = 그 항목만 해제, 나머지 유지
+                if (arr.includes('ALL')) {
+                  const next = all.filter(v => v !== val);
+                  return next.length === 0 ? ['ALL'] : next;
+                }
+                // 이미 체크된 항목 클릭 = 해제
                 if (arr.includes(val)) {
                   const next = arr.filter(v => v !== val);
                   return next.length === 0 ? ['ALL'] : next;
                 }
+                // 체크 안 된 항목 클릭 = 추가 (모두 체크되면 ALL로)
                 const next = [...arr, val];
                 return next.length === all.length ? ['ALL'] : next;
               };
