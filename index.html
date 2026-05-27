@@ -1196,6 +1196,29 @@
       const [showManualMonthly, setShowManualMonthly] = useState(false);
       const [showOeeSettings, setShowOeeSettings] = useState(false);
       const [qdSection, setQdSection] = useState('TCP');
+      
+      // ===== Production 보고 탭 state =====
+      const _prNow = new Date();
+      const [prdSection, setPrdSection] = useState('TCP'); // 'TCP' or 'FE'
+      const [prdStartDate, setPrdStartDate] = useState(`${_prNow.getFullYear()}-${String(_prNow.getMonth()+1).padStart(2,'0')}-01`);
+      const [prdEndDate, setPrdEndDate] = useState(_prNow.toISOString().split('T')[0]);
+      const [prodReportNotes, setProdReportNotes] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mfg_prod_report_notes') || '{}'); } catch { return {}; }
+      });
+      const [expandedNotes, setExpandedNotes] = useState({});
+      const toggleNote = (key) => setExpandedNotes(prev => ({ ...prev, [key]: !prev[key] }));
+      const updateProdNote = (key, value) => {
+        setProdReportNotes(prev => {
+          const next = { ...prev };
+          if (!value || !value.trim()) {
+            delete next[key];
+          } else {
+            next[key] = value;
+          }
+          try { localStorage.setItem('mfg_prod_report_notes', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
       const [qdYear, setQdYear] = useState(new Date().getFullYear());
       const [qdMonth, setQdMonth] = useState(new Date().getMonth() + 1);
       const [qdLine, setQdLine] = useState('1PC');
@@ -2581,6 +2604,7 @@
         { id: 'oee',       icon: '⚙️', label: 'OEE' },
         { id: 'oeedetail', icon: '🔍', label: 'OEE(상세)' },
         { id: 'oeecompare', icon: '🆚', label: 'OEE(비교)' },
+        { id: 'prodreport', icon: '📧', label: 'Production 보고' },
         { id: 'quantity',  icon: '🍩', label: '수량' },
         { id: 'qdetail',   icon: '📋', label: '수량(상세)' },
         { id: 'defect',    icon: '🔴', label: '불량' },
@@ -7144,6 +7168,690 @@
                       </div>
                     )}
                   </div>
+                </div>
+              );
+            })()}
+
+            {activeTab === 'prodreport' && (tcpData || feData) && (() => {
+              // 작업자 매핑
+              const empMap = {};
+              [...(tcpData?.employees || []), ...(feData?.employees || [])].forEach(e => { empMap[e.id] = e.name; });
+              
+              const minDiffPr = (s, e) => {
+                if (!s || !e) return 0;
+                const [sh, sm] = s.split(':').map(Number);
+                const [eh, em] = e.split(':').map(Number);
+                let s2 = sh*60+sm, e2 = eh*60+em;
+                if (e2 < s2) e2 += 24*60;
+                return e2 - s2;
+              };
+              
+              // 일자 범위 생성
+              const dateRange = [];
+              {
+                const s = new Date(prdStartDate);
+                const e = new Date(prdEndDate);
+                for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+                  dateRange.push(d.toISOString().split('T')[0]);
+                }
+              }
+              
+              // ===== TCP 데이터 처리 (swap을 work 비가동에 통합) =====
+              const buildTcpLineData = (lineName) => {
+                const logs = allLogs.filter(l => 
+                  l.section === 'TCP' && l.lineName === lineName 
+                  && l.productionDate >= prdStartDate && l.productionDate <= prdEndDate
+                );
+                
+                const byDayShift = {};
+                logs.forEach(l => {
+                  const key = `${l.productionDate}|${l.shift || '주간'}`;
+                  (byDayShift[key] = byDayShift[key] || []).push(l);
+                });
+                
+                const dtByLogId = {}, defByLogId = {}, rwByLogId = {};
+                allDowntimeLogs.forEach(d => {
+                  if (d.productionLogId != null) (dtByLogId[d.productionLogId] = dtByLogId[d.productionLogId] || []).push(d);
+                });
+                allDefectLogs.forEach(d => {
+                  if (d.productionLogId != null) (defByLogId[d.productionLogId] = defByLogId[d.productionLogId] || []).push(d);
+                });
+                allReworkLogs.forEach(r => {
+                  if (r.productionLogId != null) (rwByLogId[r.productionLogId] = rwByLogId[r.productionLogId] || []).push(r);
+                });
+                
+                const grouped = [];
+                // ★ 같은 날짜는 주간 → 야간 순서
+                const keys = Object.keys(byDayShift).sort((a, b) => {
+                  const [da, sa] = a.split('|');
+                  const [db, sb] = b.split('|');
+                  if (da !== db) return da.localeCompare(db);
+                  if (sa === '주간' && sb !== '주간') return -1;
+                  if (sa !== '주간' && sb === '주간') return 1;
+                  return 0;
+                });
+                keys.forEach(key => {
+                  const [date, shift] = key.split('|');
+                  const logList = byDayShift[key];
+                  
+                  // 같은 일자/주야 안에서 같은 item 합치기
+                  const itemMap = {};
+                  
+                  logList.forEach(log => {
+                    const dts = dtByLogId[log.id] || [];
+                    const swapDts = dts.filter(d => /교체|change/i.test(d.downtimeType || ''));
+                    const otherDts = dts.filter(d => {
+                      if (/교체|change/i.test(d.downtimeType || '')) return false;
+                      if ((d.downtimeCategory || '').includes('계획')) return false;
+                      return true;
+                    });
+                    const defs = defByLogId[log.id] || [];
+                    const rws = rwByLogId[log.id] || [];
+                    
+                    const item = log.item || '-';
+                    if (!itemMap[item]) {
+                      itemMap[item] = {
+                        type: 'work',
+                        item, good: 0,
+                        downtimeAll: [],
+                        defectList: [], reworkList: [],
+                        startTime: log.startTime || '99:99',
+                        logIds: []
+                      };
+                    }
+                    const g = itemMap[item];
+                    g.good += parseFloat(log.goodQuantity) || 0;
+                    if (log.startTime && (g.startTime === '99:99' || log.startTime < g.startTime)) g.startTime = log.startTime;
+                    g.logIds.push(log.id);
+                    
+                    // ★ swap + 일반 비가동을 같은 리스트에 모음 (sortTime 포함)
+                    otherDts.forEach(d => {
+                      const mins = minDiffPr(d.startTime, d.endTime) || (d.duration || 0);
+                      if (mins <= 0) return;
+                      // ★ 정형 항목 제외: M/check, 설비, 안전점검
+                      const typeStr = (d.downtimeType || '').toLowerCase();
+                      if (/m\s*\/?\s*check/i.test(typeStr)) return;
+                      if (typeStr.includes('설비') && !typeStr.includes('설비고장')) return;
+                      if (typeStr.includes('안전점검')) return;
+                      const content = (d.content || '').trim();
+                      g.downtimeAll.push({
+                        sortTime: d.startTime || '99:99',
+                        isSwap: false,
+                        text: `${d.downtimeType} ${mins}분${content ? ' (' + content + ')' : ''}`
+                      });
+                    });
+                    swapDts.forEach(d => {
+                      const mins = minDiffPr(d.startTime, d.endTime) || (d.duration || 0);
+                      if (mins > 0) {
+                        const cleanContent = (d.content || '').replace(/\d{1,2}:\d{2}\s*[~\-]\s*\d{1,2}:\d{2}/g, '').trim();
+                        g.downtimeAll.push({
+                          sortTime: d.startTime || '99:99',
+                          isSwap: true,
+                          label: d.downtimeType || '교체',
+                          content: cleanContent,
+                          minutes: mins
+                        });
+                      }
+                    });
+                    defs.forEach(d => g.defectList.push(`${d.defectSubType || d.defectType} ${d.quantity}개`));
+                    rws.forEach(r => g.reworkList.push(`${r.reworkSubType || r.reworkType} ${r.quantity}개`));
+                  });
+                  
+                  // work 행 - 비가동 시간순 정렬
+                  const workRows = Object.values(itemMap).map(g => {
+                    // 비가동/swap을 시간순 정렬
+                    g.downtimeAll.sort((a, b) => (a.sortTime || '').localeCompare(b.sortTime || ''));
+                    return {
+                      type: 'work',
+                      item: g.item,
+                      good: g.good,
+                      downtimeAll: g.downtimeAll,
+                      defects: g.defectList.join(' · '),
+                      reworks: g.reworkList.join(' · '),
+                      startTime: g.startTime === '99:99' ? '' : g.startTime,
+                      noteKey: `prod|${lineName}|${date}|${shift}|${g.item}`
+                    };
+                  });
+                  
+                  const sortKey = (t) => {
+                    if (!t) return 0;
+                    const [h, m] = t.split(':').map(Number);
+                    let mins = h*60 + m;
+                    if (shift === '야간' && mins < 12*60) mins += 24*60;
+                    return mins;
+                  };
+                  
+                  workRows.sort((a, b) => sortKey(a.startTime) - sortKey(b.startTime));
+                  grouped.push({ date, shift, rows: workRows });
+                });
+                return grouped;
+              };
+              
+              // ===== FE FTIV / UCC 데이터 처리 =====
+              const buildFeLineData = (lineKey) => {
+                // lineKey: 'FTIV' or 'UCC'
+                const targetLines = lineKey === 'FTIV' ? ['FTIV'] : ['UCC'];
+                const logs = allLogs.filter(l => 
+                  l.section === 'FE' && targetLines.includes(l.lineName)
+                  && l.productionDate >= prdStartDate && l.productionDate <= prdEndDate
+                );
+                
+                // 일자별 집계
+                const byDate = {};
+                dateRange.forEach(d => {
+                  byDate[d] = { good: 0, opr1st: 0, ovr1st: 0, flvv1st: 0, eol1st: 0, moduleLeak: 0 };
+                });
+                
+                const logIdToDate = {};
+                logs.forEach(l => {
+                  logIdToDate[l.id] = l.productionDate;
+                  if (byDate[l.productionDate]) {
+                    byDate[l.productionDate].good += parseFloat(l.goodQuantity) || 0;
+                  }
+                });
+                
+                // 재작업에서 station/subType 매칭 (관대한 매칭)
+                allReworkLogs.forEach(r => {
+                  const d = logIdToDate[r.productionLogId];
+                  if (!d || !byDate[d]) return;
+                  const station = (r.station || '').trim();
+                  const subType = (r.reworkSubType || '').trim();
+                  const type = (r.reworkType || '').trim();
+                  const combined = `${station} ${type} ${subType}`.toLowerCase();
+                  const qty = parseFloat(r.quantity) || 0;
+                  if (lineKey === 'FTIV') {
+                    // OPR 1차 불량: 'OP80' 또는 'OPR Leak' 포함
+                    if (/op\s*80|opr.*leak/.test(combined)) byDate[d].opr1st += qty;
+                    // OVR 1차 불량: 'OP90' 또는 'OVR Leak' 포함
+                    else if (/op\s*90|ovr.*leak/.test(combined)) byDate[d].ovr1st += qty;
+                  } else if (lineKey === 'UCC') {
+                    // FLVV 1차 불량: FLVV 성능 공정
+                    if (/flvv.*성능|flvv.*perf/i.test(station)) byDate[d].flvv1st += qty;
+                    // EOL 1차 불량: EOL 공정
+                    else if (/^eol|^EOL/i.test(station)) byDate[d].eol1st += qty;
+                  }
+                });
+                
+                return byDate;
+              };
+              
+              // ===== HTML 복사 함수 =====
+              const copyAsHtml = () => {
+                let html = '';
+                if (prdSection === 'TCP') {
+                  const data1 = buildTcpLineData('1PC');
+                  const data2 = buildTcpLineData('2PC');
+                  // 같은 일자/주야 키별로 1PC + 2PC rows 합치기
+                  const keySet = new Set();
+                  data1.forEach(g => keySet.add(`${g.date}|${g.shift}`));
+                  data2.forEach(g => keySet.add(`${g.date}|${g.shift}`));
+                  const sortedKeys = [...keySet].sort((a, b) => {
+                    const [da, sa] = a.split('|');
+                    const [db, sb] = b.split('|');
+                    if (da !== db) return da.localeCompare(db);
+                    if (sa === '주간' && sb !== '주간') return -1;
+                    if (sa !== '주간' && sb === '주간') return 1;
+                    return 0;
+                  });
+                  
+                  const buildDt = (r) => {
+                    if (!r || !r.downtimeAll || r.downtimeAll.length === 0) return '-';
+                    return r.downtimeAll.map(d => d.isSwap
+                      ? `<span style="background:#fef3c7;color:#92400e;font-weight:bold;padding:2px 4px;border:1px solid #f59e0b;border-radius:3px">🔧 ${d.label}${d.content ? ' ('+d.content+')' : ''} ${d.minutes}분</span>`
+                      : `<span style="color:#c2410c">${d.text}</span>`
+                    ).join('<br/>');
+                  };
+                  
+                  const dayKr = ['일','월','화','수','목','금','토'];
+                  html = `<p><b>TCP ${prdStartDate}~${prdEndDate} Production 보고</b></p>`;
+                  html += '<table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-family:Arial;font-size:12px;width:100%">';
+                  html += '<tr><th rowspan="2" style="background:#f1f5f9">일자</th><th rowspan="2" style="background:#f1f5f9">주야</th><th colspan="4" style="background:#2563eb;color:white">1PC</th><th colspan="4" style="background:#d97706;color:white">2PC</th></tr>';
+                  html += '<tr style="background:#f1f5f9"><th>품명</th><th>생산수량</th><th>비가동</th><th>비고</th><th>품명</th><th>생산수량</th><th>비가동</th><th>비고</th></tr>';
+                  
+                  let prevDate = null, prevShift = null;
+                  sortedKeys.forEach((key, ki) => {
+                    const [date, shift] = key.split('|');
+                    const r1 = data1.find(g => g.date === date && g.shift === shift)?.rows || [];
+                    const r2 = data2.find(g => g.date === date && g.shift === shift)?.rows || [];
+                    const maxLen = Math.max(r1.length, r2.length, 1);
+                    
+                    const isDayChange = prevDate !== date;
+                    const isShiftChange = prevDate !== date || prevShift !== shift;
+                    
+                    for (let i = 0; i < maxLen; i++) {
+                      const lr = r1[i];
+                      const rr = r2[i];
+                      const lnote = lr ? (prodReportNotes[lr.noteKey] || '') : '';
+                      const rnote = rr ? (prodReportNotes[rr.noteKey] || '') : '';
+                      
+                      let trStyle = '';
+                      if (i === 0 && isDayChange) trStyle = 'border-top:3px solid #334155';
+                      else if (i === 0 && isShiftChange) trStyle = 'border-top:2px dashed #60a5fa';
+                      
+                      html += `<tr style="${trStyle}">`;
+                      if (i === 0) {
+                        const dayLabel = `${date.slice(5)}(${dayKr[new Date(date).getDay()]})`;
+                        html += `<td rowspan="${maxLen}" style="text-align:center;vertical-align:middle;font-weight:bold;background:#f8fafc;white-space:nowrap">${dayLabel}</td>`;
+                        html += `<td rowspan="${maxLen}" style="text-align:center;vertical-align:middle;font-weight:bold;background:${shift === '주간' ? '#fef9c3' : '#e0e7ff'};color:${shift === '주간' ? '#854d0e' : '#3730a3'}">${shift}</td>`;
+                      }
+                      // 1PC
+                      html += `<td>${lr ? lr.item : ''}</td>`;
+                      html += `<td style="text-align:right;font-weight:600;color:#4338ca">${lr && lr.good > 0 ? Math.round(lr.good).toLocaleString() : (lr ? '-' : '')}</td>`;
+                      html += `<td>${buildDt(lr)}</td>`;
+                      html += `<td>${lnote}</td>`;
+                      // 2PC
+                      html += `<td>${rr ? rr.item : ''}</td>`;
+                      html += `<td style="text-align:right;font-weight:600;color:#4338ca">${rr && rr.good > 0 ? Math.round(rr.good).toLocaleString() : (rr ? '-' : '')}</td>`;
+                      html += `<td>${buildDt(rr)}</td>`;
+                      html += `<td>${rnote}</td>`;
+                      html += `</tr>`;
+                    }
+                    prevDate = date; prevShift = shift;
+                  });
+                  html += '</table>';
+                } else {
+                  // FE
+                  const ftiv = buildFeLineData('FTIV');
+                  const ucc = buildFeLineData('UCC');
+                  html = `<p><b>FE ${prdStartDate}~${prdEndDate} Production 보고</b></p>`;
+                  
+                  // FTIV 표
+                  html += '<p><b>FTIV</b></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-family:Arial;font-size:12px"><tr><th>구분</th>';
+                  dateRange.forEach(d => { html += `<th>${d.slice(5)}</th>`; });
+                  html += '</tr>';
+                  ['생산수량(개)','OPR 1차 불량(개)','OVR 1차 불량(개)','OPR Leak(%)','OVR Leak(%)'].forEach(label => {
+                    html += `<tr><td><b>${label}</b></td>`;
+                    dateRange.forEach(d => {
+                      const v = ftiv[d];
+                      let cellVal = '';
+                      if (label === '생산수량(개)') cellVal = v.good > 0 ? Math.round(v.good).toLocaleString() : '';
+                      else if (label === 'OPR 1차 불량(개)') cellVal = v.opr1st > 0 ? Math.round(v.opr1st).toLocaleString() : '';
+                      else if (label === 'OVR 1차 불량(개)') cellVal = v.ovr1st > 0 ? Math.round(v.ovr1st).toLocaleString() : '';
+                      else if (label === 'OPR Leak(%)') {
+                        const sum = v.good + v.opr1st;
+                        cellVal = sum > 0 ? (v.opr1st/sum*100).toFixed(1) + '%' : '';
+                      } else if (label === 'OVR Leak(%)') {
+                        const sum = v.good + v.ovr1st;
+                        cellVal = sum > 0 ? (v.ovr1st/sum*100).toFixed(1) + '%' : '';
+                      }
+                      html += `<td style="text-align:right">${cellVal}</td>`;
+                    });
+                    html += '</tr>';
+                  });
+                  html += '</table>';
+                  
+                  // UCC 표
+                  html += '<p><b>UCC</b></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-family:Arial;font-size:12px"><tr><th>구분</th>';
+                  dateRange.forEach(d => { html += `<th>${d.slice(5)}</th>`; });
+                  html += '</tr>';
+                  ['생산수량(개)','FLVV 1차 불량(개)','EOL 1차 불량(개)','Module Leak(%)','EOL 1차 불량(%)'].forEach(label => {
+                    html += `<tr><td><b>${label}</b></td>`;
+                    dateRange.forEach(d => {
+                      const v = ucc[d];
+                      let cellVal = '';
+                      if (label === '생산수량(개)') cellVal = v.good > 0 ? Math.round(v.good).toLocaleString() : '';
+                      else if (label === 'FLVV 1차 불량(개)') cellVal = v.flvv1st > 0 ? Math.round(v.flvv1st).toLocaleString() : '';
+                      else if (label === 'EOL 1차 불량(개)') cellVal = v.eol1st > 0 ? Math.round(v.eol1st).toLocaleString() : '';
+                      else if (label === 'Module Leak(%)') {
+                        const sum = v.good + v.flvv1st;
+                        cellVal = sum > 0 ? (v.flvv1st/sum*100).toFixed(1) + '%' : '';
+                      } else if (label === 'EOL 1차 불량(%)') {
+                        const sum = v.good + v.eol1st;
+                        cellVal = sum > 0 ? (v.eol1st/sum*100).toFixed(1) + '%' : '';
+                      }
+                      html += `<td style="text-align:right">${cellVal}</td>`;
+                    });
+                    html += '</tr>';
+                  });
+                  html += '</table>';
+                  
+                  // FTIV 비고
+                  const ftivMemo = prodReportNotes[`fe|FTIV|${prdStartDate}_${prdEndDate}`];
+                  if (ftivMemo) html += `<p><b>FTIV 특이사항:</b><br/>${ftivMemo.replace(/\n/g, '<br/>')}</p>`;
+                  // UCC 비고
+                  const uccMemo = prodReportNotes[`fe|UCC|${prdStartDate}_${prdEndDate}`];
+                  if (uccMemo) html += `<p><b>UCC 특이사항:</b><br/>${uccMemo.replace(/\n/g, '<br/>')}</p>`;
+                }
+                
+                if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+                  const blob = new Blob([html], {type: 'text/html'});
+                  const textBlob = new Blob([html.replace(/<[^>]+>/g, ' ')], {type: 'text/plain'});
+                  navigator.clipboard.write([new ClipboardItem({'text/html': blob, 'text/plain': textBlob})]).then(() => {
+                    alert('✅ HTML 형식으로 복사되었습니다. 메일에 붙여넣기 하세요.');
+                  }).catch(() => {
+                    navigator.clipboard.writeText(html).then(() => alert('HTML 텍스트로 복사되었습니다.'));
+                  });
+                } else {
+                  navigator.clipboard.writeText(html).then(() => alert('HTML 텍스트로 복사되었습니다.'));
+                }
+              };
+              
+              // ===== 엑셀 다운로드 =====
+              const downloadExcel = () => {
+                if (typeof XLSX === 'undefined') { alert('엑셀 라이브러리 로딩 중입니다.'); return; }
+                const wb = XLSX.utils.book_new();
+                
+                if (prdSection === 'TCP') {
+                  const dayKr = ['일','월','화','수','목','금','토'];
+                  ['1PC', '2PC'].forEach(line => {
+                    const data = buildTcpLineData(line);
+                    const rows = [];
+                    data.forEach(g => {
+                      g.rows.forEach((r, i) => {
+                        const dtStr = (r.downtimeAll || []).map(d => d.isSwap
+                          ? `🔧 ${d.label}${d.content ? ' ('+d.content+')' : ''} ${d.minutes}분`
+                          : d.text
+                        ).join(' · ');
+                        const dayLabel = i === 0 ? `${g.date.slice(5)}(${dayKr[new Date(g.date).getDay()]})` : '';
+                        rows.push({
+                          '일자': dayLabel,
+                          '주야': i === 0 ? g.shift : '',
+                          '품명': r.item,
+                          '생산수량': r.good > 0 ? Math.round(r.good) : '',
+                          '비가동': dtStr,
+                          '비고': prodReportNotes[r.noteKey] || ''
+                        });
+                      });
+                    });
+                    if (rows.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), `TCP_${line}`);
+                  });
+                } else {
+                  // FE: FTIV / UCC 각 시트
+                  [{ key: 'FTIV', rows: ['생산수량(개)','OPR 1차 불량(개)','OVR 1차 불량(개)','OPR Leak(%)','OVR Leak(%)']},
+                   { key: 'UCC',  rows: ['생산수량(개)','FLVV 1차 불량(개)','EOL 1차 불량(개)','Module Leak(%)','EOL 1차 불량(%)']}].forEach(cfg => {
+                    const d = buildFeLineData(cfg.key);
+                    const sheetData = cfg.rows.map(label => {
+                      const row = { '구분': label };
+                      dateRange.forEach(dt => {
+                        const v = d[dt];
+                        let val = '';
+                        if (label === '생산수량(개)') val = v.good > 0 ? Math.round(v.good) : '';
+                        else if (label === 'OPR 1차 불량(개)') val = v.opr1st > 0 ? Math.round(v.opr1st) : '';
+                        else if (label === 'OVR 1차 불량(개)') val = v.ovr1st > 0 ? Math.round(v.ovr1st) : '';
+                        else if (label === 'FLVV 1차 불량(개)') val = v.flvv1st > 0 ? Math.round(v.flvv1st) : '';
+                        else if (label === 'EOL 1차 불량(개)') val = v.eol1st > 0 ? Math.round(v.eol1st) : '';
+                        else if (label === 'OPR Leak(%)') { const sum = v.good + v.opr1st; val = sum > 0 ? (v.opr1st/sum*100).toFixed(1) + '%' : ''; }
+                        else if (label === 'OVR Leak(%)') { const sum = v.good + v.ovr1st; val = sum > 0 ? (v.ovr1st/sum*100).toFixed(1) + '%' : ''; }
+                        else if (label === 'Module Leak(%)') { const sum = v.good + v.flvv1st; val = sum > 0 ? (v.flvv1st/sum*100).toFixed(1) + '%' : ''; }
+                        else if (label === 'EOL 1차 불량(%)') { const sum = v.good + v.eol1st; val = sum > 0 ? (v.eol1st/sum*100).toFixed(1) + '%' : ''; }
+                        row[dt] = val;
+                      });
+                      return row;
+                    });
+                    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetData), cfg.key);
+                  });
+                }
+                
+                const filename = `Production_${prdSection}_${prdStartDate}_${prdEndDate}.xlsx`;
+                XLSX.writeFile(wb, filename);
+              };
+              
+              // ===== 렌더링 =====
+              return (
+                <div className="space-y-3">
+                  {/* 컨트롤 */}
+                  <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex bg-slate-100 rounded p-1">
+                        {['TCP','FE'].map(s => (
+                          <button key={s} onClick={() => setPrdSection(s)} className={`px-4 py-1 rounded text-sm font-bold ${prdSection === s ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>{s}</button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-600">기간</span>
+                        <input type="date" value={prdStartDate} onChange={(e) => setPrdStartDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
+                        <span>~</span>
+                        <input type="date" value={prdEndDate} onChange={(e) => setPrdEndDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
+                      </div>
+                      <div className="ml-auto flex gap-2">
+                        <button onClick={copyAsHtml} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">📋 HTML 복사</button>
+                        <button onClick={downloadExcel} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium">📥 엑셀</button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* TCP 화면 - 한 테이블 (좌우 동기화) */}
+                  {prdSection === 'TCP' && (() => {
+                    const data1 = buildTcpLineData('1PC');
+                    const data2 = buildTcpLineData('2PC');
+                    // 같은 일자/주야 키별로 1PC + 2PC rows 합치기
+                    const keySet = new Set();
+                    data1.forEach(g => keySet.add(`${g.date}|${g.shift}`));
+                    data2.forEach(g => keySet.add(`${g.date}|${g.shift}`));
+                    const sortedKeys = [...keySet].sort((a, b) => {
+                      const [da, sa] = a.split('|');
+                      const [db, sb] = b.split('|');
+                      if (da !== db) return da.localeCompare(db);
+                      if (sa === '주간' && sb !== '주간') return -1;
+                      if (sa !== '주간' && sb === '주간') return 1;
+                      return 0;
+                    });
+                    
+                    // 각 그룹의 row 데이터 생성 (max 길이로 패딩)
+                    const mergedGroups = sortedKeys.map(key => {
+                      const [date, shift] = key.split('|');
+                      const r1 = data1.find(g => g.date === date && g.shift === shift)?.rows || [];
+                      const r2 = data2.find(g => g.date === date && g.shift === shift)?.rows || [];
+                      const maxLen = Math.max(r1.length, r2.length, 1);
+                      const rows = [];
+                      for (let i = 0; i < maxLen; i++) {
+                        rows.push({ left: r1[i] || null, right: r2[i] || null });
+                      }
+                      return { date, shift, rows };
+                    });
+                    
+                    const renderCell = (r, lineName) => {
+                      if (!r) return { item: '', good: '', det: null, note: '', noteKey: '' };
+                      return r;
+                    };
+                    
+                    return (
+                      <div className="bg-white rounded-lg shadow-sm border border-slate-300 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs" style={{tableLayout: 'fixed'}}>
+                            <colgroup>
+                              <col style={{width: '70px'}} />
+                              <col style={{width: '50px'}} />
+                              <col style={{width: '110px'}} />
+                              <col style={{width: '70px'}} />
+                              <col />
+                              <col style={{width: '110px'}} />
+                              <col style={{width: '70px'}} />
+                              <col />
+                            </colgroup>
+                            <thead className="bg-slate-100 sticky top-0 z-10">
+                              <tr>
+                                <th rowSpan="2" className="px-2 py-1 border w-20">일자</th>
+                                <th rowSpan="2" className="px-2 py-1 border w-12">주야</th>
+                                <th colSpan="3" className="px-2 py-1 border bg-blue-600 text-white">1PC</th>
+                                <th colSpan="3" className="px-2 py-1 border bg-amber-600 text-white">2PC</th>
+                              </tr>
+                              <tr className="bg-slate-100">
+                                <th className="px-2 py-1 border text-left">품명</th>
+                                <th className="px-2 py-1 border w-16">생산수량</th>
+                                <th className="px-2 py-1 border text-left">비가동</th>
+                                <th className="px-2 py-1 border text-left">품명</th>
+                                <th className="px-2 py-1 border w-16">생산수량</th>
+                                <th className="px-2 py-1 border text-left">비가동</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {mergedGroups.length === 0 && (
+                                <tr><td colSpan="8" className="text-center text-slate-400 py-4">해당 기간 데이터 없음</td></tr>
+                              )}
+                              {mergedGroups.map((g, gi) => {
+                                const prevGroup = mergedGroups[gi - 1];
+                                const isDayChange = !prevGroup || prevGroup.date !== g.date;
+                                const isShiftChange = !prevGroup || prevGroup.date !== g.date || prevGroup.shift !== g.shift;
+                                // 그룹 총 row 수 (work + 펼쳐진 비고)
+                                let groupTotalRows = 0;
+                                g.rows.forEach(pair => {
+                                  groupTotalRows += 1;
+                                  const lExp = pair.left && expandedNotes[pair.left.noteKey];
+                                  const rExp = pair.right && expandedNotes[pair.right.noteKey];
+                                  if (lExp || rExp) groupTotalRows += 1;
+                                });
+                                
+                                const renderDtCell = (r) => {
+                                  if (!r) return '';
+                                  if (!r.downtimeAll || r.downtimeAll.length === 0) return <span className="text-slate-300">-</span>;
+                                  return (
+                                    <div className="space-y-1">
+                                      {r.downtimeAll.map((d, di) => d.isSwap ? (
+                                        <div key={di}>
+                                          <span className="inline-block bg-amber-100 border border-amber-400 text-amber-900 font-semibold px-2 py-0.5 rounded">
+                                            🔧 {d.label}{d.content ? ` (${d.content})` : ''} <span className="text-amber-700 font-normal">{d.minutes}분</span>
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div key={di} className="text-orange-700 leading-relaxed">{d.text}</div>
+                                      ))}
+                                    </div>
+                                  );
+                                };
+                                
+                                const out = [];
+                                g.rows.forEach((pair, ri) => {
+                                  const lr = pair.left;
+                                  const rr = pair.right;
+                                  const isFirstRow = ri === 0;
+                                  let trClass = 'border-t border-slate-200';
+                                  if (isFirstRow && isDayChange) trClass = 'border-t-4 border-t-slate-700';
+                                  else if (isFirstRow && isShiftChange) trClass = 'border-t-2 border-t-blue-400 border-dashed';
+                                  
+                                  out.push(
+                                    <tr key={`${gi}-${ri}`} className={trClass}>
+                                      {isFirstRow && (
+                                        <>
+                                          <td rowSpan={groupTotalRows} className="px-2 py-1 border text-center align-middle font-semibold bg-slate-50 whitespace-nowrap">{g.date.slice(5)}({["일","월","화","수","목","금","토"][new Date(g.date).getDay()]})</td>
+                                          <td rowSpan={groupTotalRows} className={`px-2 py-1 border text-center align-middle font-semibold ${g.shift === '주간' ? 'bg-yellow-50 text-yellow-800' : 'bg-indigo-50 text-indigo-800'}`}>{g.shift}</td>
+                                        </>
+                                      )}
+                                      {/* 1PC */}
+                                      <td className="px-2 py-1.5 border align-top cursor-pointer hover:bg-blue-50" onClick={() => lr && toggleNote(lr.noteKey)}>
+                                        {lr ? <span className="font-semibold text-slate-800">{lr.item}</span> : ''}
+                                      </td>
+                                      <td className="px-2 py-1.5 border text-right align-top font-bold text-indigo-700 text-sm">{lr && lr.good > 0 ? Math.round(lr.good).toLocaleString() : (lr ? '-' : '')}</td>
+                                      <td className="px-2 py-1.5 border align-top text-xs">{renderDtCell(lr)}</td>
+                                      {/* 2PC */}
+                                      <td className="px-2 py-1.5 border align-top cursor-pointer hover:bg-amber-50" onClick={() => rr && toggleNote(rr.noteKey)}>
+                                        {rr ? <span className="font-semibold text-slate-800">{rr.item}</span> : ''}
+                                      </td>
+                                      <td className="px-2 py-1.5 border text-right align-top font-bold text-indigo-700 text-sm">{rr && rr.good > 0 ? Math.round(rr.good).toLocaleString() : (rr ? '-' : '')}</td>
+                                      <td className="px-2 py-1.5 border align-top text-xs">{renderDtCell(rr)}</td>
+                                    </tr>
+                                  );
+                                  
+                                  // 비고 입력 행 (펼쳐진 경우)
+                                  const lExp = lr && expandedNotes[lr.noteKey];
+                                  const rExp = rr && expandedNotes[rr.noteKey];
+                                  if (lExp || rExp) {
+                                    out.push(
+                                      <tr key={`${gi}-${ri}-note`} className="bg-yellow-50">
+                                        <td colSpan="3" className="px-2 py-1 border">
+                                          {lExp ? (
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs font-bold text-yellow-800">📝 비고:</span>
+                                              <input type="text" value={prodReportNotes[lr.noteKey] || ''} onChange={(e) => updateProdNote(lr.noteKey, e.target.value)} className="flex-1 px-2 py-1 text-xs border rounded" placeholder="비고 입력..." autoFocus />
+                                            </div>
+                                          ) : null}
+                                        </td>
+                                        <td colSpan="3" className="px-2 py-1 border">
+                                          {rExp ? (
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs font-bold text-yellow-800">📝 비고:</span>
+                                              <input type="text" value={prodReportNotes[rr.noteKey] || ''} onChange={(e) => updateProdNote(rr.noteKey, e.target.value)} className="flex-1 px-2 py-1 text-xs border rounded" placeholder="비고 입력..." autoFocus />
+                                            </div>
+                                          ) : null}
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+                                });
+                                return out;
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  
+                  {/* FE 화면 */}
+                  {prdSection === 'FE' && (
+                    <div className="space-y-4">
+                      {[{key:'FTIV', color:'green', rows:[
+                        {label:'생산수량(개)', field:'good'},
+                        {label:'OPR 1차 불량(개)', field:'opr1st'},
+                        {label:'OVR 1차 불량(개)', field:'ovr1st'},
+                        {label:'OPR Leak(%)', calc:(v) => { const s = v.good + v.opr1st; return s > 0 ? (v.opr1st/s*100).toFixed(1) + '%' : ''; }},
+                        {label:'OVR Leak(%)', calc:(v) => { const s = v.good + v.ovr1st; return s > 0 ? (v.ovr1st/s*100).toFixed(1) + '%' : ''; }},
+                      ]}, {key:'UCC', color:'purple', rows:[
+                        {label:'생산수량(개)', field:'good'},
+                        {label:'FLVV 1차 불량(개)', field:'flvv1st'},
+                        {label:'EOL 1차 불량(개)', field:'eol1st'},
+                        {label:'Module Leak(%)', calc:(v) => { const s = v.good + v.flvv1st; return s > 0 ? (v.flvv1st/s*100).toFixed(1) + '%' : ''; }},
+                        {label:'EOL 1차 불량(%)', calc:(v) => { const s = v.good + v.eol1st; return s > 0 ? (v.eol1st/s*100).toFixed(1) + '%' : ''; }},
+                      ]}].map(cfg => {
+                        const data = buildFeLineData(cfg.key);
+                        const lineNoteKey = `fe|${cfg.key}|${prdStartDate}_${prdEndDate}`;
+                        const isExpanded = expandedNotes[lineNoteKey];
+                        return (
+                          <div key={cfg.key} className="bg-white rounded-lg shadow-sm border border-slate-300 overflow-hidden">
+                            <div className={`px-3 py-2 font-bold text-white bg-${cfg.color}-600 cursor-pointer hover:opacity-90 flex items-center justify-between`} onClick={() => toggleNote(lineNoteKey)}>
+                              <span>{cfg.key}</span>
+                              <span className="text-xs opacity-90">📝 비고</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="text-xs">
+                                <thead className="bg-slate-100">
+                                  <tr>
+                                    <th className="px-2 py-1 border min-w-[140px] text-left">구분</th>
+                                    {dateRange.map(d => {
+                                      const dayKr = ['일','월','화','수','목','금','토'];
+                                      const dayLabel = `${d.slice(5)}(${dayKr[new Date(d).getDay()]})`;
+                                      return <th key={d} className="px-2 py-1 border min-w-[70px] whitespace-nowrap">{dayLabel}</th>;
+                                    })}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {cfg.rows.map(row => (
+                                    <tr key={row.label} className="border-t border-slate-200">
+                                      <td className="px-2 py-1 border font-medium bg-slate-50">{row.label}</td>
+                                      {dateRange.map(d => {
+                                        const v = data[d];
+                                        let cellVal = '';
+                                        if (row.field) cellVal = v[row.field] > 0 ? Math.round(v[row.field]).toLocaleString() : '';
+                                        else if (row.calc) cellVal = row.calc(v);
+                                        return <td key={d} className="px-2 py-1 border text-right">{cellVal}</td>;
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            {isExpanded && (
+                              <div className="bg-yellow-50 border-t border-yellow-300 p-3">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-xs font-bold text-yellow-800 whitespace-nowrap pt-1">📝 {cfg.key} 비고:</span>
+                                  <textarea 
+                                    value={prodReportNotes[lineNoteKey] || ''}
+                                    onChange={(e) => updateProdNote(lineNoteKey, e.target.value)}
+                                    rows="4"
+                                    className="flex-1 px-2 py-1 text-xs border border-yellow-400 rounded focus:ring-2 focus:ring-yellow-400 outline-none"
+                                    placeholder={`예) 05/19 ${cfg.key} A\n  - 특이사항 내용...`}
+                                    autoFocus
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      
+
+                    </div>
+                  )}
                 </div>
               );
             })()}
