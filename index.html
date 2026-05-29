@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
@@ -1222,7 +1223,35 @@
       // UCC 접기/펴기
       const [uccCollapsed, setUccCollapsed] = useState(false);
       
-      // ★ 자동 백업: prodReportNotes / moduleQuantities 변경 시 10초 후 silent 백업
+      // ★ 비가동 셀 오버라이드 (화면 자체에서만 수정, 원본 데이터 안 건드림)
+      const [dtOverrides, setDtOverrides] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mfg_dt_overrides') || '{}'); } catch { return {}; }
+      });
+      const updateDtOverride = (key, text) => {
+        setDtOverrides(prev => {
+          const next = { ...prev };
+          next[key] = text || '';  // 빈 텍스트도 유효한 오버라이드로 저장 (삭제는 resetDtOverride로만)
+          try { localStorage.setItem('mfg_dt_overrides', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
+      const resetDtOverride = (key) => {
+        setDtOverrides(prev => {
+          const next = { ...prev };
+          delete next[key];
+          try { localStorage.setItem('mfg_dt_overrides', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
+      // 비가동 셀 편집 중 상태
+      const [editingDtCellKey, setEditingDtCellKey] = useState(null);
+      const [editingDtCellText, setEditingDtCellText] = useState('');
+      const startDtEdit = (cellKey, currentText) => {
+        setEditingDtCellKey(cellKey);
+        setEditingDtCellText(currentText);
+      };
+      
+      // ★ 자동 백업: 변경 시 10초 후 silent 백업
       const autoBackupSkipRef = React.useRef(true);
       React.useEffect(() => {
         if (autoBackupSkipRef.current) {
@@ -1233,7 +1262,7 @@
           try {
             const payload = {
               filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-              data: { version: 5, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities }
+              data: { version: 6, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides }
             };
             await fetch(GAS_URL, {
               method: 'POST',
@@ -1243,7 +1272,7 @@
           } catch {}
         }, 10000);
         return () => clearTimeout(timer);
-      }, [prodReportNotes, moduleQuantities]);
+      }, [prodReportNotes, moduleQuantities, dtOverrides]);
       const [expandedNotes, setExpandedNotes] = useState({});
       const toggleNote = (key) => setExpandedNotes(prev => ({ ...prev, [key]: !prev[key] }));
       const updateProdNote = (key, value) => {
@@ -1492,7 +1521,7 @@
         try {
           const payload = {
             filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-            data: { version: 5, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities }
+            data: { version: 6, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides }
           };
           const res = await fetch(GAS_URL, {
             method: 'POST',
@@ -1556,6 +1585,10 @@
             if (d.moduleQuantities !== undefined) {
               setModuleQuantities(d.moduleQuantities || {});
               try { localStorage.setItem('mfg_module_quantities', JSON.stringify(d.moduleQuantities || {})); } catch {}
+            }
+            if (d.dtOverrides !== undefined) {
+              setDtOverrides(d.dtOverrides || {});
+              try { localStorage.setItem('mfg_dt_overrides', JSON.stringify(d.dtOverrides || {})); } catch {}
             }
             setShowDriveLoad(false);
             alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성률 계획 데이터가 복원되었습니다');
@@ -1665,6 +1698,10 @@
                   if (d.moduleQuantities !== undefined) {
                     setModuleQuantities(d.moduleQuantities || {});
                     try { localStorage.setItem('mfg_module_quantities', JSON.stringify(d.moduleQuantities || {})); } catch {}
+                  }
+                  if (d.dtOverrides !== undefined) {
+                    setDtOverrides(d.dtOverrides || {});
+                    try { localStorage.setItem('mfg_dt_overrides', JSON.stringify(d.dtOverrides || {})); } catch {}
                   }
                 }
               } catch {}
@@ -7782,6 +7819,227 @@
                 }
               };
               
+              // ===== PPT 다운로드 =====
+              const downloadPpt = () => {
+                try {
+                  if (typeof PptxGenJS === 'undefined') {
+                    alert('PPT 라이브러리 로드 실패. 새로고침 후 다시 시도해주세요.');
+                    return;
+                  }
+                  const pres = new PptxGenJS();
+                  pres.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inch
+                  pres.title = 'Production 보고';
+                  
+                  // 비가동 셀 텍스트 생성 (override 우선)
+                  const getDtText = (section, date, shift, item, downtimeAll) => {
+                    const cellKey = `dtcell|${section}|${date}|${shift}|${item}`;
+                    const override = dtOverrides[cellKey];
+                    if (override !== undefined) return override;
+                    if (!downtimeAll || downtimeAll.length === 0) return '-';
+                    return downtimeAll.map(d => d.isSwap ? `🔧 ${d.label}${d.content ? ' (' + d.content + ')' : ''} ${d.minutes}분` : d.text).join('\n');
+                  };
+                  
+                  const dayKr = ['일','월','화','수','목','금','토'];
+                  const fmtDate = (d) => `${d.slice(5)}(${dayKr[new Date(d).getDay()]})`;
+                  
+                  if (prdSection === 'TCP') {
+                    const data1 = buildTcpLineData('1PC');
+                    const data2 = buildTcpLineData('2PC');
+                    
+                    // mergedGroups 재생성
+                    const map = {};
+                    [...data1, ...data2].forEach(g => {
+                      const k = `${g.date}|${g.shift}`;
+                      if (!map[k]) map[k] = { date: g.date, shift: g.shift, rows1: [], rows2: [] };
+                    });
+                    data1.forEach(g => { map[`${g.date}|${g.shift}`].rows1 = g.rows; });
+                    data2.forEach(g => { map[`${g.date}|${g.shift}`].rows2 = g.rows; });
+                    const merged = Object.values(map).sort((a, b) => {
+                      if (a.date !== b.date) return a.date.localeCompare(b.date);
+                      return a.shift === '주간' ? -1 : 1;
+                    });
+                    
+                    const slide = pres.addSlide();
+                    slide.addText(`TCP 생산 보고 (${prdStartDate} ~ ${prdEndDate})`, { x: 0.3, y: 0.15, fontSize: 16, bold: true, color: '1E3A8A' });
+                    
+                    // 헤더 2 줄
+                    const tableRows = [];
+                    tableRows.push([
+                      { text: '일자', options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', rowspan: 2 } },
+                      { text: '주야', options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', rowspan: 2 } },
+                      { text: '1PC', options: { bold: true, fill: '2563EB', color: 'FFFFFF', valign: 'middle', align: 'center', colspan: 3 } },
+                      { text: '2PC', options: { bold: true, fill: 'D97706', color: 'FFFFFF', valign: 'middle', align: 'center', colspan: 3 } },
+                    ]);
+                    tableRows.push([
+                      { text: '품명', options: { bold: true, fill: 'DBEAFE', valign: 'middle', align: 'center' } },
+                      { text: '생산수량', options: { bold: true, fill: 'DBEAFE', valign: 'middle', align: 'center' } },
+                      { text: '비가동', options: { bold: true, fill: 'DBEAFE', valign: 'middle', align: 'center' } },
+                      { text: '품명', options: { bold: true, fill: 'FEF3C7', valign: 'middle', align: 'center' } },
+                      { text: '생산수량', options: { bold: true, fill: 'FEF3C7', valign: 'middle', align: 'center' } },
+                      { text: '비가동', options: { bold: true, fill: 'FEF3C7', valign: 'middle', align: 'center' } },
+                    ]);
+                    
+                    // 데이터 행
+                    let totalGood1 = 0, totalGood2 = 0, swap1 = 0, swap2 = 0, swapMin1 = 0, swapMin2 = 0, norm1 = 0, norm2 = 0;
+                    merged.forEach(g => {
+                      const r1 = g.rows1 || [], r2 = g.rows2 || [];
+                      const maxRow = Math.max(r1.length, r2.length, 1);
+                      for (let i = 0; i < maxRow; i++) {
+                        const row = [];
+                        if (i === 0) {
+                          row.push({ text: fmtDate(g.date), options: { rowspan: maxRow, bold: true, fill: 'F8FAFC', valign: 'middle', align: 'center', fontSize: 9 } });
+                          row.push({ text: g.shift, options: { rowspan: maxRow, fill: g.shift === '주간' ? 'FEF3C7' : 'E0E7FF', valign: 'middle', align: 'center', fontSize: 9 } });
+                        }
+                        // else: rowspan으로 인해 일자/주야 셀은 후속 행에서 자동 점유
+                        const item1 = r1[i] ? r1[i].item : '';
+                        const good1 = r1[i] ? Math.round(r1[i].good).toLocaleString() : '';
+                        const dt1 = r1[i] ? getDtText('TCP', g.date, g.shift, r1[i].item, r1[i].downtimeAll) : '';
+                        row.push({ text: item1, options: { fill: 'EFF6FF', valign: 'middle', align: 'center', bold: true, fontSize: 9 } });
+                        row.push({ text: good1, options: { fill: 'EFF6FF', valign: 'middle', align: 'center', color: '4338CA', bold: true, fontSize: 10 } });
+                        row.push({ text: dt1, options: { fill: 'EFF6FF', valign: 'top', align: 'left', color: 'C2410C', fontSize: 8 } });
+                        
+                        const item2 = r2[i] ? r2[i].item : '';
+                        const good2 = r2[i] ? Math.round(r2[i].good).toLocaleString() : '';
+                        const dt2 = r2[i] ? getDtText('TCP', g.date, g.shift, r2[i].item, r2[i].downtimeAll) : '';
+                        row.push({ text: item2, options: { fill: 'FFFBEB', valign: 'middle', align: 'center', bold: true, fontSize: 9 } });
+                        row.push({ text: good2, options: { fill: 'FFFBEB', valign: 'middle', align: 'center', color: '4338CA', bold: true, fontSize: 10 } });
+                        row.push({ text: dt2, options: { fill: 'FFFBEB', valign: 'top', align: 'left', color: 'C2410C', fontSize: 8 } });
+                        
+                        tableRows.push(row);
+                      }
+                      // 종합 누적
+                      r1.forEach(r => { totalGood1 += r.good; (r.downtimeAll||[]).forEach(d => { if (d.isSwap) { swap1++; swapMin1 += d.minutes; } else { norm1 += d.minutes||0; } }); });
+                      r2.forEach(r => { totalGood2 += r.good; (r.downtimeAll||[]).forEach(d => { if (d.isSwap) { swap2++; swapMin2 += d.minutes; } else { norm2 += d.minutes||0; } }); });
+                    });
+                    
+                    // 종합 행
+                    const totalRow = [
+                      { text: '종합', options: { bold: true, fill: 'CBD5E1', valign: 'middle', align: 'center', colspan: 2, fontSize: 10 } },
+                      { text: '전체', options: { bold: true, fill: 'DBEAFE', valign: 'middle', align: 'center', fontSize: 9 } },
+                      { text: Math.round(totalGood1).toLocaleString(), options: { bold: true, fill: 'DBEAFE', valign: 'middle', align: 'center', color: '4338CA', fontSize: 10 } },
+                      { text: `${swap1 > 0 ? '🔧 Tool 교체 ' + swap1 + '회 / ' + swapMin1 + '분\n' : ''}⚠ 비가동 ${norm1}분`, options: { bold: true, fill: 'DBEAFE', valign: 'top', align: 'left', fontSize: 8 } },
+                      { text: '전체', options: { bold: true, fill: 'FEF3C7', valign: 'middle', align: 'center', fontSize: 9 } },
+                      { text: Math.round(totalGood2).toLocaleString(), options: { bold: true, fill: 'FEF3C7', valign: 'middle', align: 'center', color: '4338CA', fontSize: 10 } },
+                      { text: `${swap2 > 0 ? '🔧 Tool 교체 ' + swap2 + '회 / ' + swapMin2 + '분\n' : ''}⚠ 비가동 ${norm2}분`, options: { bold: true, fill: 'FEF3C7', valign: 'top', align: 'left', fontSize: 8 } },
+                    ];
+                    tableRows.push(totalRow);
+                    
+                    slide.addTable(tableRows, {
+                      x: 0.3, y: 0.6,
+                      w: 12.7,
+                      h: 6.7,
+                      colW: [0.8, 0.6, 1.0, 0.9, 3.0, 1.0, 0.9, 3.0],
+                      border: { type: 'solid', color: '94A3B8', pt: 0.5 },
+                      fontFace: 'Malgun Gothic',
+                      fontSize: 9
+                    });
+                  } else {
+                    // FE: FTIV / UCC 각 슬라이드
+                    ['FTIV', 'UCC'].forEach(lineKey => {
+                      const isUcc = lineKey === 'UCC';
+                      const data = buildFeLineDataRows(lineKey);
+                      if (data.length === 0) return;
+                      
+                      const slide = pres.addSlide();
+                      const headerColor = isUcc ? '7E22CE' : '16A34A';
+                      slide.addText(`${lineKey} 생산 보고 (${prdStartDate} ~ ${prdEndDate})`, { x: 0.3, y: 0.15, fontSize: 16, bold: true, color: headerColor });
+                      
+                      const tableRows = [];
+                      const headers = isUcc 
+                        ? ['일자', '주야', '품명', '생산수량', 'Module 수량', 'FLVV 1차 불량', 'EOL 1차 불량', 'Module Leak(%)', 'EOL 1차 불량(%)', '비가동']
+                        : ['일자', '주야', '품명', '생산수량', 'OPR 1차 불량', 'OVR 1차 불량', 'OPR Leak(%)', 'OVR Leak(%)', '비가동'];
+                      tableRows.push(headers.map(h => ({ text: h, options: { bold: true, fill: headerColor, color: 'FFFFFF', valign: 'middle', align: 'center', fontSize: 9 } })));
+                      
+                      let tGood = 0, tOpr = 0, tOvr = 0, tFlvv = 0, tEol = 0, tMq = 0;
+                      let tSwap = 0, tSwapMin = 0, tNorm = 0;
+                      
+                      data.forEach(g => {
+                        g.rows.forEach((r, ri) => {
+                          const mqKey = `${g.date}|${g.shift}|${r.item}`;
+                          const mqRow = isUcc ? (moduleQuantities[mqKey] || 0) : 0;
+                          const isFirstRow = ri === 0;
+                          const row = [];
+                          if (isFirstRow) {
+                            row.push({ text: fmtDate(g.date), options: { rowspan: g.rows.length, bold: true, fill: 'F8FAFC', valign: 'middle', align: 'center', fontSize: 9 } });
+                            row.push({ text: g.shift, options: { rowspan: g.rows.length, fill: g.shift === '주간' ? 'FEF3C7' : 'E0E7FF', valign: 'middle', align: 'center', fontSize: 9 } });
+                          }
+                          // else: rowspan으로 자동 점유
+                          row.push({ text: r.item, options: { valign: 'middle', align: 'center', bold: true, fontSize: 9 } });
+                          row.push({ text: r.good > 0 ? Math.round(r.good).toLocaleString() : '-', options: { valign: 'middle', align: 'center', color: '4338CA', bold: true, fontSize: 10 } });
+                          if (isUcc) {
+                            row.push({ text: mqRow > 0 ? mqRow.toLocaleString() : '-', options: { fill: 'FEFCE8', valign: 'middle', align: 'center', fontSize: 9 } });
+                            row.push({ text: r.flvv1st > 0 ? Math.round(r.flvv1st).toLocaleString() : '-', options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                            row.push({ text: r.eol1st > 0 ? Math.round(r.eol1st).toLocaleString() : '-', options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                            const moduleLeak = (() => { const s = r.flvv1st + mqRow; return s > 0 ? (r.flvv1st/s*100).toFixed(1) + '%' : '-'; })();
+                            const eolLeak = (() => { const s = r.good + r.eol1st; return s > 0 ? (r.eol1st/s*100).toFixed(1) + '%' : '-'; })();
+                            row.push({ text: moduleLeak, options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                            row.push({ text: eolLeak, options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                          } else {
+                            row.push({ text: r.opr1st > 0 ? Math.round(r.opr1st).toLocaleString() : '-', options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                            row.push({ text: r.ovr1st > 0 ? Math.round(r.ovr1st).toLocaleString() : '-', options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                            const oprLeak = (() => { const s = r.good + r.opr1st; return s > 0 ? (r.opr1st/s*100).toFixed(1) + '%' : '-'; })();
+                            const ovrLeak = (() => { const s = r.good + r.ovr1st; return s > 0 ? (r.ovr1st/s*100).toFixed(1) + '%' : '-'; })();
+                            row.push({ text: oprLeak, options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                            row.push({ text: ovrLeak, options: { valign: 'middle', align: 'center', fontSize: 9 } });
+                          }
+                          const dtText = getDtText(lineKey, g.date, g.shift, r.item, r.downtimeAll);
+                          row.push({ text: dtText, options: { valign: 'top', align: 'left', color: 'C2410C', fontSize: 8 } });
+                          tableRows.push(row);
+                          
+                          tGood += r.good;
+                          tOpr += r.opr1st || 0;
+                          tOvr += r.ovr1st || 0;
+                          tFlvv += r.flvv1st || 0;
+                          tEol += r.eol1st || 0;
+                          tMq += mqRow;
+                          (r.downtimeAll||[]).forEach(d => { if (d.isSwap) { tSwap++; tSwapMin += d.minutes; } else { tNorm += d.minutes||0; } });
+                        });
+                      });
+                      
+                      // 종합 행
+                      const totalRow = [
+                        { text: '종합', options: { bold: true, fill: 'CBD5E1', valign: 'middle', align: 'center', colspan: 3, fontSize: 10 } },
+                        { text: Math.round(tGood).toLocaleString(), options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', color: '4338CA', fontSize: 10 } },
+                      ];
+                      if (isUcc) {
+                        totalRow.push({ text: tMq > 0 ? tMq.toLocaleString() : '-', options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                        totalRow.push({ text: tFlvv > 0 ? Math.round(tFlvv).toLocaleString() : '-', options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                        totalRow.push({ text: tEol > 0 ? Math.round(tEol).toLocaleString() : '-', options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                        const ml = (() => { const s = tFlvv + tMq; return s > 0 ? (tFlvv/s*100).toFixed(1) + '%' : '-'; })();
+                        const el = (() => { const s = tGood + tEol; return s > 0 ? (tEol/s*100).toFixed(1) + '%' : '-'; })();
+                        totalRow.push({ text: ml, options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                        totalRow.push({ text: el, options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                      } else {
+                        totalRow.push({ text: tOpr > 0 ? Math.round(tOpr).toLocaleString() : '-', options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                        totalRow.push({ text: tOvr > 0 ? Math.round(tOvr).toLocaleString() : '-', options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                        const ol = (() => { const s = tGood + tOpr; return s > 0 ? (tOpr/s*100).toFixed(1) + '%' : '-'; })();
+                        const vl = (() => { const s = tGood + tOvr; return s > 0 ? (tOvr/s*100).toFixed(1) + '%' : '-'; })();
+                        totalRow.push({ text: ol, options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                        totalRow.push({ text: vl, options: { bold: true, fill: 'E2E8F0', valign: 'middle', align: 'center', fontSize: 9 } });
+                      }
+                      totalRow.push({ text: `${tSwap > 0 ? '🔧 Tool 교체 ' + tSwap + '회 / ' + tSwapMin + '분\n' : ''}⚠ 비가동 ${tNorm}분`, options: { bold: true, fill: 'E2E8F0', valign: 'top', align: 'left', fontSize: 8 } });
+                      tableRows.push(totalRow);
+                      
+                      const colWidths = isUcc 
+                        ? [0.7, 0.55, 0.95, 0.8, 0.8, 0.85, 0.85, 0.85, 0.85, 4.0]
+                        : [0.8, 0.6, 1.05, 0.9, 1.0, 1.0, 0.9, 0.9, 4.55];
+                      slide.addTable(tableRows, {
+                        x: 0.3, y: 0.6,
+                        w: 12.7, h: 6.7,
+                        colW: colWidths,
+                        border: { type: 'solid', color: '94A3B8', pt: 0.5 },
+                        fontFace: 'Malgun Gothic',
+                        fontSize: 9
+                      });
+                    });
+                  }
+                  
+                  pres.writeFile({ fileName: `Production_${prdSection}_${prdStartDate}_${prdEndDate}.pptx` });
+                } catch (err) {
+                  alert('PPT 생성 오류: ' + err.message);
+                }
+              };
+              
               // ===== 엑셀 다운로드 =====
               const downloadExcel = () => {
                 if (typeof XLSX === 'undefined') { alert('엑셀 라이브러리 로딩 중입니다.'); return; }
@@ -7865,11 +8123,40 @@
                         <input type="date" value={prdEndDate} onChange={(e) => setPrdEndDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
                       </div>
                       <div className="ml-auto flex gap-2">
+                        <button onClick={() => {
+                          // 현재 보이는 화면 (섹션 + 기간)의 cellKey 수집
+                          const visibleKeys = new Set();
+                          if (prdSection === 'TCP') {
+                            const d1 = buildTcpLineData('1PC');
+                            const d2 = buildTcpLineData('2PC');
+                            [...d1, ...d2].forEach(g => g.rows.forEach(r => {
+                              visibleKeys.add(`dtcell|TCP|${g.date}|${g.shift}|${r.item}`);
+                            }));
+                          } else {
+                            ['FTIV', 'UCC'].forEach(lk => {
+                              const d = buildFeLineDataRows(lk);
+                              d.forEach(g => g.rows.forEach(r => {
+                                visibleKeys.add(`dtcell|${lk}|${g.date}|${g.shift}|${r.item}`);
+                              }));
+                            });
+                          }
+                          const toReset = [...visibleKeys].filter(k => dtOverrides[k] !== undefined);
+                          if (toReset.length === 0) { alert('현재 화면에 수정된 비가동 내용이 없습니다.'); return; }
+                          if (confirm(`현재 화면(${prdSection}, ${prdStartDate}~${prdEndDate})의 수정된 비가동 ${toReset.length}개를 원래대로 복원하시겠습니까?`)) {
+                            setDtOverrides(prev => {
+                              const next = { ...prev };
+                              toReset.forEach(k => delete next[k]);
+                              try { localStorage.setItem('mfg_dt_overrides', JSON.stringify(next)); } catch {}
+                              return next;
+                            });
+                            alert(`${toReset.length}개 셀이 원래대로 복원되었습니다.`);
+                          }
+                        }} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-sm font-bold" title="현재 화면(섹션+기간)의 수정만 원래대로">↻ 화면 원래대로</button>
                         <button onClick={async () => {
                           try {
                             const payload = {
                               filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-                              data: { version: 5, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities }
+                              data: { version: 6, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides }
                             };
                             const res = await fetch(GAS_URL, {
                               method: 'POST',
@@ -7883,6 +8170,7 @@
                         }} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-bold">💾 저장</button>
                         <button onClick={copyAsHtml} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">📋 HTML 복사</button>
                         <button onClick={downloadExcel} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium">📥 엑셀</button>
+                        <button onClick={downloadPpt} className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium">📊 PPT</button>
                       </div>
                     </div>
                   </div>
@@ -8009,13 +8297,79 @@
                                         {lr ? <span className="font-bold text-slate-800 text-sm">{lr.item}</span> : ''}
                                       </td>
                                       <td className="px-2 py-1.5 border text-center align-middle font-bold text-indigo-700 text-base bg-blue-50">{lr && lr.good > 0 ? Math.round(lr.good).toLocaleString() : (lr ? '-' : '')}</td>
-                                      <td className="px-2 py-1.5 border align-top text-left text-xs">{renderDtCell(lr)}</td>
+                                      <td className="px-2 py-1.5 border align-top text-left text-xs bg-blue-50 border-r-[3px] border-r-slate-600">
+                                        {(() => {
+                                          if (!lr) return '';
+                                          const cellKey = `dtcell|TCP|${g.date}|${g.shift}|${lr.item}`;
+                                          const override = dtOverrides[cellKey];
+                                          const isEditing = editingDtCellKey === cellKey;
+                                          if (isEditing) {
+                                            return (
+                                              <div className="space-y-1">
+                                                <textarea value={editingDtCellText} onChange={(e) => setEditingDtCellText(e.target.value)} rows="5" className="w-full px-2 py-1 text-xs border border-blue-400 rounded" autoFocus />
+                                                <div className="flex gap-1 flex-wrap">
+                                                  <button type="button" onClick={() => { updateDtOverride(cellKey, editingDtCellText); setEditingDtCellKey(null); }} className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs">✓ 저장</button>
+                                                  <button type="button" onClick={() => setEditingDtCellKey(null)} className="px-2 py-0.5 bg-slate-500 hover:bg-slate-600 text-white rounded text-xs">✗ 취소</button>
+                                                  <button type="button" onClick={() => { resetDtOverride(cellKey); setEditingDtCellKey(null); }} className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs">↻ 원래대로</button>
+                                                </div>
+                                              </div>
+                                            );
+                                          }
+                                          if (override !== undefined) {
+                                            return (
+                                              <div className="text-orange-700 leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-blue-100" onClick={() => startDtEdit(cellKey, override)} title="클릭하면 수정">{override}</div>
+                                            );
+                                          }
+                                          if (!lr.downtimeAll || lr.downtimeAll.length === 0) {
+                                            return <div className="cursor-pointer hover:bg-blue-100 text-slate-300" onClick={() => startDtEdit(cellKey, '')}>-</div>;
+                                          }
+                                          const originalText = lr.downtimeAll.map(d => d.isSwap ? `🔧 ${d.label}${d.content ? ' (' + d.content + ')' : ''} ${d.minutes}분` : d.text).join('\n');
+                                          return (
+                                            <div className="cursor-pointer hover:bg-blue-100" onClick={() => startDtEdit(cellKey, originalText)} title="클릭하면 수정">
+                                              {renderDtCell(lr)}
+                                            </div>
+                                          );
+                                        })()}
+                                      </td>
                                       {/* 2PC */}
                                       <td className="px-2 py-1.5 border align-middle text-center cursor-pointer bg-amber-50 hover:bg-amber-100" onClick={() => rr && toggleNote(rr.noteKey)}>
                                         {rr ? <span className="font-bold text-slate-800 text-sm">{rr.item}</span> : ''}
                                       </td>
                                       <td className="px-2 py-1.5 border text-center align-middle font-bold text-indigo-700 text-base bg-amber-50">{rr && rr.good > 0 ? Math.round(rr.good).toLocaleString() : (rr ? '-' : '')}</td>
-                                      <td className="px-2 py-1.5 border align-top text-left text-xs">{renderDtCell(rr)}</td>
+                                      <td className="px-2 py-1.5 border align-top text-left text-xs bg-amber-50">
+                                        {(() => {
+                                          if (!rr) return '';
+                                          const cellKey = `dtcell|TCP|${g.date}|${g.shift}|${rr.item}`;
+                                          const override = dtOverrides[cellKey];
+                                          const isEditing = editingDtCellKey === cellKey;
+                                          if (isEditing) {
+                                            return (
+                                              <div className="space-y-1">
+                                                <textarea value={editingDtCellText} onChange={(e) => setEditingDtCellText(e.target.value)} rows="5" className="w-full px-2 py-1 text-xs border border-amber-400 rounded" autoFocus />
+                                                <div className="flex gap-1 flex-wrap">
+                                                  <button type="button" onClick={() => { updateDtOverride(cellKey, editingDtCellText); setEditingDtCellKey(null); }} className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs">✓ 저장</button>
+                                                  <button type="button" onClick={() => setEditingDtCellKey(null)} className="px-2 py-0.5 bg-slate-500 hover:bg-slate-600 text-white rounded text-xs">✗ 취소</button>
+                                                  <button type="button" onClick={() => { resetDtOverride(cellKey); setEditingDtCellKey(null); }} className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs">↻ 원래대로</button>
+                                                </div>
+                                              </div>
+                                            );
+                                          }
+                                          if (override !== undefined) {
+                                            return (
+                                              <div className="text-orange-700 leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-amber-100" onClick={() => startDtEdit(cellKey, override)} title="클릭하면 수정">{override}</div>
+                                            );
+                                          }
+                                          if (!rr.downtimeAll || rr.downtimeAll.length === 0) {
+                                            return <div className="cursor-pointer hover:bg-amber-100 text-slate-300" onClick={() => startDtEdit(cellKey, '')}>-</div>;
+                                          }
+                                          const originalText = rr.downtimeAll.map(d => d.isSwap ? `🔧 ${d.label}${d.content ? ' (' + d.content + ')' : ''} ${d.minutes}분` : d.text).join('\n');
+                                          return (
+                                            <div className="cursor-pointer hover:bg-amber-100" onClick={() => startDtEdit(cellKey, originalText)} title="클릭하면 수정">
+                                              {renderDtCell(rr)}
+                                            </div>
+                                          );
+                                        })()}
+                                      </td>
                                     </tr>
                                   );
                                   
@@ -8144,9 +8498,11 @@
                           });
                           return acc;
                         }, { good:0, opr1st:0, ovr1st:0, flvv1st:0, eol1st:0, swapCount:0, swapMins:0, normalMins:0 });
-                        const dateSet = new Set();
-                        data.forEach(g => dateSet.add(g.date));
-                        const totalModuleQ = [...dateSet].reduce((s, d) => s + (moduleQuantities[d] || 0), 0);
+                        let totalModuleQ = 0;
+                        data.forEach(g => g.rows.forEach(r => {
+                          const k = `${g.date}|${g.shift}|${r.item}`;
+                          totalModuleQ += moduleQuantities[k] || 0;
+                        }));
                         
                         const colSpanNoTotal = isUcc ? (isCollapsed ? 7 : 10) : 9;
                         const noteColSpan = isUcc ? (isCollapsed ? 5 : 8) : 7;
@@ -8218,7 +8574,8 @@
                                       if (isFirstRow && isDayChange) trClass = 'border-t-2 border-t-slate-500';
                                       else if (isFirstRow && isShiftChange) trClass = 'border-t border-t-slate-300 border-dashed';
                                       const note = prodReportNotes[r.noteKey] || '';
-                                      const mq = isUcc ? (moduleQuantities[g.date] || 0) : 0;
+                                      const mqKey = `${g.date}|${g.shift}|${r.item}`;
+                                      const mqRow = isUcc ? (moduleQuantities[mqKey] || 0) : 0;
                                       
                                       out.push(
                                         <tr key={`${gi}-${ri}`} className={trClass}>
@@ -8238,29 +8595,57 @@
                                           </>)}
                                           {isUcc && !isCollapsed && (<>
                                             <td className="px-1 py-0.5 border bg-yellow-50 align-middle">
-                                              {isFirstRow ? (
-                                                <input type="text" inputMode="numeric"
-                                                  value={mq > 0 ? mq.toLocaleString() : ''}
-                                                  onChange={(e) => {
-                                                    const raw = e.target.value.replace(/,/g, '');
-                                                    if (raw === '' || /^\d+$/.test(raw)) updateModuleQty(g.date, raw === '' ? 0 : parseInt(raw, 10));
-                                                  }}
-                                                  className="w-full px-1 py-0.5 text-xs text-center border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-purple-400 rounded font-bold"
-                                                  placeholder="-" />
-                                              ) : (
-                                                <span className="text-slate-300 text-xs">↑</span>
-                                              )}
+                                              <input type="text" inputMode="numeric"
+                                                value={mqRow > 0 ? mqRow.toLocaleString() : ''}
+                                                onChange={(e) => {
+                                                  const raw = e.target.value.replace(/,/g, '');
+                                                  if (raw === '' || /^\d+$/.test(raw)) updateModuleQty(mqKey, raw === '' ? 0 : parseInt(raw, 10));
+                                                }}
+                                                className="w-full px-1 py-0.5 text-xs text-center border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-purple-400 rounded font-bold"
+                                                placeholder="-" />
                                             </td>
                                             <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.flvv1st > 0 ? Math.round(r.flvv1st).toLocaleString() : '-'}</td>
                                             <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.eol1st > 0 ? Math.round(r.eol1st).toLocaleString() : '-'}</td>
-                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.flvv1st + mq; return s > 0 ? (r.flvv1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.flvv1st + mqRow; return s > 0 ? (r.flvv1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
                                             <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.good + r.eol1st; return s > 0 ? (r.eol1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
                                           </>)}
                                           {isUcc && isCollapsed && (<>
                                             <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.eol1st > 0 ? Math.round(r.eol1st).toLocaleString() : '-'}</td>
                                             <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.good + r.eol1st; return s > 0 ? (r.eol1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
                                           </>)}
-                                          <td className="px-2 py-1.5 border align-top text-xs">{renderDtCellFe(r)}</td>
+                                          <td className="px-2 py-1.5 border align-top text-left text-xs">
+                                            {(() => {
+                                              const cellKey = `dtcell|${cfg.key}|${g.date}|${g.shift}|${r.item}`;
+                                              const override = dtOverrides[cellKey];
+                                              const isEditing = editingDtCellKey === cellKey;
+                                              if (isEditing) {
+                                                return (
+                                                  <div className="space-y-1">
+                                                    <textarea value={editingDtCellText} onChange={(e) => setEditingDtCellText(e.target.value)} rows="5" className="w-full px-2 py-1 text-xs border border-slate-400 rounded" autoFocus />
+                                                    <div className="flex gap-1 flex-wrap">
+                                                      <button type="button" onClick={() => { updateDtOverride(cellKey, editingDtCellText); setEditingDtCellKey(null); }} className="px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs">✓ 저장</button>
+                                                      <button type="button" onClick={() => setEditingDtCellKey(null)} className="px-2 py-0.5 bg-slate-500 hover:bg-slate-600 text-white rounded text-xs">✗ 취소</button>
+                                                      <button type="button" onClick={() => { resetDtOverride(cellKey); setEditingDtCellKey(null); }} className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-xs">↻ 원래대로</button>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              }
+                                              if (override !== undefined) {
+                                                return (
+                                                  <div className="text-orange-700 leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-slate-100" onClick={() => startDtEdit(cellKey, override)} title="클릭하면 수정">{override}</div>
+                                                );
+                                              }
+                                              if (!r.downtimeAll || r.downtimeAll.length === 0) {
+                                                return <div className="cursor-pointer hover:bg-slate-100 text-slate-300" onClick={() => startDtEdit(cellKey, '')}>-</div>;
+                                              }
+                                              const originalText = r.downtimeAll.map(d => d.isSwap ? `🔧 ${d.label}${d.content ? ' (' + d.content + ')' : ''} ${d.minutes}분` : d.text).join('\n');
+                                              return (
+                                                <div className="cursor-pointer hover:bg-slate-100" onClick={() => startDtEdit(cellKey, originalText)} title="클릭하면 수정">
+                                                  {renderDtCellFe(r)}
+                                                </div>
+                                              );
+                                            })()}
+                                          </td>
                                         </tr>
                                       );
                                       
