@@ -1205,6 +1205,45 @@
       const [prodReportNotes, setProdReportNotes] = useState(() => {
         try { return JSON.parse(localStorage.getItem('mfg_prod_report_notes') || '{}'); } catch { return {}; }
       });
+      // UCC Module 수량 (수동 입력) - key: date(YYYY-MM-DD), value: number
+      const [moduleQuantities, setModuleQuantities] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mfg_module_quantities') || '{}'); } catch { return {}; }
+      });
+      const updateModuleQty = (date, value) => {
+        setModuleQuantities(prev => {
+          const next = { ...prev };
+          const n = parseFloat(value);
+          if (!n || n <= 0) delete next[date];
+          else next[date] = n;
+          try { localStorage.setItem('mfg_module_quantities', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
+      // UCC 접기/펴기
+      const [uccCollapsed, setUccCollapsed] = useState(false);
+      
+      // ★ 자동 백업: prodReportNotes / moduleQuantities 변경 시 10초 후 silent 백업
+      const autoBackupSkipRef = React.useRef(true);
+      React.useEffect(() => {
+        if (autoBackupSkipRef.current) {
+          autoBackupSkipRef.current = false;
+          return;
+        }
+        const timer = setTimeout(async () => {
+          try {
+            const payload = {
+              filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
+              data: { version: 5, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities }
+            };
+            await fetch(GAS_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(payload)
+            });
+          } catch {}
+        }, 10000);
+        return () => clearTimeout(timer);
+      }, [prodReportNotes, moduleQuantities]);
       const [expandedNotes, setExpandedNotes] = useState({});
       const toggleNote = (key) => setExpandedNotes(prev => ({ ...prev, [key]: !prev[key] }));
       const updateProdNote = (key, value) => {
@@ -1453,7 +1492,7 @@
         try {
           const payload = {
             filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-            data: { version: 4, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData }
+            data: { version: 5, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities }
           };
           const res = await fetch(GAS_URL, {
             method: 'POST',
@@ -1509,6 +1548,14 @@
             if (d.achPlanData !== undefined) {
               setAchPlanData(d.achPlanData || {tcp:{},fe:{}});
               try { localStorage.setItem('mfg_ach_plan', JSON.stringify(d.achPlanData || {tcp:{},fe:{}})); } catch {}
+            }
+            if (d.prodReportNotes !== undefined) {
+              setProdReportNotes(d.prodReportNotes || {});
+              try { localStorage.setItem('mfg_prod_report_notes', JSON.stringify(d.prodReportNotes || {})); } catch {}
+            }
+            if (d.moduleQuantities !== undefined) {
+              setModuleQuantities(d.moduleQuantities || {});
+              try { localStorage.setItem('mfg_module_quantities', JSON.stringify(d.moduleQuantities || {})); } catch {}
             }
             setShowDriveLoad(false);
             alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성률 계획 데이터가 복원되었습니다');
@@ -1610,6 +1657,14 @@
                   if (d.achPlanData !== undefined) {
                     setAchPlanData(d.achPlanData || {tcp:{},fe:{}});
                     try { localStorage.setItem('mfg_ach_plan', JSON.stringify(d.achPlanData || {tcp:{},fe:{}})); } catch {}
+                  }
+                  if (d.prodReportNotes !== undefined) {
+                    setProdReportNotes(d.prodReportNotes || {});
+                    try { localStorage.setItem('mfg_prod_report_notes', JSON.stringify(d.prodReportNotes || {})); } catch {}
+                  }
+                  if (d.moduleQuantities !== undefined) {
+                    setModuleQuantities(d.moduleQuantities || {});
+                    try { localStorage.setItem('mfg_module_quantities', JSON.stringify(d.moduleQuantities || {})); } catch {}
                   }
                 }
               } catch {}
@@ -7267,16 +7322,28 @@
                     // ★ swap + 일반 비가동을 같은 리스트에 모음 (sortTime 포함)
                     otherDts.forEach(d => {
                       const mins = minDiffPr(d.startTime, d.endTime) || (d.duration || 0);
-                      if (mins <= 0) return;
-                      // ★ 정형 항목 제외: M/check, 설비, 안전점검
+                      // ★ 정형 항목 제외: M/check, 설비, 안전점검, 마스터(체크)
                       const typeStr = (d.downtimeType || '').toLowerCase();
                       if (/m\s*\/?\s*check/i.test(typeStr)) return;
                       if (typeStr.includes('설비') && !typeStr.includes('설비고장')) return;
                       if (typeStr.includes('안전점검')) return;
                       const content = (d.content || '').trim();
+                      // ★ 0분: 내용만 표시 + 앞에 * (내용 없으면 표시 안 함)
+                      if (mins <= 0) {
+                        if (content) {
+                          g.downtimeAll.push({
+                            sortTime: d.startTime || '99:99',
+                            isSwap: false,
+                            minutes: 0,
+                            text: `* ${content}`
+                          });
+                        }
+                        return;
+                      }
                       g.downtimeAll.push({
                         sortTime: d.startTime || '99:99',
                         isSwap: false,
+                        minutes: mins,
                         text: `${d.downtimeType} ${mins}분${content ? ' (' + content + ')' : ''}`
                       });
                     });
@@ -7297,15 +7364,33 @@
                     rws.forEach(r => g.reworkList.push(`${r.reworkSubType || r.reworkType} ${r.quantity}개`));
                   });
                   
-                  // work 행 - 비가동 시간순 정렬
+                  // work 행 - 비가동 시간순 정렬 + 같은 swap 합치기
                   const workRows = Object.values(itemMap).map(g => {
-                    // 비가동/swap을 시간순 정렬
-                    g.downtimeAll.sort((a, b) => (a.sortTime || '').localeCompare(b.sortTime || ''));
+                    // ★ 같은 swap (label + content) 합치기
+                    const swapMap = {};
+                    const deduped = [];
+                    g.downtimeAll.forEach(d => {
+                      if (d.isSwap) {
+                        const key = `${d.label}|${d.content || ''}`;
+                        if (!swapMap[key]) {
+                          swapMap[key] = { ...d };
+                          deduped.push(swapMap[key]);
+                        } else {
+                          swapMap[key].minutes += d.minutes;
+                          // 더 빠른 시간으로 업데이트
+                          if (d.sortTime && d.sortTime < swapMap[key].sortTime) swapMap[key].sortTime = d.sortTime;
+                        }
+                      } else {
+                        deduped.push(d);
+                      }
+                    });
+                    // 시간순 정렬
+                    deduped.sort((a, b) => (a.sortTime || '').localeCompare(b.sortTime || ''));
                     return {
                       type: 'work',
                       item: g.item,
                       good: g.good,
-                      downtimeAll: g.downtimeAll,
+                      downtimeAll: deduped,
                       defects: g.defectList.join(' · '),
                       reworks: g.reworkList.join(' · '),
                       startTime: g.startTime === '99:99' ? '' : g.startTime,
@@ -7373,6 +7458,172 @@
                 });
                 
                 return byDate;
+              };
+              
+              // ===== FE TCP-style 데이터 처리 (일자/주야/품명별 행) =====
+              const buildFeLineDataRows = (lineKey) => {
+                const targetLines = lineKey === 'FTIV' ? ['FTIV'] : ['UCC'];
+                const logs = allLogs.filter(l => 
+                  l.section === 'FE' && targetLines.includes(l.lineName)
+                  && l.productionDate >= prdStartDate && l.productionDate <= prdEndDate
+                );
+                
+                const byDayShift = {};
+                logs.forEach(l => {
+                  const key = `${l.productionDate}|${l.shift || '주간'}`;
+                  (byDayShift[key] = byDayShift[key] || []).push(l);
+                });
+                
+                const dtByLogId = {}, rwByLogId = {};
+                allDowntimeLogs.forEach(d => {
+                  if (d.productionLogId != null) (dtByLogId[d.productionLogId] = dtByLogId[d.productionLogId] || []).push(d);
+                });
+                allReworkLogs.forEach(r => {
+                  if (r.productionLogId != null) (rwByLogId[r.productionLogId] = rwByLogId[r.productionLogId] || []).push(r);
+                });
+                
+                const grouped = [];
+                const keys = Object.keys(byDayShift).sort((a, b) => {
+                  const [da, sa] = a.split('|');
+                  const [db, sb] = b.split('|');
+                  if (da !== db) return da.localeCompare(db);
+                  if (sa === '주간' && sb !== '주간') return -1;
+                  if (sa !== '주간' && sb === '주간') return 1;
+                  return 0;
+                });
+                
+                keys.forEach(key => {
+                  const [date, shift] = key.split('|');
+                  const logList = byDayShift[key];
+                  const itemMap = {};
+                  
+                  logList.forEach(log => {
+                    const dts = dtByLogId[log.id] || [];
+                    const swapDts = dts.filter(d => /교체|change/i.test(d.downtimeType || ''));
+                    const otherDts = dts.filter(d => {
+                      if (/교체|change/i.test(d.downtimeType || '')) return false;
+                      if ((d.downtimeCategory || '').includes('계획')) return false;
+                      return true;
+                    });
+                    const rws = rwByLogId[log.id] || [];
+                    
+                    // FTIV는 품명을 'FTIV'로 통일
+                    let item = log.item || '-';
+                    if (lineKey === 'FTIV') item = 'FTIV';
+                    if (!itemMap[item]) {
+                      itemMap[item] = {
+                        item, good: 0,
+                        opr1st: 0, ovr1st: 0, flvv1st: 0, eol1st: 0,
+                        downtimeAll: [],
+                        startTime: log.startTime || '99:99',
+                      };
+                    }
+                    const g = itemMap[item];
+                    g.good += parseFloat(log.goodQuantity) || 0;
+                    if (log.startTime && (g.startTime === '99:99' || log.startTime < g.startTime)) g.startTime = log.startTime;
+                    
+                    // 1차 불량 (rework에서 매핑)
+                    rws.forEach(r => {
+                      const station = (r.station || '').trim();
+                      const subType = (r.reworkSubType || '').trim();
+                      const type = (r.reworkType || '').trim();
+                      const combined = `${station} ${type} ${subType}`.toLowerCase();
+                      const qty = parseFloat(r.quantity) || 0;
+                      if (lineKey === 'FTIV') {
+                        if (/op\s*80|opr.*leak/.test(combined)) g.opr1st += qty;
+                        else if (/op\s*90|ovr.*leak/.test(combined)) g.ovr1st += qty;
+                      } else {
+                        if (/flvv.*성능|flvv.*perf/i.test(station)) g.flvv1st += qty;
+                        else if (/^eol/i.test(station)) g.eol1st += qty;
+                      }
+                    });
+                    
+                    // 일반 비가동
+                    otherDts.forEach(d => {
+                      const mins = minDiffPr(d.startTime, d.endTime) || (d.duration || 0);
+                      // ★ 정형 항목 제외: M/check, 설비, 안전점검, 마스터(체크)
+                      const typeStr = (d.downtimeType || '').toLowerCase();
+                      if (/m\s*\/?\s*check/i.test(typeStr)) return;
+                      if (typeStr.includes('설비') && !typeStr.includes('설비고장')) return;
+                      if (typeStr.includes('안전점검')) return;
+                      if (/마스터|master/i.test(typeStr)) return;
+                      const content = (d.content || '').trim();
+                      // ★ 0분: 내용만 표시 + 앞에 * (내용 없으면 표시 안 함)
+                      if (mins <= 0) {
+                        if (content) {
+                          g.downtimeAll.push({
+                            sortTime: d.startTime || '99:99',
+                            isSwap: false,
+                            minutes: 0,
+                            text: `* ${content}`
+                          });
+                        }
+                        return;
+                      }
+                      g.downtimeAll.push({
+                        sortTime: d.startTime || '99:99',
+                        isSwap: false,
+                        minutes: mins,
+                        text: `${d.downtimeType} ${mins}분${content ? ' (' + content + ')' : ''}`
+                      });
+                    });
+                    
+                    // 교체 (swap)
+                    swapDts.forEach(d => {
+                      const mins = minDiffPr(d.startTime, d.endTime) || (d.duration || 0);
+                      if (mins > 0) {
+                        const cleanContent = (d.content || '').replace(/\d{1,2}:\d{2}\s*[~\-]\s*\d{1,2}:\d{2}/g, '').trim();
+                        g.downtimeAll.push({
+                          sortTime: d.startTime || '99:99',
+                          isSwap: true,
+                          label: d.downtimeType || '교체',
+                          content: cleanContent,
+                          minutes: mins
+                        });
+                      }
+                    });
+                  });
+                  
+                  // swap dedup + 시간순 정렬
+                  const workRows = Object.values(itemMap).map(g => {
+                    const swapMap = {};
+                    const deduped = [];
+                    g.downtimeAll.forEach(d => {
+                      if (d.isSwap) {
+                        const sk = `${d.label}|${d.content || ''}`;
+                        if (!swapMap[sk]) {
+                          swapMap[sk] = { ...d };
+                          deduped.push(swapMap[sk]);
+                        } else {
+                          swapMap[sk].minutes += d.minutes;
+                          if (d.sortTime && d.sortTime < swapMap[sk].sortTime) swapMap[sk].sortTime = d.sortTime;
+                        }
+                      } else {
+                        deduped.push(d);
+                      }
+                    });
+                    deduped.sort((a, b) => (a.sortTime || '').localeCompare(b.sortTime || ''));
+                    return {
+                      item: g.item,
+                      good: g.good,
+                      opr1st: g.opr1st, ovr1st: g.ovr1st, flvv1st: g.flvv1st, eol1st: g.eol1st,
+                      downtimeAll: deduped,
+                      startTime: g.startTime === '99:99' ? '' : g.startTime,
+                      noteKey: `prod|${lineKey}|${date}|${shift}|${g.item}`
+                    };
+                  });
+                  
+                  const sortKey = (t) => {
+                    if (!t) return 0;
+                    const [h, m] = t.split(':').map(Number);
+                    let mins = h*60 + m;
+                    if (shift === '야간' && mins < 12*60) mins += 24*60;
+                    return mins;
+                  };
+                  workRows.sort((a, b) => sortKey(a.startTime) - sortKey(b.startTime));
+                  grouped.push({ date, shift, rows: workRows });
+                });
+                return grouped;
               };
               
               // ===== HTML 복사 함수 =====
@@ -7484,16 +7735,21 @@
                   html += '<p><b>UCC</b></p><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;font-family:Arial;font-size:12px"><tr><th>구분</th>';
                   dateRange.forEach(d => { html += `<th>${d.slice(5)}</th>`; });
                   html += '</tr>';
-                  ['생산수량(개)','FLVV 1차 불량(개)','EOL 1차 불량(개)','Module Leak(%)','EOL 1차 불량(%)'].forEach(label => {
+                  const uccLabels = uccCollapsed
+                    ? ['생산수량(개)','EOL 1차 불량(개)','EOL 1차 불량(%)']
+                    : ['생산수량(개)','Module 수량(개)','FLVV 1차 불량(개)','EOL 1차 불량(개)','Module Leak(%)','EOL 1차 불량(%)'];
+                  uccLabels.forEach(label => {
                     html += `<tr><td><b>${label}</b></td>`;
                     dateRange.forEach(d => {
                       const v = ucc[d];
+                      const moduleQ = moduleQuantities[d] || 0;
                       let cellVal = '';
                       if (label === '생산수량(개)') cellVal = v.good > 0 ? Math.round(v.good).toLocaleString() : '';
+                      else if (label === 'Module 수량(개)') cellVal = moduleQ > 0 ? Math.round(moduleQ).toLocaleString() : '';
                       else if (label === 'FLVV 1차 불량(개)') cellVal = v.flvv1st > 0 ? Math.round(v.flvv1st).toLocaleString() : '';
                       else if (label === 'EOL 1차 불량(개)') cellVal = v.eol1st > 0 ? Math.round(v.eol1st).toLocaleString() : '';
                       else if (label === 'Module Leak(%)') {
-                        const sum = v.good + v.flvv1st;
+                        const sum = v.flvv1st + moduleQ;
                         cellVal = sum > 0 ? (v.flvv1st/sum*100).toFixed(1) + '%' : '';
                       } else if (label === 'EOL 1차 불량(%)') {
                         const sum = v.good + v.eol1st;
@@ -7558,21 +7814,26 @@
                 } else {
                   // FE: FTIV / UCC 각 시트
                   [{ key: 'FTIV', rows: ['생산수량(개)','OPR 1차 불량(개)','OVR 1차 불량(개)','OPR Leak(%)','OVR Leak(%)']},
-                   { key: 'UCC',  rows: ['생산수량(개)','FLVV 1차 불량(개)','EOL 1차 불량(개)','Module Leak(%)','EOL 1차 불량(%)']}].forEach(cfg => {
+                   { key: 'UCC',  rows: uccCollapsed
+                     ? ['생산수량(개)','EOL 1차 불량(개)','EOL 1차 불량(%)']
+                     : ['생산수량(개)','Module 수량(개)','FLVV 1차 불량(개)','EOL 1차 불량(개)','Module Leak(%)','EOL 1차 불량(%)']
+                   }].forEach(cfg => {
                     const d = buildFeLineData(cfg.key);
                     const sheetData = cfg.rows.map(label => {
                       const row = { '구분': label };
                       dateRange.forEach(dt => {
                         const v = d[dt];
+                        const moduleQ = moduleQuantities[dt] || 0;
                         let val = '';
                         if (label === '생산수량(개)') val = v.good > 0 ? Math.round(v.good) : '';
+                        else if (label === 'Module 수량(개)') val = moduleQ > 0 ? Math.round(moduleQ) : '';
                         else if (label === 'OPR 1차 불량(개)') val = v.opr1st > 0 ? Math.round(v.opr1st) : '';
                         else if (label === 'OVR 1차 불량(개)') val = v.ovr1st > 0 ? Math.round(v.ovr1st) : '';
                         else if (label === 'FLVV 1차 불량(개)') val = v.flvv1st > 0 ? Math.round(v.flvv1st) : '';
                         else if (label === 'EOL 1차 불량(개)') val = v.eol1st > 0 ? Math.round(v.eol1st) : '';
                         else if (label === 'OPR Leak(%)') { const sum = v.good + v.opr1st; val = sum > 0 ? (v.opr1st/sum*100).toFixed(1) + '%' : ''; }
                         else if (label === 'OVR Leak(%)') { const sum = v.good + v.ovr1st; val = sum > 0 ? (v.ovr1st/sum*100).toFixed(1) + '%' : ''; }
-                        else if (label === 'Module Leak(%)') { const sum = v.good + v.flvv1st; val = sum > 0 ? (v.flvv1st/sum*100).toFixed(1) + '%' : ''; }
+                        else if (label === 'Module Leak(%)') { const sum = v.flvv1st + moduleQ; val = sum > 0 ? (v.flvv1st/sum*100).toFixed(1) + '%' : ''; }
                         else if (label === 'EOL 1차 불량(%)') { const sum = v.good + v.eol1st; val = sum > 0 ? (v.eol1st/sum*100).toFixed(1) + '%' : ''; }
                         row[dt] = val;
                       });
@@ -7604,6 +7865,22 @@
                         <input type="date" value={prdEndDate} onChange={(e) => setPrdEndDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
                       </div>
                       <div className="ml-auto flex gap-2">
+                        <button onClick={async () => {
+                          try {
+                            const payload = {
+                              filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
+                              data: { version: 5, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities }
+                            };
+                            const res = await fetch(GAS_URL, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                              body: JSON.stringify(payload)
+                            });
+                            const result = await res.json();
+                            if (result.ok) alert('✅ 저장 완료 — 다른 사람도 볼 수 있습니다.');
+                            else alert('저장 실패: ' + (result.error || 'unknown'));
+                          } catch (err) { alert('저장 오류: ' + err.message); }
+                        }} className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-bold">💾 저장</button>
                         <button onClick={copyAsHtml} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium">📋 HTML 복사</button>
                         <button onClick={downloadExcel} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-sm font-medium">📥 엑셀</button>
                       </div>
@@ -7650,29 +7927,29 @@
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs" style={{tableLayout: 'fixed'}}>
                             <colgroup>
-                              <col style={{width: '70px'}} />
-                              <col style={{width: '50px'}} />
+                              <col style={{width: '95px'}} />
+                              <col style={{width: '60px'}} />
                               <col style={{width: '110px'}} />
-                              <col style={{width: '70px'}} />
+                              <col style={{width: '85px'}} />
                               <col />
                               <col style={{width: '110px'}} />
-                              <col style={{width: '70px'}} />
+                              <col style={{width: '85px'}} />
                               <col />
                             </colgroup>
                             <thead className="bg-slate-100 sticky top-0 z-10">
                               <tr>
-                                <th rowSpan="2" className="px-2 py-1 border w-20">일자</th>
-                                <th rowSpan="2" className="px-2 py-1 border w-12">주야</th>
-                                <th colSpan="3" className="px-2 py-1 border bg-blue-600 text-white">1PC</th>
-                                <th colSpan="3" className="px-2 py-1 border bg-amber-600 text-white">2PC</th>
+                                <th rowSpan="2" className="px-2 py-1.5 border text-center text-sm font-bold">일자</th>
+                                <th rowSpan="2" className="px-2 py-1.5 border text-center text-sm font-bold">주야</th>
+                                <th colSpan="3" className="px-2 py-1.5 border bg-blue-600 text-white text-center text-base font-bold border-r-[3px] border-r-slate-600">1PC</th>
+                                <th colSpan="3" className="px-2 py-1.5 border bg-amber-600 text-white text-center text-base font-bold">2PC</th>
                               </tr>
                               <tr className="bg-slate-100">
-                                <th className="px-2 py-1 border text-left">품명</th>
-                                <th className="px-2 py-1 border w-16">생산수량</th>
-                                <th className="px-2 py-1 border text-left">비가동</th>
-                                <th className="px-2 py-1 border text-left">품명</th>
-                                <th className="px-2 py-1 border w-16">생산수량</th>
-                                <th className="px-2 py-1 border text-left">비가동</th>
+                                <th className="px-2 py-1.5 border text-center text-sm font-bold">품명</th>
+                                <th className="px-2 py-1.5 border text-center text-sm font-bold">생산수량</th>
+                                <th className="px-2 py-1.5 border text-center text-sm font-bold border-r-[3px] border-r-slate-600">비가동</th>
+                                <th className="px-2 py-1.5 border text-center text-sm font-bold">품명</th>
+                                <th className="px-2 py-1.5 border text-center text-sm font-bold">생산수량</th>
+                                <th className="px-2 py-1.5 border text-center text-sm font-bold">비가동</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -7716,29 +7993,29 @@
                                   const rr = pair.right;
                                   const isFirstRow = ri === 0;
                                   let trClass = 'border-t border-slate-200';
-                                  if (isFirstRow && isDayChange) trClass = 'border-t-4 border-t-slate-700';
-                                  else if (isFirstRow && isShiftChange) trClass = 'border-t-2 border-t-blue-400 border-dashed';
+                                  if (isFirstRow && isDayChange) trClass = 'border-t-2 border-t-slate-500';
+                                  else if (isFirstRow && isShiftChange) trClass = 'border-t border-t-slate-300 border-dashed';
                                   
                                   out.push(
                                     <tr key={`${gi}-${ri}`} className={trClass}>
                                       {isFirstRow && (
                                         <>
-                                          <td rowSpan={groupTotalRows} className="px-2 py-1 border text-center align-middle font-semibold bg-slate-50 whitespace-nowrap">{g.date.slice(5)}({["일","월","화","수","목","금","토"][new Date(g.date).getDay()]})</td>
-                                          <td rowSpan={groupTotalRows} className={`px-2 py-1 border text-center align-middle font-semibold ${g.shift === '주간' ? 'bg-yellow-50 text-yellow-800' : 'bg-indigo-50 text-indigo-800'}`}>{g.shift}</td>
+                                          <td rowSpan={groupTotalRows} className="px-2 py-1 border text-center align-middle font-bold bg-slate-50 whitespace-nowrap text-sm">{g.date.slice(5)}({["일","월","화","수","목","금","토"][new Date(g.date).getDay()]})</td>
+                                          <td rowSpan={groupTotalRows} className={`px-2 py-1 border text-center align-middle font-bold text-sm ${g.shift === '주간' ? 'bg-yellow-50 text-yellow-800' : 'bg-indigo-50 text-indigo-800'}`}>{g.shift}</td>
                                         </>
                                       )}
                                       {/* 1PC */}
-                                      <td className="px-2 py-1.5 border align-top cursor-pointer hover:bg-blue-50" onClick={() => lr && toggleNote(lr.noteKey)}>
-                                        {lr ? <span className="font-semibold text-slate-800">{lr.item}</span> : ''}
+                                      <td className="px-2 py-1.5 border align-middle text-center cursor-pointer bg-blue-50 hover:bg-blue-100" onClick={() => lr && toggleNote(lr.noteKey)}>
+                                        {lr ? <span className="font-bold text-slate-800 text-sm">{lr.item}</span> : ''}
                                       </td>
-                                      <td className="px-2 py-1.5 border text-right align-top font-bold text-indigo-700 text-sm">{lr && lr.good > 0 ? Math.round(lr.good).toLocaleString() : (lr ? '-' : '')}</td>
-                                      <td className="px-2 py-1.5 border align-top text-xs">{renderDtCell(lr)}</td>
+                                      <td className="px-2 py-1.5 border text-center align-middle font-bold text-indigo-700 text-base bg-blue-50">{lr && lr.good > 0 ? Math.round(lr.good).toLocaleString() : (lr ? '-' : '')}</td>
+                                      <td className="px-2 py-1.5 border align-top text-left text-xs">{renderDtCell(lr)}</td>
                                       {/* 2PC */}
-                                      <td className="px-2 py-1.5 border align-top cursor-pointer hover:bg-amber-50" onClick={() => rr && toggleNote(rr.noteKey)}>
-                                        {rr ? <span className="font-semibold text-slate-800">{rr.item}</span> : ''}
+                                      <td className="px-2 py-1.5 border align-middle text-center cursor-pointer bg-amber-50 hover:bg-amber-100" onClick={() => rr && toggleNote(rr.noteKey)}>
+                                        {rr ? <span className="font-bold text-slate-800 text-sm">{rr.item}</span> : ''}
                                       </td>
-                                      <td className="px-2 py-1.5 border text-right align-top font-bold text-indigo-700 text-sm">{rr && rr.good > 0 ? Math.round(rr.good).toLocaleString() : (rr ? '-' : '')}</td>
-                                      <td className="px-2 py-1.5 border align-top text-xs">{renderDtCell(rr)}</td>
+                                      <td className="px-2 py-1.5 border text-center align-middle font-bold text-indigo-700 text-base bg-amber-50">{rr && rr.good > 0 ? Math.round(rr.good).toLocaleString() : (rr ? '-' : '')}</td>
+                                      <td className="px-2 py-1.5 border align-top text-left text-xs">{renderDtCell(rr)}</td>
                                     </tr>
                                   );
                                   
@@ -7770,6 +8047,48 @@
                                 });
                                 return out;
                               })}
+                              {/* TCP 종합 행 */}
+                              {(() => {
+                                const calcTotal = (d) => {
+                                  let good = 0, swapCount = 0, swapMins = 0, normalMins = 0;
+                                  d.forEach(g => {
+                                    g.rows.forEach(r => {
+                                      good += r.good;
+                                      (r.downtimeAll || []).forEach(x => {
+                                        if (x.isSwap) { swapCount += 1; swapMins += x.minutes || 0; }
+                                        else { normalMins += x.minutes || 0; }
+                                      });
+                                    });
+                                  });
+                                  return { good, swapCount, swapMins, normalMins };
+                                };
+                                const t1 = calcTotal(data1);
+                                const t2 = calcTotal(data2);
+                                if (data1.length === 0 && data2.length === 0) return null;
+                                return (
+                                  <tr className="border-t-2 border-t-slate-700 bg-slate-200 font-bold">
+                                    <td colSpan="2" className="px-2 py-1.5 border text-center align-middle text-sm">종합</td>
+                                    {/* 1PC */}
+                                    <td className="px-2 py-1.5 border text-center align-middle bg-blue-100 text-sm">전체</td>
+                                    <td className="px-2 py-1.5 border text-center align-middle bg-blue-100 text-indigo-700 text-base">{t1.good > 0 ? Math.round(t1.good).toLocaleString() : '-'}</td>
+                                    <td className="px-2 py-1.5 border align-top text-left text-xs bg-blue-100 border-r-[3px] border-r-slate-600">
+                                      <div className="space-y-0.5">
+                                        {t1.swapCount > 0 && <div className="text-amber-800 font-semibold">🔧 Tool 교체 {t1.swapCount}회 / {t1.swapMins}분</div>}
+                                        <div className="text-orange-700 font-semibold">⚠ 비가동 {t1.normalMins}분</div>
+                                      </div>
+                                    </td>
+                                    {/* 2PC */}
+                                    <td className="px-2 py-1.5 border text-center align-middle bg-amber-100 text-sm">전체</td>
+                                    <td className="px-2 py-1.5 border text-center align-middle bg-amber-100 text-indigo-700 text-base">{t2.good > 0 ? Math.round(t2.good).toLocaleString() : '-'}</td>
+                                    <td className="px-2 py-1.5 border align-top text-left text-xs bg-amber-100">
+                                      <div className="space-y-0.5">
+                                        {t2.swapCount > 0 && <div className="text-amber-800 font-semibold">🔧 Tool 교체 {t2.swapCount}회 / {t2.swapMins}분</div>}
+                                        <div className="text-orange-700 font-semibold">⚠ 비가동 {t2.normalMins}분</div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })()}
                             </tbody>
                           </table>
                         </div>
@@ -7777,56 +8096,219 @@
                     );
                   })()}
                   
-                  {/* FE 화면 */}
+                  {/* FE 화면 - TCP 스타일 (FTIV/UCC 각자 별도 표) */}
                   {prdSection === 'FE' && (
                     <div className="space-y-4">
-                      {[{key:'FTIV', color:'green', rows:[
-                        {label:'생산수량(개)', field:'good'},
-                        {label:'OPR 1차 불량(개)', field:'opr1st'},
-                        {label:'OVR 1차 불량(개)', field:'ovr1st'},
-                        {label:'OPR Leak(%)', calc:(v) => { const s = v.good + v.opr1st; return s > 0 ? (v.opr1st/s*100).toFixed(1) + '%' : ''; }},
-                        {label:'OVR Leak(%)', calc:(v) => { const s = v.good + v.ovr1st; return s > 0 ? (v.ovr1st/s*100).toFixed(1) + '%' : ''; }},
-                      ]}, {key:'UCC', color:'purple', rows:[
-                        {label:'생산수량(개)', field:'good'},
-                        {label:'FLVV 1차 불량(개)', field:'flvv1st'},
-                        {label:'EOL 1차 불량(개)', field:'eol1st'},
-                        {label:'Module Leak(%)', calc:(v) => { const s = v.good + v.flvv1st; return s > 0 ? (v.flvv1st/s*100).toFixed(1) + '%' : ''; }},
-                        {label:'EOL 1차 불량(%)', calc:(v) => { const s = v.good + v.eol1st; return s > 0 ? (v.eol1st/s*100).toFixed(1) + '%' : ''; }},
-                      ]}].map(cfg => {
-                        const data = buildFeLineData(cfg.key);
+                      {[
+                        { key: 'FTIV', color: 'green', headerBg: 'bg-green-600' },
+                        { key: 'UCC',  color: 'purple', headerBg: 'bg-purple-600' },
+                      ].map(cfg => {
+                        const isUcc = cfg.key === 'UCC';
+                        const data = buildFeLineDataRows(cfg.key);
                         const lineNoteKey = `fe|${cfg.key}|${prdStartDate}_${prdEndDate}`;
                         const isExpanded = expandedNotes[lineNoteKey];
+                        const isCollapsed = isUcc && uccCollapsed;
+                        
+                        const renderDtCellFe = (r) => {
+                          if (!r || !r.downtimeAll || r.downtimeAll.length === 0) return <span className="text-slate-300">-</span>;
+                          return (
+                            <div className="space-y-1">
+                              {r.downtimeAll.map((d, di) => d.isSwap ? (
+                                <div key={di}>
+                                  <span className="inline-block bg-amber-100 border border-amber-400 text-amber-900 font-semibold px-2 py-0.5 rounded">
+                                    🔧 {d.label}{d.content ? ` (${d.content})` : ''} <span className="text-amber-700 font-normal">{d.minutes}분</span>
+                                  </span>
+                                </div>
+                              ) : (
+                                <div key={di} className="text-orange-700 leading-relaxed">{d.text}</div>
+                              ))}
+                            </div>
+                          );
+                        };
+                        
+                        const totals = data.reduce((acc, g) => {
+                          g.rows.forEach(r => {
+                            acc.good += r.good;
+                            acc.opr1st += r.opr1st || 0;
+                            acc.ovr1st += r.ovr1st || 0;
+                            acc.flvv1st += r.flvv1st || 0;
+                            acc.eol1st += r.eol1st || 0;
+                            (r.downtimeAll || []).forEach(d => {
+                              if (d.isSwap) {
+                                acc.swapCount += 1;
+                                acc.swapMins += d.minutes || 0;
+                              } else {
+                                acc.normalMins += d.minutes || 0;
+                              }
+                            });
+                          });
+                          return acc;
+                        }, { good:0, opr1st:0, ovr1st:0, flvv1st:0, eol1st:0, swapCount:0, swapMins:0, normalMins:0 });
+                        const dateSet = new Set();
+                        data.forEach(g => dateSet.add(g.date));
+                        const totalModuleQ = [...dateSet].reduce((s, d) => s + (moduleQuantities[d] || 0), 0);
+                        
+                        const colSpanNoTotal = isUcc ? (isCollapsed ? 7 : 10) : 9;
+                        const noteColSpan = isUcc ? (isCollapsed ? 5 : 8) : 7;
+                        
                         return (
                           <div key={cfg.key} className="bg-white rounded-lg shadow-sm border border-slate-300 overflow-hidden">
-                            <div className={`px-3 py-2 font-bold text-white bg-${cfg.color}-600 cursor-pointer hover:opacity-90 flex items-center justify-between`} onClick={() => toggleNote(lineNoteKey)}>
-                              <span>{cfg.key}</span>
-                              <span className="text-xs opacity-90">📝 비고</span>
+                            <div className={`px-3 py-2 font-bold text-white ${cfg.headerBg} flex items-center justify-between`}>
+                              <span className="cursor-pointer hover:opacity-90 flex-1" onClick={() => toggleNote(lineNoteKey)}>{cfg.key} 📝 비고</span>
+                              {isUcc && (
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setUccCollapsed(!uccCollapsed); }} className="ml-2 px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded text-xs">
+                                  {uccCollapsed ? '▼ 펴기' : '▲ 접기'}
+                                </button>
+                              )}
                             </div>
                             <div className="overflow-x-auto">
-                              <table className="text-xs">
-                                <thead className="bg-slate-100">
+                              <table className="w-full text-xs" style={{tableLayout: 'fixed'}}>
+                                <colgroup>
+                                  <col style={{width: '95px'}} />
+                                  <col style={{width: '60px'}} />
+                                  <col style={{width: '110px'}} />
+                                  <col style={{width: '85px'}} />
+                                  {!isUcc && (<><col style={{width: '85px'}} /><col style={{width: '85px'}} /><col style={{width: '75px'}} /><col style={{width: '75px'}} /></>)}
+                                  {isUcc && !isCollapsed && (<><col style={{width: '85px'}} /><col style={{width: '85px'}} /><col style={{width: '85px'}} /><col style={{width: '85px'}} /><col style={{width: '85px'}} /></>)}
+                                  {isUcc && isCollapsed && (<><col style={{width: '85px'}} /><col style={{width: '85px'}} /></>)}
+                                  <col />
+                                </colgroup>
+                                <thead className="bg-slate-100 sticky top-0 z-10">
                                   <tr>
-                                    <th className="px-2 py-1 border min-w-[140px] text-left">구분</th>
-                                    {dateRange.map(d => {
-                                      const dayKr = ['일','월','화','수','목','금','토'];
-                                      const dayLabel = `${d.slice(5)}(${dayKr[new Date(d).getDay()]})`;
-                                      return <th key={d} className="px-2 py-1 border min-w-[70px] whitespace-nowrap">{dayLabel}</th>;
-                                    })}
+                                    <th className="px-2 py-1.5 border text-center text-sm font-bold">일자</th>
+                                    <th className="px-2 py-1.5 border text-center text-sm font-bold">주야</th>
+                                    <th className="px-2 py-1.5 border text-center text-sm font-bold">품명</th>
+                                    <th className="px-2 py-1.5 border text-center text-sm font-bold">생산수량</th>
+                                    {!isUcc && (<>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">OPR<br/>1차 불량</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">OVR<br/>1차 불량</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">OPR<br/>Leak(%)</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">OVR<br/>Leak(%)</th>
+                                    </>)}
+                                    {isUcc && !isCollapsed && (<>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">Module<br/>수량</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">FLVV<br/>1차 불량</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">EOL<br/>1차 불량</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">Module<br/>Leak(%)</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">EOL<br/>1차 불량(%)</th>
+                                    </>)}
+                                    {isUcc && isCollapsed && (<>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">EOL<br/>1차 불량</th>
+                                      <th className="px-2 py-1.5 border text-center text-sm font-bold leading-tight">EOL<br/>1차 불량(%)</th>
+                                    </>)}
+                                    <th className="px-2 py-1.5 border text-center text-sm font-bold">비가동</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {cfg.rows.map(row => (
-                                    <tr key={row.label} className="border-t border-slate-200">
-                                      <td className="px-2 py-1 border font-medium bg-slate-50">{row.label}</td>
-                                      {dateRange.map(d => {
-                                        const v = data[d];
-                                        let cellVal = '';
-                                        if (row.field) cellVal = v[row.field] > 0 ? Math.round(v[row.field]).toLocaleString() : '';
-                                        else if (row.calc) cellVal = row.calc(v);
-                                        return <td key={d} className="px-2 py-1 border text-right">{cellVal}</td>;
-                                      })}
+                                  {data.length === 0 && (
+                                    <tr><td colSpan={colSpanNoTotal} className="text-center text-slate-400 py-4">해당 기간 데이터 없음</td></tr>
+                                  )}
+                                  {data.map((g, gi) => {
+                                    const prevGroup = data[gi - 1];
+                                    const isDayChange = !prevGroup || prevGroup.date !== g.date;
+                                    const isShiftChange = !prevGroup || prevGroup.date !== g.date || prevGroup.shift !== g.shift;
+                                    let groupTotalRows = 0;
+                                    g.rows.forEach(r => { groupTotalRows += 1; if (expandedNotes[r.noteKey]) groupTotalRows += 1; });
+                                    if (groupTotalRows === 0) groupTotalRows = 1;
+                                    
+                                    const out = [];
+                                    g.rows.forEach((r, ri) => {
+                                      const isFirstRow = ri === 0;
+                                      let trClass = 'border-t border-slate-200';
+                                      if (isFirstRow && isDayChange) trClass = 'border-t-2 border-t-slate-500';
+                                      else if (isFirstRow && isShiftChange) trClass = 'border-t border-t-slate-300 border-dashed';
+                                      const note = prodReportNotes[r.noteKey] || '';
+                                      const mq = isUcc ? (moduleQuantities[g.date] || 0) : 0;
+                                      
+                                      out.push(
+                                        <tr key={`${gi}-${ri}`} className={trClass}>
+                                          {isFirstRow && (<>
+                                            <td rowSpan={groupTotalRows} className="px-2 py-1 border text-center align-middle font-bold bg-slate-50 whitespace-nowrap text-sm">{g.date.slice(5)}({["일","월","화","수","목","금","토"][new Date(g.date).getDay()]})</td>
+                                            <td rowSpan={groupTotalRows} className={`px-2 py-1 border text-center align-middle font-bold text-sm ${g.shift === '주간' ? 'bg-yellow-50 text-yellow-800' : 'bg-indigo-50 text-indigo-800'}`}>{g.shift}</td>
+                                          </>)}
+                                          <td className="px-2 py-1.5 border align-middle text-center cursor-pointer hover:bg-slate-100" onClick={() => toggleNote(r.noteKey)}>
+                                            <span className="font-bold text-slate-900 text-sm">{r.item}</span>
+                                          </td>
+                                          <td className="px-2 py-1.5 border text-center align-middle font-bold text-indigo-700 text-base">{r.good > 0 ? Math.round(r.good).toLocaleString() : '-'}</td>
+                                          {!isUcc && (<>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.opr1st > 0 ? Math.round(r.opr1st).toLocaleString() : '-'}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.ovr1st > 0 ? Math.round(r.ovr1st).toLocaleString() : '-'}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.good + r.opr1st; return s > 0 ? (r.opr1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.good + r.ovr1st; return s > 0 ? (r.ovr1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                          </>)}
+                                          {isUcc && !isCollapsed && (<>
+                                            <td className="px-1 py-0.5 border bg-yellow-50 align-middle">
+                                              {isFirstRow ? (
+                                                <input type="text" inputMode="numeric"
+                                                  value={mq > 0 ? mq.toLocaleString() : ''}
+                                                  onChange={(e) => {
+                                                    const raw = e.target.value.replace(/,/g, '');
+                                                    if (raw === '' || /^\d+$/.test(raw)) updateModuleQty(g.date, raw === '' ? 0 : parseInt(raw, 10));
+                                                  }}
+                                                  className="w-full px-1 py-0.5 text-xs text-center border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-purple-400 rounded font-bold"
+                                                  placeholder="-" />
+                                              ) : (
+                                                <span className="text-slate-300 text-xs">↑</span>
+                                              )}
+                                            </td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.flvv1st > 0 ? Math.round(r.flvv1st).toLocaleString() : '-'}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.eol1st > 0 ? Math.round(r.eol1st).toLocaleString() : '-'}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.flvv1st + mq; return s > 0 ? (r.flvv1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.good + r.eol1st; return s > 0 ? (r.eol1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                          </>)}
+                                          {isUcc && isCollapsed && (<>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{r.eol1st > 0 ? Math.round(r.eol1st).toLocaleString() : '-'}</td>
+                                            <td className="px-2 py-1.5 border text-center align-middle text-sm">{(() => { const s = r.good + r.eol1st; return s > 0 ? (r.eol1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                          </>)}
+                                          <td className="px-2 py-1.5 border align-top text-xs">{renderDtCellFe(r)}</td>
+                                        </tr>
+                                      );
+                                      
+                                      if (expandedNotes[r.noteKey]) {
+                                        out.push(
+                                          <tr key={`${gi}-${ri}-note`} className="bg-yellow-50">
+                                            <td colSpan={noteColSpan} className="px-2 py-1 border">
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-yellow-800 whitespace-nowrap">📝 {r.item} 비고:</span>
+                                                <input type="text" value={note} onChange={(e) => updateProdNote(r.noteKey, e.target.value)} className="flex-1 px-2 py-1 text-xs border rounded" placeholder="비고 입력..." autoFocus />
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        );
+                                      }
+                                    });
+                                    return out;
+                                  })}
+                                  
+                                  {data.length > 0 && (
+                                    <tr className="border-t-2 border-t-slate-700 bg-slate-200 font-bold">
+                                      <td colSpan="3" className="px-2 py-1.5 border text-center">종합</td>
+                                      <td className="px-2 py-1.5 border text-center text-indigo-700">{totals.good > 0 ? Math.round(totals.good).toLocaleString() : '-'}</td>
+                                      {!isUcc && (<>
+                                        <td className="px-2 py-1.5 border text-center">{totals.opr1st > 0 ? Math.round(totals.opr1st).toLocaleString() : '-'}</td>
+                                        <td className="px-2 py-1.5 border text-center">{totals.ovr1st > 0 ? Math.round(totals.ovr1st).toLocaleString() : '-'}</td>
+                                        <td className="px-2 py-1.5 border text-center">{(() => { const s = totals.good + totals.opr1st; return s > 0 ? (totals.opr1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                        <td className="px-2 py-1.5 border text-center">{(() => { const s = totals.good + totals.ovr1st; return s > 0 ? (totals.ovr1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                      </>)}
+                                      {isUcc && !isCollapsed && (<>
+                                        <td className="px-2 py-1.5 border text-center">{totalModuleQ > 0 ? totalModuleQ.toLocaleString() : '-'}</td>
+                                        <td className="px-2 py-1.5 border text-center">{totals.flvv1st > 0 ? Math.round(totals.flvv1st).toLocaleString() : '-'}</td>
+                                        <td className="px-2 py-1.5 border text-center">{totals.eol1st > 0 ? Math.round(totals.eol1st).toLocaleString() : '-'}</td>
+                                        <td className="px-2 py-1.5 border text-center">{(() => { const s = totals.flvv1st + totalModuleQ; return s > 0 ? (totals.flvv1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                        <td className="px-2 py-1.5 border text-center">{(() => { const s = totals.good + totals.eol1st; return s > 0 ? (totals.eol1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                      </>)}
+                                      {isUcc && isCollapsed && (<>
+                                        <td className="px-2 py-1.5 border text-center">{totals.eol1st > 0 ? Math.round(totals.eol1st).toLocaleString() : '-'}</td>
+                                        <td className="px-2 py-1.5 border text-center">{(() => { const s = totals.good + totals.eol1st; return s > 0 ? (totals.eol1st/s*100).toFixed(1) + '%' : '-'; })()}</td>
+                                      </>)}
+                                      <td className="px-2 py-1.5 border align-top text-left text-xs">
+                                        <div className="space-y-0.5">
+                                          {totals.swapCount > 0 && <div className="text-amber-800 font-semibold">🔧 Tool 교체 {totals.swapCount}회 / {totals.swapMins}분</div>}
+                                          <div className="text-orange-700 font-semibold">⚠ 비가동 {totals.normalMins}분</div>
+                                        </div>
+                                      </td>
                                     </tr>
-                                  ))}
+                                  )}
                                 </tbody>
                               </table>
                             </div>
@@ -7848,8 +8330,6 @@
                           </div>
                         );
                       })}
-                      
-
                     </div>
                   )}
                 </div>
