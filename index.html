@@ -2289,12 +2289,15 @@
 
       const filterOeeLogs = (logs, section) => {
         if (section === 'TCP') return logs.filter(l => l.section === 'TCP' && ['1PC','2PC','Nospin'].includes(l.lineName));
-        return logs.filter(l => l.section === 'FE' && l.lineName !== 'ATV' && l.lineName !== 'ATV M/C');
+        if (section === 'FTIV') return logs.filter(l => l.section === 'FE' && (l.lineName||'').toUpperCase().includes('FTIV'));
+        return logs.filter(l => l.section === 'FE' && l.lineName !== 'ATV' && l.lineName !== 'ATV M/C' && !(l.lineName||'').toUpperCase().includes('FTIV'));
       };
 
       const groupOfLine = (section, lineName) => {
         if (section === 'TCP') return lineName;
         const ln = (lineName || '').toUpperCase();
+        if (section === 'FTIV') return ln.includes('FTIV') ? 'FTIV' : null;
+        if (ln.includes('FTIV')) return null;
         if (ln.includes('GVV')) return 'GVV';
         if (ln.includes('FLVV')) return 'FLVV';
         if (ln.includes('ICV')) return 'ICV';
@@ -2434,6 +2437,7 @@
 
       const getOeeSectionLines = useMemo(() => {
         if (oeeSection === 'TCP') return ['1PC','2PC','Nospin'];
+        if (oeeSection === 'FTIV') return ['FTIV'];
         return ['GVV','LVS','FLVV','Memb','ICV','UCC'];
       }, [oeeSection]);
 
@@ -3420,9 +3424,9 @@
               const fmtPct = (v) => v == null || v === '' || isNaN(v) ? '-' : (typeof v === 'number' ? v.toFixed(1) : parseFloat(v).toFixed(1)) + '%';
 
               // 2-col group layout: pairs of [GVV/LVS, FLVV/Memb, ICV/UCC] for FE; single col for TCP
-              const groupPairs = oeeSection === 'TCP'
-                ? lineList.map(l => [l, null])
-                : [['GVV','LVS'],['FLVV','Memb'],['ICV','UCC']];
+              const groupPairs = oeeSection === 'FE'
+                ? [['GVV','LVS'],['FLVV','Memb'],['ICV','UCC']]
+                : lineList.map(l => [l, null]);
 
               const ComparisonCard = ({ title, headerColor, bgColor, valueObj, editable, calcOverall, calcLines }) => (
                 <div className="rounded-lg overflow-hidden shadow-md border border-slate-300 flex flex-col h-full">
@@ -3455,7 +3459,7 @@
                   <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-2">
                     <div className="flex flex-wrap items-center gap-3">
                       <div className="flex bg-slate-100 rounded p-1">
-                        {['TCP','FE'].map(s => (
+                        {['TCP','FE','FTIV'].map(s => (
                           <button key={s} onClick={() => setOeeSection(s)} className={`px-4 py-1 rounded text-sm font-bold ${oeeSection === s ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>{s}</button>
                         ))}
                       </div>
@@ -3584,6 +3588,7 @@
 
                   {/* Top: 3 cards + bar chart */}
                   <div className="grid grid-cols-12 gap-3 items-stretch">
+                    {oeeSection !== 'FTIV' && (
                     <div className="col-span-6 grid grid-cols-3 gap-2">
                       <ComparisonCard
                         title={`${oeeYear-1} YTD`}
@@ -3609,9 +3614,10 @@
                         calcLines={ytd2026Lines}
                       />
                     </div>
+                    )}
 
                     {/* Monthly bar chart */}
-                    <div className="col-span-6 bg-white rounded-lg shadow-sm border border-slate-200 border border-slate-300 p-4">
+                    <div className={`${oeeSection === 'FTIV' ? 'col-span-12' : 'col-span-6'} bg-white rounded-lg shadow-sm border border-slate-200 border border-slate-300 p-4`}>
                       <h3 className="text-center font-bold text-slate-800 mb-3 text-xl">월별 OEE</h3>
                       {(() => {
                         const W = 700, H = 340, padL = 50, padR = 15, padT = 35, padB = 42;
@@ -6915,6 +6921,7 @@
                 addToAgg(logsA, 'a');
                 addToAgg(logsB, 'b');
                 return Object.entries(agg).map(([type, v]) => ({ type, category: v.category, a: v.a, b: v.b, diff: v.a - v.b }))
+                  .filter(r => r.category !== '계획') // A 손실의 직접 원인은 비계획비가동만 (계획비가동은 계획시간에서 제외되어 A에 직접 영향 없음)
                   .sort((x, y) => y.diff - x.diff);
               })();
 
@@ -7066,17 +7073,17 @@
                       // Build specific evidence for each factor
                       const evidenceFor = (key) => {
                         if (key === 'A') {
-                          // Top downtime increase
-                          const topUp = dtCompare.filter(r => r.diff > 0).slice(0, 3);
-                          const topDown = dtCompare.filter(r => r.diff < 0).slice(-3).reverse();
+                          // A = 가동시간/계획시간. 변화 원인을 종합적으로: 시간 변화 + 비가동 증감(감소=상승요인/증가=하락요인)
+                          const up = dtCompare.filter(r => r.diff > 0.5).sort((a,b)=>b.diff-a.diff).slice(0,2);
+                          const down = dtCompare.filter(r => r.diff < -0.5).sort((a,b)=>a.diff-b.diff).slice(0,2);
+                          const dLt = Math.round((aggA.lt||0) - (aggB.lt||0));
+                          const dOt = Math.round((aggA.ot||0) - (aggB.ot||0));
                           const parts = [];
-                          if (topUp.length > 0) {
-                            parts.push(`${topUp.map(r => `${r.type}(${Math.round(r.diff).toLocaleString()}분 증가)`).join(', ')}`);
-                          }
-                          if (topDown.length > 0 && topUp.length === 0) {
-                            parts.push(`${topDown.map(r => `${r.type}(${Math.abs(Math.round(r.diff)).toLocaleString()}분 감소)`).join(', ')}`);
-                          }
-                          return parts.length > 0 ? parts.join('; ') : null;
+                          if (dLt !== 0) parts.push(`계획시간 ${dLt>=0?'+':''}${dLt.toLocaleString()}분`);
+                          if (dOt !== 0) parts.push(`가동시간 ${dOt>=0?'+':''}${dOt.toLocaleString()}분`);
+                          if (down.length > 0) parts.push(`비가동↓ ${down.map(r => `${r.type} ${Math.round(Math.abs(r.diff)).toLocaleString()}분`).join(', ')}`);
+                          if (up.length > 0) parts.push(`비가동↑ ${up.map(r => `${r.type} +${Math.round(r.diff).toLocaleString()}분`).join(', ')}`);
+                          return parts.length > 0 ? parts.join(' · ') : null;
                         }
                         if (key === 'P') {
                           // Top item P drop/rise
@@ -7281,7 +7288,7 @@
 
                     {dtCompare.length > 0 && (
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                        <div className="bg-blue-50 px-4 py-2.5 font-semibold text-blue-900 border-b border-blue-100">🔵 A 원인 분석 — 비가동 유형별 비교 (분)</div>
+                        <div className="bg-blue-50 px-4 py-2.5 font-semibold text-blue-900 border-b border-blue-100">🔵 A 원인 분석 — 비계획비가동 유형별 비교 (분) <span className="text-xs font-normal text-blue-600">※ 계획비가동(저녁·휴식 등)은 계획시간에서 제외되어 A에 직접 영향 없음</span></div>
                         <table className="w-full text-sm">
                           <thead className="bg-slate-50 text-slate-600 text-xs">
                             <tr>
@@ -10546,6 +10553,220 @@
                 XLSX.writeFile(wb, filename);
               };
 
+              // ★ 월간 PPT 보고서 — 예시 레이아웃을 PPT 네이티브(차트/표/카드)로 재구성
+              const handleExportPpt = () => {
+                if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드 실패. 새로고침 후 다시 시도해주세요.'); return; }
+                const pres = new PptxGenJS();
+                pres.layout = 'LAYOUT_WIDE';
+                pres.title = exportYear + '년 ' + exportMonth + '월 생산 보고서';
+                const NAVY = '003865', GRAY = '64748B';
+
+                const fLogs = allLogs.filter(inRange);
+                const lMap = {}; fLogs.forEach(l => { lMap[l.id] = l; });
+                const inSec = (logId, sec) => { const l = lMap[logId]; return l && l.section === sec; };
+
+                // ===== 1. 대시보드 (탭 화면처럼 KPI 카드) =====
+                const NAVY_H = '2E2E7A';
+                const prevMonth = exportMonth === 1 ? 12 : exportMonth - 1;
+                const prevYear = exportMonth === 1 ? exportYear - 1 : exportYear;
+                const dtMonth = (yr, mo, sec) => {
+                  const ids = {};
+                  allLogs.forEach(l => { const dd = new Date(l.productionDate); if (dd.getFullYear()===yr && (dd.getMonth()+1)===mo && l.section===sec) ids[l.id]=1; });
+                  let sum = 0;
+                  allDowntimeLogs.filter(d => ids[d.productionLogId]).forEach(d => { sum += minDiffExp(d.startTime, d.endTime) || (parseFloat(d.duration) || 0); });
+                  return sum;
+                };
+                const s1 = pres.addSlide(); s1.background = { color: 'FFFFFF' };
+                s1.addText(exportYear + '년 ' + exportMonth + '월 생산 대시보드', { x: 0.4, y: 0.28, fontSize: 30, bold: true, color: '0F172A' });
+
+                const addKpi = (sl, x, y, w, label, val, prev, delta, up) => {
+                  const h1=0.4, h2=0.62, h3=0.42;
+                  sl.addText(label, {x, y, w, h:h1, fontSize:11, bold:true, color:'FFFFFF', fill:{color:NAVY_H}, align:'center', valign:'middle'});
+                  sl.addText(val, {x, y:y+h1, w, h:h2, fontSize:21, bold:true, color:'1E293B', align:'center', valign:'middle', fill:{color:'FFFFFF'}, line:{color:'E2E8F0', width:1}});
+                  sl.addText(prev, {x, y:y+h1+h2, w:w/2, h:h3, fontSize:13, bold:true, color:'A16207', align:'center', valign:'middle', fill:{color:'FEF9C3'}, line:{color:'E2E8F0', width:0.5}});
+                  sl.addText(delta, {x:x+w/2, y:y+h1+h2, w:w/2, h:h3, fontSize:13, bold:true, color:up?'2563EB':'DC2626', align:'center', valign:'middle', fill:{color:'EFF6FF'}, line:{color:'E2E8F0', width:0.5}});
+                };
+                const col = [0.4, 4.74, 9.08], cw = 4.0;
+                [{name:'TCP', color:'BAE6FD', y:0.95},{name:'FE', color:'FED7AA', y:4.15}].forEach(sec => {
+                  const d = getDashboardSectionData(exportYear, exportMonth, sec.name) || {};
+                  const pd = getDashboardSectionData(prevYear, prevMonth, sec.name) || {};
+                  const fmt = v => Math.round(v||0).toLocaleString();
+                  const pct = v => (v||0).toFixed(1)+'%';
+                  const dlt = (c,p,isPct) => { const diff=(c||0)-(p||0); const s=diff>=0?'+':''; return isPct?(s+diff.toFixed(1)+'%'):(s+Math.round(diff).toLocaleString()); };
+                  s1.addText(sec.name, {x:col[0], y:sec.y, w:cw, h:1.44, fontSize:28, bold:true, color:'1E3A8A', fill:{color:sec.color}, align:'center', valign:'middle', charSpacing:4});
+                  addKpi(s1, col[1], sec.y, cw, "FG(Q'ty)", fmt(d.goodQty), fmt(pd.goodQty), dlt(d.goodQty,pd.goodQty), (d.goodQty||0)>=(pd.goodQty||0));
+                  addKpi(s1, col[2], sec.y, cw, "FPY", pct(d.fpy), pct(pd.fpy), dlt(d.fpy,pd.fpy,true), (d.fpy||0)>=(pd.fpy||0));
+                  const y2 = sec.y + 1.55;
+                  addKpi(s1, col[0], y2, cw, "OEE", pct(d.oee), pct(pd.oee), dlt(d.oee,pd.oee,true), (d.oee||0)>=(pd.oee||0));
+                  addKpi(s1, col[1], y2, cw, "Retest(Q'ty)", fmt(d.rework), fmt(pd.rework), dlt(d.rework,pd.rework), (d.rework||0)>=(pd.rework||0));
+                  addKpi(s1, col[2], y2, cw, "NG(Q'ty)", fmt(d.defects), fmt(pd.defects), dlt(d.defects,pd.defects), (d.defects||0)>=(pd.defects||0));
+                });
+
+                // ===== 2-4. OEE (TCP/FE: 3컬럼+차트+표 / FTIV: 차트+표) =====
+                const oeeLinesOf = (sec) => sec==='TCP' ? ['1PC','2PC','Nospin'] : ['GVV','LVS','FLVV','Memb','ICV','UCC'];
+                const emptyT = () => ({ goodQty:0, rework:0, defects:0, loadTime:0, operatingTime:0, expectedOutput:0 });
+                const monthlyOeeOf = (year, sec, lines) => { const arr=[]; for(let m=1;m<=12;m++){ let t=emptyT(); lines.forEach(g=>t=addTotals(t,getGroupTotals(year,m,sec,g))); arr.push(Object.values(t).some(v=>v>0)?+(computeMetricsFromTotals(t).OEE).toFixed(1):0);} return arr; };
+                const ytdOeeOf = (year, upto, sec, lines) => { let t=emptyT(); for(let m=1;m<=upto;m++) lines.forEach(g=>t=addTotals(t,getGroupTotals(year,m,sec,g))); return Object.values(t).some(v=>v>0)?+(computeMetricsFromTotals(t).OEE).toFixed(1):null; };
+                const ytdLineOf = (year, upto, sec, grp) => { let t=emptyT(); for(let m=1;m<=upto;m++) t=addTotals(t,getGroupTotals(year,m,sec,grp)); return Object.values(t).some(v=>v>0)?+(computeMetricsFromTotals(t).OEE).toFixed(1):null; };
+                const lineTableOf = (year, month, sec, lines) => lines.map(g => { const raw=getGroupTotals(year,month,sec,g); const m=computeMetricsFromTotals(raw); return {line:g, total:Math.round((raw.goodQty||0)+(raw.defects||0)), good:Math.round(raw.goodQty||0), rework:Math.round(raw.rework||0), defect:Math.round(raw.defects||0), A:m.A, P:m.P, Q:m.Q, OEE:m.OEE, raw};}).filter(r=>r.total>0||r.good>0);
+                const ftivRawOf = (year, month) => { const logs=monthLogs(year,month).filter(l=>l.section==='FE'&&(l.lineName||'').toUpperCase().includes('FTIV')); return logs.length?aggregateContribs(logs):computeMetricsFromTotals(emptyT()); };
+                const ftivMonthlyOee = (year) => { const arr=[]; for(let m=1;m<=12;m++){ const a=ftivRawOf(year,m); arr.push((a.goodQty+a.defects)>0?+(a.OEE).toFixed(1):0);} return arr; };
+
+                const SHX={type:'outer',blur:6,offset:2,angle:90,color:'64748B',opacity:0.3};
+                const moLabels=['1','2','3','4','5','6','7','8','9','10','11','12'];
+                const hdrC=(t,f)=>({text:t,options:{bold:true,fill:f||'F1F5F9',align:'center',valign:'middle',fontSize:11,color:'334155'}});
+                const cellC=(t,o)=>({text:t,options:Object.assign({align:'right',valign:'middle',fontSize:11,color:'334155'},o||{})});
+                const fmtN=v=>Math.round(v||0).toLocaleString();
+                const fmtP=v=>(v==null||v==='')?'-':((typeof v==='number'?v:parseFloat(v)).toFixed(1)+'%');
+
+                const addOeeSlide = (sec) => {
+                  const lines = oeeLinesOf(sec);
+                  const s = pres.addSlide(); s.background={color:'F1F5F9'};
+                  s.addText(sec+' OEE — '+exportYear+'년 '+exportMonth+'월', {x:0.4, y:0.16, fontSize:24, bold:true, color:'0F172A'});
+                  const ym = oeeManual[sec]||{};
+                  const ytd25 = ym.ytd2025||{overall:'',lines:{}};
+                  const goal26 = ym.goal2026||{overall:'',lines:{}};
+                  const ytdTarget = parseFloat(ym.ytdTarget);
+                  const colData=[
+                    {title:(exportYear-1)+' YTD', head:'7C3AED', light:'EDE9FE', overall:ytd25.overall, lv:g=>ytd25.lines?.[g]},
+                    {title:exportYear+' Goal', head:'2563EB', light:'DBEAFE', overall:goal26.overall, lv:g=>goal26.lines?.[g]},
+                    {title:exportYear+' YTD', head:'C2410C', light:'FFEDD5', overall:ytdOeeOf(exportYear,exportMonth,sec,lines), lv:g=>ytdLineOf(exportYear,exportMonth,sec,g)}
+                  ];
+                  const nLines=lines.length;
+                  const colW=2.05, colX=[0.4,2.6,4.8], topY=0.72;
+                  const lh = nLines>4 ? 0.52 : 0.72;
+                  const cardH = 0.5+0.6+nLines*lh+0.12;
+                  colData.forEach((c,ci)=>{
+                    const x=colX[ci];
+                    s.addShape(pres.shapes.ROUNDED_RECTANGLE,{x,y:topY,w:colW,h:cardH,fill:{color:'FFFFFF'},line:{color:'E2E8F0',width:1.25},rectRadius:0.1,shadow:SHX});
+                    let y=topY+0.06;
+                    s.addText(c.title,{x:x+0.06,y,w:colW-0.12,h:0.46,fontSize:13,bold:true,color:'FFFFFF',fill:{color:c.head},align:'center',valign:'middle',rectRadius:0.06}); y+=0.5;
+                    s.addText(fmtP(c.overall),{x:x+0.06,y,w:colW-0.12,h:0.56,fontSize:21,bold:true,color:'1E293B',fill:{color:c.light},align:'center',valign:'middle',rectRadius:0.04}); y+=0.6;
+                    lines.forEach(g=>{
+                      const vh=lh*0.42, hh=lh-vh;
+                      s.addText(g,{x:x+0.06,y,w:colW-0.12,h:hh,fontSize:nLines>4?9:10.5,bold:true,color:'FFFFFF',fill:{color:c.head},align:'center',valign:'middle',rectRadius:0.04}); y+=hh;
+                      s.addText(fmtP(c.lv(g)),{x:x+0.06,y,w:colW-0.12,h:vh,fontSize:nLines>4?12:14,bold:true,color:'1E293B',fill:{color:c.light},align:'center',valign:'middle',rectRadius:0.04}); y+=vh;
+                    });
+                  });
+                  const chartH=Math.max(2.6, Math.min(cardH, 3.6));
+                  s.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:7.0,y:topY,w:6.25,h:chartH,fill:{color:'FFFFFF'},line:{color:'E2E8F0',width:1.25},rectRadius:0.1,shadow:SHX});
+                  s.addText('월별 OEE',{x:7.0,y:topY+0.1,w:6.25,h:0.36,fontSize:15,bold:true,color:'1E293B',align:'center'});
+                  const monthly=monthlyOeeOf(exportYear,sec,lines);
+                  const cSeries=[{type:pres.charts.BAR,data:[{name:'OEE',labels:moLabels,values:monthly}],options:{chartColors:['3B82F6'],barGapWidthPct:45}}];
+                  if(!isNaN(ytdTarget)&&ytdTarget>0){ cSeries.push({type:pres.charts.LINE,data:[{name:'목표',labels:moLabels,values:Array(12).fill(ytdTarget)}],options:{chartColors:['EF4444'],lineSize:1.5,lineDash:'dash',lineDataSymbol:'none',showValue:false}}); }
+                  s.addChart(cSeries,{x:7.15,y:topY+0.5,w:5.95,h:chartH-0.7,barDir:'col',showValue:true,dataLabelFontSize:8,dataLabelPosition:'outEnd',dataLabelFormatCode:'0.0"%";;',dataLabelColor:'334155',catAxisLabelFontSize:9,valAxisMinVal:0,valAxisMaxVal:100,valAxisMajorUnit:20,valAxisLabelFontSize:8,valAxisLabelFormatCode:'0"%"',showLegend:false,showTitle:false});
+                  if(!isNaN(ytdTarget)&&ytdTarget>0){ s.addText('목표 '+ytdTarget.toFixed(1)+'%',{x:10.95,y:topY+0.5+(chartH-0.7)*(1-ytdTarget/100)*0.9-0.08,w:2.2,h:0.26,fontSize:9.5,bold:true,color:'EF4444',align:'right'}); }
+                  const tbl=lineTableOf(exportYear,exportMonth,sec,lines);
+                  const tot=tbl.reduce((a,r)=>({total:a.total+r.total,good:a.good+r.good,rework:a.rework+r.rework,defect:a.defect+r.defect,raw:addTotals(a.raw,r.raw)}),{total:0,good:0,rework:0,defect:0,raw:emptyT()});
+                  const totM=computeMetricsFromTotals(tot.raw);
+                  const tableY=Math.max(topY+cardH, topY+chartH)+0.18;
+                  const rows=[[hdrC('라인'),hdrC('총수량'),hdrC('양품수량'),hdrC('재작업'),hdrC('불량'),hdrC('A','DBEAFE'),hdrC('P','FEF9C3'),hdrC('Q','DCFCE7'),hdrC('OEE','E0E7FF')]];
+                  tbl.forEach(r=>rows.push([cellC(r.line,{align:'center',bold:true}),cellC(fmtN(r.total)),cellC(fmtN(r.good)),cellC(fmtN(r.rework)),cellC(fmtN(r.defect)),cellC(r.A.toFixed(1)+'%'),cellC(r.P.toFixed(1)+'%'),cellC(r.Q.toFixed(1)+'%'),cellC(r.OEE.toFixed(1)+'%',{bold:true,color:'2563EB'})]));
+                  rows.push([cellC('Total',{align:'center',bold:true,fill:'F1F5F9'}),cellC(fmtN(tot.total),{bold:true,fill:'F1F5F9'}),cellC(fmtN(tot.good),{bold:true,fill:'F1F5F9'}),cellC(fmtN(tot.rework),{bold:true,fill:'F1F5F9'}),cellC(fmtN(tot.defect),{bold:true,fill:'F1F5F9'}),cellC(totM.A.toFixed(1)+'%',{bold:true,fill:'F1F5F9'}),cellC(totM.P.toFixed(1)+'%',{bold:true,fill:'F1F5F9'}),cellC(totM.Q.toFixed(1)+'%',{bold:true,fill:'F1F5F9'}),cellC(totM.OEE.toFixed(1)+'%',{bold:true,fill:'E0E7FF',color:'2563EB'})]);
+                  const availH = 7.5 - tableY - 0.1;
+                  const rowH = Math.max(0.26, Math.min(0.44, availH/rows.length));
+                  s.addTable(rows,{x:0.4,y:tableY,w:12.85,border:{pt:1,color:'E2E8F0'},rowH,valign:'middle',colW:[1.5,1.65,1.65,1.25,1.25,1.35,1.35,1.4,1.45],fill:{color:'FFFFFF'}});
+                };
+                addOeeSlide('TCP');
+                addOeeSlide('FE');
+
+                (() => { // FTIV (차트+표만, goal 없음)
+                  const s=pres.addSlide(); s.background={color:'F1F5F9'};
+                  s.addText('FTIV OEE — '+exportYear+'년 '+exportMonth+'월',{x:0.4,y:0.16,fontSize:24,bold:true,color:'0F172A'});
+                  s.addShape(pres.shapes.ROUNDED_RECTANGLE,{x:0.4,y:0.72,w:12.85,h:3.35,fill:{color:'FFFFFF'},line:{color:'E2E8F0',width:1.25},rectRadius:0.1,shadow:SHX});
+                  s.addText('월별 OEE',{x:0.4,y:0.84,w:12.85,h:0.4,fontSize:15,bold:true,color:'1E293B',align:'center'});
+                  const monthly=ftivMonthlyOee(exportYear);
+                  s.addChart(pres.charts.BAR,[{name:'OEE',labels:moLabels,values:monthly}],{x:0.6,y:1.3,w:12.45,h:2.6,barDir:'col',chartColors:['3B82F6'],barGapWidthPct:45,showValue:true,dataLabelFontSize:9,dataLabelPosition:'outEnd',dataLabelFormatCode:'0.0"%";;',dataLabelColor:'334155',catAxisLabelFontSize:10,valAxisMinVal:0,valAxisMaxVal:100,valAxisMajorUnit:20,valAxisLabelFontSize:9,valAxisLabelFormatCode:'0"%"',showLegend:false,showTitle:false});
+                  const raw=ftivRawOf(exportYear,exportMonth); const m=computeMetricsFromTotals(raw); const tot=Math.round((raw.goodQty||0)+(raw.defects||0));
+                  const rows=[
+                    [hdrC('라인'),hdrC('총수량'),hdrC('양품수량'),hdrC('재작업'),hdrC('불량'),hdrC('A','DBEAFE'),hdrC('P','FEF9C3'),hdrC('Q','DCFCE7'),hdrC('OEE','E0E7FF')],
+                    [cellC('FTIV',{align:'center',bold:true}),cellC(fmtN(tot)),cellC(fmtN(raw.goodQty)),cellC(fmtN(raw.rework)),cellC(fmtN(raw.defects)),cellC(m.A.toFixed(1)+'%'),cellC(m.P.toFixed(1)+'%'),cellC(m.Q.toFixed(1)+'%'),cellC(m.OEE.toFixed(1)+'%',{bold:true,color:'2563EB'})]
+                  ];
+                  s.addTable(rows,{x:0.4,y:4.3,w:12.85,border:{pt:1,color:'E2E8F0'},rowH:0.46,valign:'middle',colW:[1.5,1.65,1.65,1.25,1.25,1.35,1.35,1.4,1.45],fill:{color:'FFFFFF'}});
+                })();
+
+                // ===== 4-5. 수량 도넛 (제품별, TCP/FE) =====
+                ['TCP','FE'].forEach(sec => {
+                  const accent = sec==='TCP'?'2563EB':'D97706';
+                  const byItem = {};
+                  fLogs.filter(l => l.section===sec).forEach(l => { const it=l.item||'기타'; byItem[it]=(byItem[it]||0)+(parseFloat(l.goodQuantity)||0); });
+                  const entries = Object.entries(byItem).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+                  const total = entries.reduce((s,[,v])=>s+v,0);
+                  const s = pres.addSlide(); s.background={color:'FFFFFF'};
+                  s.addText(sec+' 수량 — '+exportMonth+'월 제품별', {x:0.5, y:0.3, fontSize:24, bold:true, color:NAVY});
+                  if (entries.length) {
+                    s.addChart(pres.charts.DOUGHNUT, [{name:'수량', labels:entries.map(e=>e[0]), values:entries.map(e=>Math.round(e[1]))}], {
+                      x:0.5, y:1.3, w:6.3, h:5.3, showLegend:true, legendPos:'b', legendFontSize:9, holeSize:55, showTitle:false, showValue:false
+                    });
+                    s.addText('총 생산수량', {x:7.2, y:1.5, w:5.6, h:0.4, fontSize:13, bold:true, color:NAVY});
+                    s.addText(Math.round(total).toLocaleString()+' 개', {x:7.2, y:1.9, w:5.6, h:0.7, fontSize:26, bold:true, color:accent});
+                    const rows = [[{text:'제품', options:{bold:true, fill:'F1F5F9', fontSize:11}},{text:'수량', options:{bold:true, fill:'F1F5F9', align:'right', fontSize:11}},{text:'비율', options:{bold:true, fill:'F1F5F9', align:'right', fontSize:11}}]];
+                    entries.slice(0,9).forEach(e => { rows.push([{text:e[0], options:{fontSize:10}},{text:Math.round(e[1]).toLocaleString(), options:{align:'right', fontSize:10}},{text:(e[1]/total*100).toFixed(1)+'%', options:{align:'right', fontSize:10}}]); });
+                    s.addTable(rows, {x:7.2, y:2.7, w:5.6, border:{pt:1, color:'E2E8F0'}, rowH:0.33});
+                  } else { s.addText('데이터 없음', {x:0.5, y:3, fontSize:18, color:'94A3B8'}); }
+                });
+
+                // ===== 6-7. 불량 가로 바차트 (유형별 Top, TCP/FE) =====
+                ['TCP','FE'].forEach(sec => {
+                  const accent='DC2626';
+                  const byType={};
+                  allDefectLogs.filter(d=>inSec(d.productionLogId,sec)).forEach(d=>{const t=d.defectType||'기타';byType[t]=(byType[t]||0)+(parseFloat(d.quantity)||0);});
+                  const all=Object.entries(byType).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
+                  const entries=all.slice(0,10);
+                  const total=all.reduce((s,e)=>s+e[1],0);
+                  const s=pres.addSlide(); s.background={color:'FFFFFF'};
+                  s.addText(sec+' 불량 — '+exportMonth+'월 유형별 Top', {x:0.5, y:0.3, fontSize:24, bold:true, color:NAVY});
+                  if (entries.length) {
+                    s.addChart(pres.charts.BAR, [{name:'불량수량', labels:entries.map(e=>e[0]), values:entries.map(e=>Math.round(e[1]))}], {
+                      x:0.5, y:1.2, w:8.6, h:5.5, barDir:'bar', chartColors:[accent], showValue:true, dataLabelFontSize:9, dataLabelPosition:'outEnd', catAxisLabelFontSize:10, valAxisLabelFontSize:9, showLegend:false, showTitle:false
+                    });
+                    s.addText('총 불량', {x:9.4, y:1.4, w:3.4, h:0.4, fontSize:14, bold:true, color:NAVY, align:'center'});
+                    s.addText(Math.round(total).toLocaleString()+' 개', {x:9.4, y:1.8, w:3.4, h:0.7, fontSize:26, bold:true, color:accent, align:'center'});
+                  } else { s.addText('데이터 없음', {x:0.5, y:3, fontSize:18, color:'94A3B8'}); }
+                });
+
+                // ===== 8-9. 재작업 가로 바차트 (유형별, TCP/FE) =====
+                ['TCP','FE'].forEach(sec => {
+                  const accent='059669';
+                  const byType={};
+                  allReworkLogs.filter(r=>inSec(r.productionLogId,sec)).forEach(r=>{const t=r.reworkType||'기타';byType[t]=(byType[t]||0)+(parseFloat(r.quantity)||0);});
+                  const all=Object.entries(byType).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
+                  const entries=all.slice(0,10);
+                  const total=all.reduce((s,e)=>s+e[1],0);
+                  const s=pres.addSlide(); s.background={color:'FFFFFF'};
+                  s.addText(sec+' 재작업 — '+exportMonth+'월 유형별 Top', {x:0.5, y:0.3, fontSize:24, bold:true, color:NAVY});
+                  if (entries.length) {
+                    s.addChart(pres.charts.BAR, [{name:'재작업수량', labels:entries.map(e=>e[0]), values:entries.map(e=>Math.round(e[1]))}], {
+                      x:0.5, y:1.2, w:8.6, h:5.5, barDir:'bar', chartColors:[accent], showValue:true, dataLabelFontSize:9, dataLabelPosition:'outEnd', catAxisLabelFontSize:10, valAxisLabelFontSize:9, showLegend:false, showTitle:false
+                    });
+                    s.addText('총 재작업', {x:9.4, y:1.4, w:3.4, h:0.4, fontSize:14, bold:true, color:NAVY, align:'center'});
+                    s.addText(Math.round(total).toLocaleString()+' 개', {x:9.4, y:1.8, w:3.4, h:0.7, fontSize:26, bold:true, color:accent, align:'center'});
+                  } else { s.addText('데이터 없음', {x:0.5, y:3, fontSize:18, color:'94A3B8'}); }
+                });
+
+                // ===== 10-11. 비가동 도넛 (유형별, TCP/FE) =====
+                ['TCP','FE'].forEach(sec => {
+                  const byType={};
+                  allDowntimeLogs.filter(d=>inSec(d.productionLogId,sec)).forEach(d=>{const min=minDiffExp(d.startTime,d.endTime)||(parseFloat(d.duration)||0);const t=d.downtimeType||d.downtimeCategory||'기타';byType[t]=(byType[t]||0)+min;});
+                  const entries=Object.entries(byType).filter(e=>e[1]>0).sort((a,b)=>b[1]-a[1]);
+                  const total=entries.reduce((s,e)=>s+e[1],0);
+                  const s=pres.addSlide(); s.background={color:'FFFFFF'};
+                  s.addText(sec+' 비가동 — '+exportMonth+'월 유형별', {x:0.5, y:0.3, fontSize:24, bold:true, color:NAVY});
+                  if (entries.length) {
+                    s.addChart(pres.charts.DOUGHNUT, [{name:'비가동(분)', labels:entries.map(e=>e[0]), values:entries.map(e=>Math.round(e[1]))}], {
+                      x:0.5, y:1.3, w:6.3, h:5.3, showLegend:true, legendPos:'b', legendFontSize:9, holeSize:55, showTitle:false, showValue:false
+                    });
+                    s.addText('총 비가동', {x:7.2, y:1.5, w:5.6, h:0.4, fontSize:13, bold:true, color:NAVY});
+                    s.addText(Math.round(total).toLocaleString()+' 분', {x:7.2, y:1.9, w:5.6, h:0.7, fontSize:26, bold:true, color:'7C3AED'});
+                    const rows=[[{text:'유형', options:{bold:true, fill:'F1F5F9', fontSize:11}},{text:'분', options:{bold:true, fill:'F1F5F9', align:'right', fontSize:11}},{text:'비율', options:{bold:true, fill:'F1F5F9', align:'right', fontSize:11}}]];
+                    entries.slice(0,9).forEach(e=>{rows.push([{text:e[0], options:{fontSize:10}},{text:Math.round(e[1]).toLocaleString(), options:{align:'right', fontSize:10}},{text:(e[1]/total*100).toFixed(1)+'%', options:{align:'right', fontSize:10}}]);});
+                    s.addTable(rows, {x:7.2, y:2.7, w:5.6, border:{pt:1, color:'E2E8F0'}, rowH:0.33});
+                  } else { s.addText('데이터 없음', {x:0.5, y:3, fontSize:18, color:'94A3B8'}); }
+                });
+
+                pres.writeFile({ fileName: 'MFG보고서_' + exportYear + '년_' + String(exportMonth).padStart(2,'0') + '월.pptx' });
+              };
+
               const filteredCount = allLogs.filter(inRange).length;
 
               return (
@@ -10635,6 +10856,34 @@
                         </p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* PPT 월간 보고서 카드 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="text-3xl">📊</span>
+                      <h2 className="text-2xl font-bold text-slate-800">PPT 월간 보고서</h2>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-6">선택한 월의 데이터를 PPT 차트·표로 구성합니다. 대시보드 + OEE/수량/불량/재작업/비가동(TCP·FE). (게시판 게시용)</p>
+                    <div className="flex flex-wrap items-center gap-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-600">Year</span>
+                        <select value={exportYear} onChange={(e) => setExportYear(Number(e.target.value))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                          {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-600">Month</span>
+                        <select value={exportMonth} onChange={(e) => setExportMonth(Number(e.target.value))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}월</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <button onClick={handleExportPpt} className="w-full px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-lg rounded-lg shadow-md transition flex items-center justify-center gap-2">
+                      <span>📊</span>
+                      <span>{exportYear}년 {exportMonth}월 PPT 보고서 출력</span>
+                    </button>
+                    <p className="text-xs text-slate-400 mt-2">11페이지: 대시보드 / OEE·수량·불량·재작업·비가동 (TCP·FE 각각)</p>
                   </div>
                 </div>
               );
