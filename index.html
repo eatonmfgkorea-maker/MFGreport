@@ -2106,7 +2106,8 @@
         if (itemData?.excludeFromOEE === true) return null;
         let baseQty = null;
         if (itemData?.ct && Array.isArray(itemData.ct)) {
-          const wc = Array.isArray(log.selectedWorkers) ? log.selectedWorkers.length : (parseInt(log.workers) || 1);
+          // 실제 공수(workers)로 CT 매칭 (예: 2.5명 → CT의 2.5명 항목 직접). 공유작업자 케이스 정확 반영
+          const wc = parseFloat(log.workers) || (Array.isArray(log.selectedWorkers) ? log.selectedWorkers.length : 1);
           const ce = itemData.ct.find(c => c.workers === wc) || itemData.ct[0];
           baseQty = ce?.baseQty;
         }
@@ -2225,7 +2226,7 @@
         const A = Math.min(100, Math.max(0, A_raw));
         const P = Math.max(0, P_raw);
         const Q = Math.min(100, Math.max(0, Q_raw));
-        const OEE = Math.min(100, Math.max(0, (A/100)*(P/100)*(Q/100)*100));
+        const OEE = Math.max(0, (A/100)*(P/100)*(Q/100)*100);
         return { ...t, totalQty: values.totalQty, A, P, Q, OEE };
       };
 
@@ -4080,8 +4081,8 @@
                     const log = !isStage1 ? m.singleLog : null;
                     const dts = !isStage1 ? (data.downtimeLogs || []).filter(d => d.productionLogId === log.id) : [];
                     const itemDef = !isStage1 ? items.find(i => i.item === log.item) : null;
-                    const wcount = !isStage1 ? (Array.isArray(log.selectedWorkers) ? log.selectedWorkers.length : (parseFloat(log.workers) || 1)) : 0;
-                    const ctEntry = !isStage1 && itemDef && Array.isArray(itemDef.ct) ? (itemDef.ct.find(c => c.workers === Math.round(wcount)) || itemDef.ct[0]) : null;
+                    const wcount = !isStage1 ? (parseFloat(log.workers) || (Array.isArray(log.selectedWorkers) ? log.selectedWorkers.length : 1)) : 0;
+                    const ctEntry = !isStage1 && itemDef && Array.isArray(itemDef.ct) ? (itemDef.ct.find(c => c.workers === wcount) || itemDef.ct[0]) : null;
                     const baseQty = ctEntry?.baseQty;
 
                     // Focus mode aggregations (only computed when needed)
@@ -4254,7 +4255,7 @@
                               </div>
                               <div className="p-4 text-sm space-y-1.5">
                                 {!isStage1 && baseQty && (
-                                  <div className="flex justify-between"><span className="text-slate-600">기준 CT:</span><span>{ctBase}분당 {baseQty}개 ({Math.round(wcount)}명 기준)</span></div>
+                                  <div className="flex justify-between"><span className="text-slate-600">기준 CT:</span><span>{ctBase}분당 {baseQty}개 ({wcount % 1 === 0 ? wcount : wcount.toFixed(1)}명 기준)</span></div>
                                 )}
                                 <div className="flex justify-between"><span className="text-slate-600">작업시간:</span><span>{Math.round(agg.ot).toLocaleString()}분</span></div>
                                 <div className="flex justify-between"><span className="text-slate-600"><Info term="기대 생산량" label="기대 생산량" />:</span><span>{Math.round(agg.exp).toLocaleString()}개</span></div>
