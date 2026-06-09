@@ -2106,10 +2106,16 @@
         if (itemData?.excludeFromOEE === true) return null;
         let baseQty = null;
         if (itemData?.ct && Array.isArray(itemData.ct)) {
-          // 실제 공수(workers)로 CT 매칭 (예: 2.5명 → CT의 2.5명 항목 직접). 공유작업자 케이스 정확 반영
+          // 공수(workers) + 날짜 구간으로 CT 매칭 (생산관리시스템 getCtForDate와 동일). 매칭 실패 시 제외(fallback 없음)
           const wc = parseFloat(log.workers) || (Array.isArray(log.selectedWorkers) ? log.selectedWorkers.length : 1);
-          const ce = itemData.ct.find(c => c.workers === wc) || itemData.ct[0];
-          baseQty = ce?.baseQty;
+          const td = new Date(log.productionDate);
+          const ce = itemData.ct.find(c => {
+            if (c.workers !== wc) return false;
+            const sd = new Date(c.startDate);
+            const ed = c.endDate ? new Date(c.endDate) : new Date('9999-12-31');
+            return td >= sd && td <= ed;
+          });
+          baseQty = ce ? ce.baseQty : null;
         }
         let productionTime = 0;
         if (log.startTime && log.endTime) {
