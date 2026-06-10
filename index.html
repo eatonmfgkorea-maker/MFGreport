@@ -9,6 +9,8 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script>window.QPRM_TEMPLATE_B64 = "UEsDBBQAAAAIALMqylxGx01IlQAAAM0AAAAQAAAAZG9jUHJvcHMvYXBwLnhtbE3PTQvCMAwG4L9SdreZih6kDkQ9ip68zy51hbYpbYT67+0EP255ecgboi6JIia2mEXxLuRtMzLHDUDWI/o+y8qhiqHke64x3YGMsRoPpB8eA8OibdeAhTEMOMzit7Dp1C5GZ3XPlkJ3sjpRJsPiWDQ6sScfq9wcChDneiU+ixNLOZcrBf+LU8sVU57mym/8ZAW/B7oXUEsDBBQAAAAIALMqylx8reY+KQEAAJUCAAARAAAAZG9jUHJvcHMvY29yZS54bWzFktFrwjAQxv8V6bP10lRlhtqHbYwxFASFDd9CetawJg1JRvW/X5vZqmzve8x33/3uu3CZMEzUFje2Nmi9RDc6qUo7JswyOnpvGIATR1TcTVqHbouH2iru26ctwXDxyUsESsgcFHpecM+hA8ZmIEZ5VggmLHJf2wu+EAPefNkqwAoBWKFC7R0kkwSi/LXhuhyP3rhCl8EV0gE9WuV+BCwGalD/RIcKRBfnycnB1TTNpEmDr90jgY/1ahtWjqV2nmuBbZeTzJ8NLqN+8nv69Lx7iXJKaBqTh5gsdoSy2ZTR6b7LepfvGljVhTzI/048j8k8TsiOzBhNWLq4SdwHzLP2NCru/PoiPJ7zFeJ4tEUldQa/q33Dxkrd7Xw7Jwk/Q/dDX28Kwv0F5t9QSwMEFAAAAAgAsyrKXHWuj7ykBgAAAyEAABMAAAB4bC90aGVtZS90aGVtZTEueG1s7Vlbixs3FH4v9D+IeXfm7kuIN9hju2mym4TsJqWP2rHsUawZGUnejQmBklBooRQKaelLoW95KKWFBlr60h+z0NCm/Q89M76NbDnZNJvS0rXBM5K+c/TpnKOj45lLl++lDB0RISnPmpZ7wbEQyWLep9mwad0+6FXqFpIKZ33MeEaa1pRI6/LO229dwhdVQlKCQD6TF3HTSpQaX7RtGUM3lhf4mGQwNuAixQqaYmj3BT4GvSmzPcep2immmYUynILaG4MBjQnyHNdHFbh4Hvrzw0+eP/nI2lnM1GXwkymZd8RM7MfF9NvEC7n+yM0vciojJtARZk0LCPT58QG5pyzEsFQw0LSc4mPZO5fspRBTW2RLcr3iM5ebC/RHXiEnhodLwSAIg2prqd+b6d/EdWvdare61FcAcBzDql2DzpoXBXNsCTS7Neju1Dq+q+FL+v0NfCvMvxreX+GDDXyvF61sWALNbsMNfNhutDu6/nCFr27ga06rE9Q0fAFKGM1GG2gnrPrRYrVLyICzK0Z4Iwx6NW8OX6HsUqTN5DN1mrhL8V0uegAuHI0VzZCajskAxyATYUYPBUW7dJhAEI5xxiV0O57Tc3z4zb9BcVd4F18kuCQ964rlRlfODclY0LFqWldBq1WC/PrTTycPn548/PHk0aOTh9/N596Uu4KzYVnu+ZPP/vjqA/T7D18/f/y5GS/L+Gfffvzs519epF5ptL74/tnT73/98tPfvnlsgLcEPizDD2hKJLpOjtEtnsICDROQQ/FqEgcJppoETgBpAHZVogGvTzEz4dpEN+EdAVnDBHxnclfjup+IiaIG4LUk1YB7nLM2F8blXMvnKi9nkg3Nk4tJGXcL4yPT3NGag7uTMYQ/NamMEqLRvMnA23hIMqJQPsZHhBjE3qdUs+sejQWXfKDQ+xS1MTWa5IAeKrPQFZqCX6YmguBqzTZ7d1CbM5P6DjnSkbAtMDOpJEwz4zt4onBqZIxTVkbuYpWYSO5PRawZXCrw9JAwjrp9IqVJ5oaYanSvQYYxu32PTVMdKRQdmZC7mPMyssNHUYLTsZEzzZIy9l05ghDF6CZXRhJc3yF5G/yAs63uvkOJerVtfRsykDlA8pGJMG0JwvX9OGUDTEzKWyLVsmtLUGN0tCdDLbR3CWH4GPcJQbffNeH5mJtJX00gq1whJttcxXqs5u2MSIKKGsfgWCq1kN0nQ76Fz950LfFMcZZisU3z9ZEeMl045Yyp9AaLR1oqpSLftGYSN2SKT6X1ZoK1sMrb0hyvU5G96h4Dmbt/Q4a8sgwk9lPb5gAzYg6YAwwFhindgsjELJJvp0JsYpQb6Jt25QZ7rd5JafbS4met7An/mbLnjRU8Z1/qbEsp6wXONtx/sKzp4El2k8BJcl7VnFc1/8eqZttePq9lzmuZ81rmH6tlVuWLXX7iU2hJT/X4Z0AZ21dTRnZlUQRJyAP9HnQWjULB8snTOIHb+dQabihwcY8EV+9RlewneAxTusUMQzlXPZRozCWUUdZW3UUZNkn3eH/W67qLh50ggNWqH8qwRT8UbWrWW62tnuot1RetoSwTCAulpydRmkwn4RtI1PzTkXCds2LRMLCouy9iYZe8AgcVwvkD9DCYMYLQg/Du536ayS+8e+ae3mZMfdmeYXmN4Mw8rZEohZtOohSGCRwk691n7OtGw+xqz0ijVn8TvrY3cwPL9BY6hj3nh6AmxuOmNYA/UHCbjkGfzLMWZsOsacVqbui/k1nGQqoOlskMVgzN1p9SRQRiNIVYL7uBZSturldz/r3kGs6/z3L2upPJYEBitaVn1YSxmRLj6GuC8wafAOn9pH+MDtlE3MJgqLDm5gbsU6mW1uxTUQrulRXX0tV8K2ovYVZbFLNxgucnSjmZz+DF/ZJOaR0F0/VV2SYTHg57Z3HqvlxoLWluOUBqW7PYmzvkS6x8M6vQmOsadefFp8TrHwglanUzNd9MbdvZcYYFQWm66ha7eVu9+ZqnwXrU2qUas2htvPnmh3ch8jtQuU6YkrMHZfegFI8W7ylnmaDoXWSXewpNBG1a952wFUReGFWcetitBH7gVOphy6+0wtB3u6HrdNreAzCKSlI3nM3dgz/+bDp/y1/0b7zpTxdl94WYpzYvamK7EC7e9Lvey970H+RYC1Gw0v2q12v4jXa10vBbvUrQadcrjajarnSqUa3T60RhvdF7YKGjAhy0/CioduuVqhtFlaDq5EupNyq1wPNaQa1V7watB3O7gxUW14WpC447fwFQSwMEFAAAAAgAsyrKXOEyJpDnAQAARAoAABMAAABkb2NQcm9wcy9jdXN0b20ueG1stZZLi9swEID/ivGphVU9kiXHDkkgfgQC3TaQ0EMvQZHGicEvbCXdUPrfq9Dt9lAKxaCLkJA0nu8TGnmxG7oeB1Ph6L00dTsu/Ysx/TwIRnXBRo4f7HRrZ8puaKSxw+EcdGVZKcw7dW2wNQEDiAJ1HU3XkP4tnL9avA7uXisbXPpZ1xq7/nDvcat9r2xMpZf+91xkeS5AEFYkGaFAU5KEyYxADMBSlm2SdfHD9/rHYmaj3sy87r+NZviV8PxmpuasO/XAH788UrIJwwvYzwMU8YYCX2dpCnky41EcbrJYpLRYZ4wVPF0EbzmsFsFvyr94n/fb3fGjPGF9LEtOYyFiMmMoCNcxkkTEJVElAs5CZBT0sWjlqcaJZkKnZsxwRUfUezS5NDiNmjulZsAiAowwfgCYQzgP2VdHFp7RXLqJRy+cStgb2Wo5aEfgn+yuadiRU+xCmq71trZiDa2svc9tfffebXfsvatrUJnJVXHm1ISOBBMqEeSUQER4SKXt2YuByUnQk+ShUtyRlLUyVddO1RI71SIjrhTVtkCE1g23LZHIGIkQWKxZAqWOHWl5fUjTyozTzCRun1FH2Ad5noZLwSkvhScvfPJsS/+XHHUl9zjcbOxtI89o0SYeJaVO2f4FFPz5b1z9BFBLAwQUAAAACACzKspc9/73x9ADAAAkEAAAGAAAAHhsL3dvcmtzaGVldHMvc2hlZXQxLnhtbK1YXXPaOhB976/wuDOd2xdsy58kwEwDgXxAQoD2PjsgwBPb4tqiNP31XcmyLxRZhLQvib1H55zdlaxIae1I9pKvMabajyRO87a+pnRzYRj5fI2TMG+QDU4BWZIsCSm8Zisj32Q4XHBSEhvIND0jCaNU77R4bJx1WmRL4yjF40zLt0kSZq9XOCa7tm7pZWASrdaUBYxOaxOu8BTTr5txBm9GpbKIEpzmEUm1DC/b+hd0MXPYeD7gW4R3+d6zRsPnKY7xnOIFN2KVPRPywsBbCJk6c0qx9jrdxBF427pGyWaIl7SL4xj0HV0L5zT6jscwrK0/E0pJwnDImoYUQsuM/MQpz4Fbsdw2R4MLkUJ0ELCa/+MFsOeqQJbW/nNZS593Gjr3HOa4S+J/owVdt/VA1xZ4GW5jOiG7Gyy65zVcpjgncc5/artitGU1LOTq2nybQ1ZCgiVCX2NI1goAS6KUx5Lwh5iHPQFfwfUEFwku+o3r2g1f5V3yHcHnc2oUNfAW9EIadloZ2WkZd+Gl+g2vEq3qB9VCERJgg78gEYH8AWdr0pgL7EpgtnWMdRVY7xCLUraypzSDMRFkTDufPjqBbwaX8NtBrnfZMijQGVZpXCv0+wpsoMBuFNitArtTYPcKbKjARmXfg5oeWZ8+ugh5zqXGuuUik3XLN50mC7hm0/cg4DqB6cra91DKN4+tHxXYWGBN8xh7KrG6aUV/lPJEkdZUgc3kKRvwNVSfhF18Ep53+nuwhRqqKRI+NSzJ/qrg+bUr3rUcF7H6TVe+4rtqhXGYUQmrV+ZrH3fm+mROyPV5TpZt28Ukub7PJ8mBz5NNY9MLgmoaJf59tcf+KnbtwHS4mwkmbxEfqMX7s/7kwz/Xj0PtwEZdw2eJz817fI5W+Gmf2z/3Yb8dWEAy+Tu1PBP+K3N+/y6fE/2S+Az/gk/ZL4n8qJCv24CHZP6y3WgPA9n2qqZ+TWMgy6mPaqplftNUzuOC3lTQVe5PYruo28JV1hPBNd9R9fQE91TZszfwa/wP/hA41T7viH3TkZx7BCbZUrv1UE9AEsFrAbmSs0w9NKj3uhGQJznICEhynrur97qvFxzWC47qM3yohx7robGAAsnpQ0DoGJrUQ9N6r5kUOlgtqFmcG2xbdW44PGmY51Ps8ynu2RQHnU85PzEneDvF2Lu6JDhb8ftfrs3JNuV3zb1ocZ19gussvzr9Fu+hCzgGHcdH6GLMxxv/yxd351GYraI012K4fcI9twFrOyvS5M9wyeVP0OXillq+reEajzP2BvUtCaHlCzOp/jHQ+QVQSwMEFAAAAAgAsyrKXK25WvqABQAAeBsAABgAAAB4bC93b3Jrc2hlZXRzL3NoZWV0Mi54bWy9WVt3qjgU/issZq2ZpxEIV2l1LbQ3W61Wq728UY2WdYAwgMfT/vpJAni0JtE67bwo5Nv727ckG8jpCqU/slcIc+lXFMZZQ37N88RVlGz6CiM/q6EExhiZozTyc3ybLpQsSaE/o0pRqABVtZTID2K5eUrHBmnzFC3zMIjhIJWyZRT56VsLhmjVkDW5GhgGi9ecDCjN08RfwBHMxwmWnwf5PRrggRJT1pyzIIJxFqBYSuG8IXua67VMIkIlJgFcZRvX0jtC0Wjqh/CWuB5iOlWVJRLuC0I/iEhn1pBVmZiPofQ2SsIAO2TIUo6SLpznbRhiLc+0ZMmf5sFPOMByDfkF5TmKiACOJfdzPDRP0TuMqSswhFgW+5jsCBckBWvPrmPtf2gg5HodKPFr87oK6YLmH+fnxc9gG4UPwSx/bciOLM3g3F+G+RCtrmCZU6tG8zJFYUZ/pVUhrWk125Sl6TLDTpUMpCL5W0jS7eBIoyCmY5H/qyzAhr5T08Ah+qDSNz8QaKB2EIFmVQzWBwb9QAK7IrB3YjgoBaDyAHz0ABxI4FQEzgcCk5TnAIJ6RVBMj6KadDKc+bnfPE3RSkqJLmYnFx5hocnHc4CsRmVaIi0u0uYiZwWiWSbFgpis51GeYpkA+0G3CzdL/Cl2Gu8HGUx/QrnZQ7NlCKWL7mQinSo55iPCa9LzktSp7xq8EGCXAuyKG0KHi1xXwdmfCU4at9uSl2V/PbFiuxH42BVgPQF2K8D6AmxQRq7vQnfcpAz3VHyzuIz4RwJ/7gXYWIBNKpfqHJfWFWE49CAgfhRgTwLsWYB5nggs16C2BSl4Da8XMi4J2b1BvWat94f1ll4yW+vFDsrMaJzM/PmHUddt/YT+Awf/m5pqOSeMRLVKLp2X5bLwmEJ3VKOgsm1KbTmE2rBVo86ibu+hFu4i2I5qUjumYajOjj3WKjyr8qJ/amVr2AYAlnGCjRqOCVShkXMg2MYqB4xPOUDsmzagudV1/TA/LgV+XB2V+fUW97a32iyHOl9gdKvk0iFWr/+Pmt8Ict0VYL0Ss9Xvnw+3Aj/6AmxQ+SjYTBy9MG4AoJWbCp0bhqXbrJV/B7gtaLinXk1+Zci/YVosgyNBgPd7itDcm26B4bHA8GTPbnBcqA8Ci48C7Ok70/AsMOx5IrDsPzq/NepFazRAzdrfGfVipM6YeS0B1hZgZwVmWJ9Zw13o/2B2j2PIpAv8/sxiuziKjefb5Zf6diVIaUeAXR/lxRD+3U9gzNy8C0L9cz25HaIsiBeSFy/w0wiDtvulue99ddS33xN1/0ujHgjmwZ3O7yGlE5wXOLr4WE2iVHM4amQmM9TuxSHzrI33qHGsTfaolSVnNQZxxZtbtWXoPx4X59PRDj//R4c9bw8Bx2Ov7ASCnmMUPceuaeu3seIjHO05rCZkk4+JWxzmuimZVMJUGT2phDRGS+JDZ+Zm3FvQublZje2XE77WJV/rig91+B5e87Vu+FCXD/X40C0f6vOhAT8bdyb3K0kZMQMalRBju7rnQ2M+NOFDD3zokQ898aFnPuR5AqyavgZ/JYHyy4YlfHjbUiFPqERA1w9XcQ5XUTY+o0YwXdCv8pk0RcuYyDvyxnBx2jDRXPJ9R9kBLoCLX8N3x6+B22WNPwGXPA3vAlfAxc9LDCLN7bMMDzV3zBq/B+6YxX8G3HPW+BC4I6a85l6y+D0cAMvPFnBbrPE2cNus8QFwB6zxHnD7LH86wO2w5CfAfaTyyu9KFkdKPT9dBHEmhXCOq6rW8LNCWswIep2jhF7hCVwc01R3r9CfwZTc4ak0Ryivbn4fVS0TCaUBjHOfHPY05NCPZ9nUT6AsJfg3HQXv+PGHnPGQEyg8KVXq4fqwrfkvUEsDBBQAAAAIALMqyly5wAiFWwQAAJYSAAAYAAAAeGwvd29ya3NoZWV0cy9zaGVldDMueG1spVhbd6o4GP0rLGateRvBgIBUXavV2pu3amtb31KNyioQBuJ42l8/uaC9GILH81Lg29n727l9NWlscfqWrREi2q8ojLOmviYk8Q0jm69RBLMKTlBMkSVOI0joZ7oysiRFcMFJUWgA03SMCAax3mrw2ChtNfCGhEGMRqmWbaIIpu8XKMTbpl7Vd4FxsFoTFjBajQSu0ASRx4S2XwbkAY9oIMeMveYiiFCcBTjWUrRs6ufAn9msBW8wDdA2+/KufWAcTeYwpDpeTf/8HLCOhCLI+v6K8Rsj3CyauqkzLzHS3idJGFB3lq4RnPTQkrRRSEnnVUfX4JwE/6ERbdfUXzEhOGINaMcIJDS0TPEHirkxFCLalhpODhoLEaHadWme7F/eK/a+7zXz9fV918Eunww6WK8wQ20cPgULsqZd0rUFWsJNSMZ4e43yAXYqNaY4x2HG/2pb0bpqVRxAB2G+yairXILND3lng+YCXYuCuKmzJ/zFnsZ3vl0pZlc9J6dbOd36STcriuyffCfnOz/4wDqCXHVzNn35TrePYXs7tsfnRAwhn4EOJLDVSPFWS/kI8ZF2K86+R/vhp7pCk6Znjc+BiNCV1dTZnjHmOXKRI/Uax4KY7aAJSWmbgOYlrb//suuWa53xJ/Dos1Y1He+sYRAqw9rstdq5lusVaI1gSrQBjJCE3NkZcZRkLKFellGpZ8szbeHddXlfHI/1xXZNuy7rS/cITbPGtWq2bXpn2hGiVztRt0D0ajrVqlQRAMfmil4NmCrF61zRqx9O7c0um3mI3ZY5YSZqLuBDZlnWUWbuFGZ6CjP9MjNPKFwE8eoYDwNFnmFZnm6Pjn8PwTeJ8EghfC+wul28hzzX5EvDBjVH5nucS0jUJ7vMRduqeMWwpy1P+KCYrEdFX6dlbkpXjsLUk8LUs8LUS5mp31hBM3keg9bdffG19oXVKiysOVK3DrG2AusosEsF1lVgV1ZJMStY89dlvC79fSXh3ZTxxugf9hNPQr090erdiVZ7p1vtC2rhf7v9tpSVqRLuz00kkRj+QfrRn6e/zyUkO3VsFdcyAXnm783uQwmtYHIfS2h0bofyuZ2e5vPpNJ/PJ/t8KWGqFsGshKteBN/qob2vh3ZhPcyRumTBtAXm2pJyKCBPongpIHoUlFRDBXalwK4V2I0Cu1Vgdwqsp8D6O0zS94ECGyo0RwrsXqE5FlgdSLZ0PkO1Q+ihGHoshqbF0FMx9FwMvRRDMykk1rbx5dAVoXTFD86ZNsebmJ2xgP4lLG4HhsAf8RPrj3gf+ANZ/Bb4PVn8Cvg3sngb+G1LEn8B/kzW/gL4F7L2HeB3ZPEu8Luy+CXwL2XxCfAfZXmnwH/mceNz3MSFSx+mqyDOtBAt6RiaFfpLPBVnVv5OcMLf6HSIe4vd1xrBBUrZFy1aS4zJ7uPzImeTaDgNUEwgu/1o6iGMF9kcJkjXEvo3nQQf9KBNq08mLmhscdOzv4pq/Q9QSwMEFAAAAAgAsyrKXO7BZGTkBwAAq6sAAA0AAAB4bC9zdHlsZXMueG1s7Z1Lb9tGEMe/CsFTc0j4FCU1ktBKtoECDRDUOQSIg4KWVhIBPlSSSqWccuilxwDtLQV6KNAeWxToqZ+odr9D+dCDjCR7RXKXM3J1MV/L+fHP2dnZJbnuBOHSJpdTQkJh4dhu0BWnYTj7VJKC4ZQ4ZvDEmxE32jP2fMcMo1V/IgUzn5ijIC7k2JIqy4bkmJYr9jru3LlwwkAYenM37IraZpOQ/vli1BUVQxeF9HQDb0S6ovz1o6evviKj11efyFePRGlvmUa+zDL6XT12nKvHo9HTzw6UMXbLSI4jrUtIK9peZ+y5W+iWmG6ITmk6RHhj2l3x5tf3tz+9E/758+ebH36Myw6nph9EmiV7FbUdbxubjmUv001qcpBne74QRjpG1pV4S/B2VSJdiyVeWXAs1/MTqtR2NQRrey3m5jTOl6dtBfYn113xIvrJ0a8OjOvV7h0kWa4LqX6M+muAtkNwpAbJnzg8WLa9CQ+qIqZbep2ZGYbEdy+ilaRQsnFnl7BafrGcRQgT31wqakOkLhB4tjWKTU4G2XvaPztrnp8n3pffsb3ZUuacJa2ltYuXtYFxLvd1ftd2brTb/KwNZH5KRj91MOBl7ezsvH/R5HZtg3P9zOBlTZb78gXP+xb9uFnT+3KLW33r61H9Zu8lm5AvhFYctx/LTzS93W4ZqmEYTbmpNVpZBssdkQWJ0kZDZx472dkabCRkb6utnskNTrZ2oyYDWyuPaa89Rn7SbEcOoxitVquta4qu8wE4+jqTP1Gecu35I+JvM5W2uN7W69hkHEblfWsyjf+G3iw24oWh50QLI8uceK6ZpDHrEtmSQtJN7IrhNOnmDfeixQeuLFAdnxyZoFAdHh23JqY6Pj204LXthqT7rm63xD3Xt1vgvivcLVHqGuu7f/V7HCDnlx6OV1OILaH1QKn+UCbBQ8HUEhRkZlOBy8IwDGwOGVlzB/rdBHd1EO4I28bmHgyQCQYzZj5hAUddLEzNMTkC1p3hn+wff1PqT56Z5KD8QgOzNLSIBTDRu+a2qbiCYJwcUK/igHyrhSA6A7Hty/icL8e5FwcW48zDfDl+lO8mi/FTfcu2V1vT06xWzNnMXn5uWxPXIfFp4kd15npVeEP80BrGD/qG0SpJn/Qtxh9ZanOzpCssTUlZXVOVMwKrsnqHxPIxNMLMeuOF/Xl0s93kkG/mXkie+2RsLZL1xTgte7xCGaTGQ0Saer71NrKWgYKIuYMkfOubsxdkEa4e+tPy6Vm+Jl8ZK2HWEDIrKifoqFGohlhHANxA6BY5ZoWXyiWhDYRC55gVAwd0rvFQODdy1UDjYNbYM8dpfVWRrolQ4hZoZuV0hM7XPyThmYN3VFkBdVy4bVy4CocmpEreOruihTVW2CdxlfpEjrcBnreFS94WLnU1XOpqiNVV2QQ0ZukwI17GAZhNz59dAEbWKCsYc3c2gaJy5iZC5rxztDBCt3FAcxhZYcwMrgd9YKwCo9LxgxDIUtMojVNqaNAHnBo4NcDUA0m2cR+mBqS6YXlas79S6XV19o/j1JBUowNBClw9ouEEIej+Cs9oPLU6XwSgHAUmCE/cH4HgcdY2LFo9J4iafQBURyKojkXQjxJkwKQGFlAOo/XVc8IQlCLag+CkyY+wcELoaNAkTRA4M3rKmRiq15lwMk/WFQa1Wz4ACuEm03BCqN37nfGhYaoVYWY/7TnEWWZ8uQDnUeOHLLQtUPOPG6llITQTaIzMWaFVLNDwogWF0AbjFuN/an7UtcU8ECkaQJ+oB7SyZDKdBv1uUF6f85VM0zh/XlYUs0wfgk3tp/EByM+mWTjEg1H6ZBJ3eA5RR4RgPR7fgDduQ0NaZpwbDSjfe48GFA8ptIqfCVBKZd+KMgikWUVbdSpa/EVA4N8P73/yBS900QyTguggcs2wKuwLcp5aoo7Rzur61hSDAODG7HFSM65OJef1AtLVKzwQqFT2hX2huHQAqrJ0FAFU1cFSBTfkwLrlZtD46Jn7rkD9fBRiZ67wRz4nAA2uR0JFDe7TtUPxt7J+VLEM2tgrJuxZKKmogc3peIhZhl3X6LDBBbYcNvtR6zLjP+gnT0UySWaueUAyw0COGckEAyiTBwOhcxgIncPA6Bx1jtOd5sQ1NLN7ghOaBhqc0hiFPh2dOUw6yJYZic753giShDQPjVJplNO2oxnOkFEOwmAaGTiIzfkF4kocG0nYa2JnVjE6hwquItJAY0yZwLk0Tb8FHDS8njiSsFwUk/OgV1FMzuNcRcfE4aqp41BTxaGmikNNRcPBCRmzmZGzzn+4VpgTQkNE885UmdrO5FVNGugyzlobdKkHMIze5aV4oxtcr4CKGnKKjUZpCmZwOqOcCIcGuozSbKJHxj1UBq1LbbPKlArUtVGXaRMZfc0O+62wO5Bo7Usn8YLn/t4Bmnep70gSi95HirMrJdxkv+AGaMExvgVMl79UXdmra0vqS5/BpaInm9Zx/tq4ogwJXq4Bb+YcALPBPew57KQhse2X46DXiRcuw6VNAmHozWMYTcxsFVzTIV3x3/cfbn95t73jwvXcskPL3YT/jwvc/P7HzV/f3X74bUueLdPYV+b2+78jO8Ir+fX2JmULGQn+FrjXCc1rm+TpI7YRGZtzO3yx2dkVt8vPyMiaO+rmqOex7qujtstfWpNpqCQGh57t+UFsOYj3XE4JCXv/AVBLAwQUAAAACACzKspcQknwHtAAAACmAgAACwAAAF9yZWxzLy5yZWxztZLLbgIxDEV/ZZQ9mEfFomJYsWGHED/gJp6HZhJHjhHD35OyKYPaUiF16eTm6OTK6wP1qC2H1LQxFYPvQypNoxrfAZJtyGOacqSQbyoWj5pHqSGi7bAmWMxmK5B7htms75nF8RLpL0SuqtbSlu3JU9BvwA8JUxxRatLSDD2cWboP5m6aoabYudLIzs0NvOjy8+/Ak6JDRbAsNImSX4u2lL50HNt9Pk63xEho8bLQ83JoUAqO3O9KGOPIaPmPRvaUlP2Tim6ZkdLbpxKM1nJzBVBLAwQUAAAACACzKspccv5GNXgBAAB3AwAADwAAAHhsL3dvcmtib29rLnhtbLWTy07DMBBFfyXyHvIoVKVquimCVuIlCu3ajSfNCD8ie0qAr8dxFKiKVLHpyr53LM/R9XjSGPu2MeYt+lBSu5xVRPU4jl1RgeLu3NSgfaU0VnHy0m5jV1vgwlUApGScJckwVhw1m076u55sPJ20mxVC4379Vkbv6HCDEukzZ2EvgUUKNSr8ApGzhEWuMs3cWPwymrhcFtZImbO0K6zAEhZ/7GXL88I3Ljgfa9TCNDkbjLKRv/Gz12dp5mUT1BoFVe2R4cWPNwfcVpSzLA0HiW+eOaHJ2TDxskTrKHQKnLwgfAfftFM7MjcoCew1J7i1Zlej3rY4Po14L44QXb92uY/tf5I3ZYkFXJtip0BTF70F2QJqV2HtWKS5gpzd3qfp+WXkOXibjm+zEF1S5NH2crdj9AW7EAHydECvs9khTXaEJjstzd1qeUgzOEIzCA/Yv5qAEjWIB3+T876fxOLJRu0SMr5Kk2zkJ2Un5cx7j/rOcNEPQf8Rpt9QSwMEFAAAAAgAsyrKXLts6uy6AAAAGgMAABoAAAB4bC9fcmVscy93b3JrYm9vay54bWwucmVsc8WTOQ6DMBBFr4J8AIYlSREBVRraiAtYMCxiseWZKHD7ECjAUoo0iMr6Y/n9V4yjJ3aSGzVQ3Whyxr4bKBY1s74DUF5jL8lVGof5plSmlzxHU4GWeSsrhMDzbmD2DJFEe6aTTRr/IaqybHJ8qPzV48A/wPBWpqUakYWTSVMhxwLGbhsTLIfvzmThpEUsTFr4As4WCiyh4Hyh0BIKDxQinjqkzWbNVv3lwHqe3+LWvsR1aC/J9esA1ldIPlBLAwQUAAAACACzKspcmjLZWSwBAABcBQAAEwAAAFtDb250ZW50X1R5cGVzXS54bWzNlM9Og0AQxl+FcG1ga008mNKLetUefIF1GcqG/ZedodK3d4C2iaYSG0z0wgbmm+83y7ewfj0EwKSzxmGR1kThXghUNViJuQ/guFL5aCXxbdyJIFUjdyBWy+WdUN4ROMqo90g360eoZGsoeer4MWrvijSCwTR5GIU9q0hlCEYrSVwXe1d+oWRHQs6dgwZrHXDBglRcJPSV7wHHvpc9xKhLSLYy0rO0rBKdEUgHA5hPW1yY0VeVVlB61VpuyTFEkCXWAGRNPpoupsnEbxjG681s/mAzBWTlNvqAnFiE63GnSPruLLARRNLTWzwT2Xr2/qBPu4TyWrZqkbydjR9tfgjnbN99bIbDgGJY5gf8+YCd/a+cY/VP5rj9wznevG9++3vv19xK7U58MfxUNx9QSwECFAMUAAAACACzKspcRsdNSJUAAADNAAAAEAAAAAAAAAAAAAAAgAEAAAAAZG9jUHJvcHMvYXBwLnhtbFBLAQIUAxQAAAAIALMqylx8reY+KQEAAJUCAAARAAAAAAAAAAAAAACAAcMAAABkb2NQcm9wcy9jb3JlLnhtbFBLAQIUAxQAAAAIALMqylx1ro+8pAYAAAMhAAATAAAAAAAAAAAAAACAARsCAAB4bC90aGVtZS90aGVtZTEueG1sUEsBAhQDFAAAAAgAsyrKXOEyJpDnAQAARAoAABMAAAAAAAAAAAAAAIAB8AgAAGRvY1Byb3BzL2N1c3RvbS54bWxQSwECFAMUAAAACACzKspc9/73x9ADAAAkEAAAGAAAAAAAAAAAAAAAgIEICwAAeGwvd29ya3NoZWV0cy9zaGVldDEueG1sUEsBAhQDFAAAAAgAsyrKXK25WvqABQAAeBsAABgAAAAAAAAAAAAAAICBDg8AAHhsL3dvcmtzaGVldHMvc2hlZXQyLnhtbFBLAQIUAxQAAAAIALMqyly5wAiFWwQAAJYSAAAYAAAAAAAAAAAAAACAgcQUAAB4bC93b3Jrc2hlZXRzL3NoZWV0My54bWxQSwECFAMUAAAACACzKspc7sFkZOQHAACrqwAADQAAAAAAAAAAAAAAgAFVGQAAeGwvc3R5bGVzLnhtbFBLAQIUAxQAAAAIALMqylxCSfAe0AAAAKYCAAALAAAAAAAAAAAAAACAAWQhAABfcmVscy8ucmVsc1BLAQIUAxQAAAAIALMqylxy/kY1eAEAAHcDAAAPAAAAAAAAAAAAAACAAV0iAAB4bC93b3JrYm9vay54bWxQSwECFAMUAAAACACzKspcu2zq7LoAAAAaAwAAGgAAAAAAAAAAAAAAgAECJAAAeGwvX3JlbHMvd29ya2Jvb2sueG1sLnJlbHNQSwECFAMUAAAACACzKspcmjLZWSwBAABcBQAAEwAAAAAAAAAAAAAAgAH0JAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLBQYAAAAADAAMAAsDAABRJgAAAAA=";</script>
   <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -1206,6 +1208,59 @@
       const [prodReportNotes, setProdReportNotes] = useState(() => {
         try { return JSON.parse(localStorage.getItem('mfg_prod_report_notes') || '{}'); } catch { return {}; }
       });
+      // Lot&FTFR 탭: 공정 토글 / 비고(자유 입력) / Lot 펼침 상태
+      const [lotFtfrSection, setLotFtfrSection] = useState('TCP');
+      const [lotFtfrItem, setLotFtfrItem] = useState('');
+      const [lotFtfrFeLine, setLotFtfrFeLine] = useState('UCC');
+      const [lotFtfrFrom, setLotFtfrFrom] = useState('');
+      const [lotFtfrTo, setLotFtfrTo] = useState('');
+      const [lotFtfrNotes, setLotFtfrNotes] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mfg_lotftfr_notes') || '{}'); } catch { return {}; }
+      });
+      const [expandedLotRows, setExpandedLotRows] = useState({});
+      const toggleLotRow = (key) => setExpandedLotRows(prev => ({ ...prev, [key]: !prev[key] }));
+      // QPRM 템플릿 엑셀 내보내기 (ExcelJS: 템플릿 서식·병합·색상 유지)
+      const qprmExport = async (sheetName, startRow, maxCol, dataRows, fname, renameTo) => {
+        try {
+          const bin = atob(window.QPRM_TEMPLATE_B64);
+          const buf = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+          const wb = new ExcelJS.Workbook();
+          await wb.xlsx.load(buf.buffer);
+          wb.worksheets.slice().forEach(w => { if (w.name !== sheetName) wb.removeWorksheet(w.id); });
+          const ws = wb.getWorksheet(sheetName);
+          const tplRow = ws.getRow(startRow);
+          const styles = [];
+          for (let c = 1; c <= maxCol; c++) styles[c] = tplRow.getCell(c).style;
+          const tplH = tplRow.height;
+          dataRows.forEach((vals, i) => {
+            const row = ws.getRow(startRow + i);
+            if (tplH) row.height = tplH;
+            for (let c = 1; c <= maxCol; c++) {
+              const cell = row.getCell(c);
+              if (styles[c]) cell.style = JSON.parse(JSON.stringify(styles[c]));
+              const v = vals[c - 1];
+              cell.value = (v === undefined || v === '') ? null : v;
+            }
+          });
+          if (renameTo) ws.name = renameTo.replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31);
+          const out = await wb.xlsx.writeBuffer();
+          const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = fname;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        } catch (e) { alert('엑셀 출력 오류: ' + (e && e.message ? e.message : e)); }
+      };
+      const updateLotFtfrNote = (key, value) => {
+        setLotFtfrNotes(prev => {
+          const next = { ...prev };
+          if (!value || !value.trim()) { delete next[key]; } else { next[key] = value; }
+          try { localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
       // UCC Module 수량 (수동 입력) - key: date(YYYY-MM-DD), value: number
       const [moduleQuantities, setModuleQuantities] = useState(() => {
         try { return JSON.parse(localStorage.getItem('mfg_module_quantities') || '{}'); } catch { return {}; }
@@ -1375,7 +1430,7 @@
           try {
             const payload = {
               filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-              data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping }
+              data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes }
             };
             await fetch(GAS_URL, {
               method: 'POST',
@@ -1385,7 +1440,7 @@
           } catch {}
         }, 10000);
         return () => clearTimeout(timer);
-      }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping]);
+      }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes]);
       const [expandedNotes, setExpandedNotes] = useState({});
       const toggleNote = (key) => setExpandedNotes(prev => ({ ...prev, [key]: !prev[key] }));
       const updateProdNote = (key, value) => {
@@ -1634,7 +1689,7 @@
         try {
           const payload = {
             filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-            data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping }
+            data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes }
           };
           const res = await fetch(GAS_URL, {
             method: 'POST',
@@ -1694,6 +1749,10 @@
             if (d.prodReportNotes !== undefined) {
               setProdReportNotes(d.prodReportNotes || {});
               try { localStorage.setItem('mfg_prod_report_notes', JSON.stringify(d.prodReportNotes || {})); } catch {}
+            }
+            if (d.lotFtfrNotes !== undefined) {
+              setLotFtfrNotes(d.lotFtfrNotes || {});
+              try { localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {})); } catch {}
             }
             if (d.moduleQuantities !== undefined) {
               setModuleQuantities(d.moduleQuantities || {});
@@ -1815,6 +1874,10 @@
                   if (d.prodReportNotes !== undefined) {
                     setProdReportNotes(d.prodReportNotes || {});
                     try { localStorage.setItem('mfg_prod_report_notes', JSON.stringify(d.prodReportNotes || {})); } catch {}
+                  }
+                  if (d.lotFtfrNotes !== undefined) {
+                    setLotFtfrNotes(d.lotFtfrNotes || {});
+                    try { localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {})); } catch {}
                   }
                   if (d.moduleQuantities !== undefined) {
                     setModuleQuantities(d.moduleQuantities || {});
@@ -2848,6 +2911,7 @@
         { id: 'workhour',  icon: '⏱️', label: 'Working Hour' },
         { id: 'ftfr',      icon: '✨', label: 'FTFR' },
         { id: 'ftfrdetail',icon: '🔬', label: 'FTFR(세부)' },
+        { id: 'lotftfr',   icon: '📦', label: 'Lot & FTFR' },
         { id: 'validate',  icon: '🔎', label: '유효성검사' },
         { id: 'formula',   icon: '⚙️', label: 'OEE/FTFR 설정' },
         { id: 'upload',    icon: '📁', label: '데이터' },
@@ -8346,7 +8410,7 @@
                           try {
                             const payload = {
                               filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-                              data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping }
+                              data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes }
                             };
                             const res = await fetch(GAS_URL, {
                               method: 'POST',
@@ -8634,7 +8698,7 @@
                           }} className="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded text-sm">전체 계획 삭제</button>
                           <button onClick={async () => {
                             try {
-                              const payload = { filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`, data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping } };
+                              const payload = { filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`, data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes } };
                               const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
                               const result = await res.json();
                               alert(result.ok ? '✅ 저장 완료' : '저장 실패');
@@ -9227,6 +9291,667 @@
                       })}
                     </div>
                   )}
+                </div>
+              );
+            })()}
+
+            {activeTab === 'lotftfr' && (tcpData || feData) && (() => {
+              const section = lotFtfrSection;
+              const data = section === 'TCP' ? tcpData : feData;
+              const TH = "border border-slate-200 px-2 py-2 bg-slate-50 text-slate-600 font-semibold text-center align-middle";
+              const TD = "border border-slate-100 px-2 py-1.5 text-center text-slate-700 align-top";
+              const sectionToggle = (
+                <div className="bg-white rounded-xl border border-slate-200 inline-flex p-1 gap-1">
+                  {[{k:'TCP',l:'TCP'},{k:'FE',l:'FE'}].map(s => (
+                    <button key={s.k} onClick={() => setLotFtfrSection(s.k)} className={`px-5 py-1.5 rounded-lg text-sm font-bold transition-colors ${section===s.k?'bg-slate-800 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{s.l}</button>
+                  ))}
+                </div>
+              );
+              if (!data) {
+                return (<div>{sectionToggle}<div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400 mt-4">{section} 데이터가 없습니다. ‘데이터’ 탭에서 백업을 불러와 주세요.</div></div>);
+              }
+              const rate1 = (v) => (Math.round((v||0)*100)/100).toFixed(2);
+              const norm = (v) => String(v||'').replace(/\s+/g,'').toLowerCase();
+              const TCP_COLS = ['Lockup NG', 'Unlock NG', '10V Lockup NG', '10V Unlock NG'];
+              // 유형 헤더 라벨: 'NG' 제거 + 단어별 줄바꿈으로 칸 축소
+              const subLabel = (s) => {
+                if (s === '-') return '-';
+                const parts = String(s).replace(/\s*NG\s*$/i,'').trim().split(/\s+/);
+                return parts.map((w, i) => (<React.Fragment key={i}>{i > 0 && <br/>}{w}</React.Fragment>));
+              };
+              // 유형 집계 (필터 없이 전체): 1차 불량 유형 = 재작업, 2차 불량 유형 = 불량
+              const getSubtypes = (log) => {
+                const first = {}, second = {};
+                // TCP: 4종 컬럼에 느슨한 포함 매칭 (10V → Unlock → Lockup 순으로 판정)
+                const classify = (cands) => {
+                  if (section !== 'TCP') return cands.find(c => c) || '기타';
+                  for (const raw of cands) {
+                    if (!raw) continue;
+                    const t = norm(raw);
+                    const is10v = t.includes('10v');
+                    if (t.includes('unlock')) return is10v ? '10V Unlock NG' : 'Unlock NG';
+                    if (t.includes('lockup') || t.includes('lock')) return is10v ? '10V Lockup NG' : 'Lockup NG';
+                  }
+                  return cands.find(c => c) || '기타';
+                };
+                // 불량(폐기)은 1차에서도 한 번 떨어진 것이므로 1차 유형에도 포함 (1차 = 재작업+불량, 2차 = 불량)
+                const addD = (d) => { const q = parseFloat(d.quantity) || 0; if (!q) return; const k = classify([d.defectSubType, d.subType, d.defectType]); first[k] = (first[k]||0) + q; second[k] = (second[k]||0) + q; };
+                const addR = (r) => { const q = parseFloat(r.quantity) || 0; if (!q) return; const k = classify([r.reworkSubType, r.subType, r.reworkType]); first[k] = (first[k]||0) + q; };
+                const lld = data?.lotData?.[log.id];
+                if (lld && Array.isArray(lld.defects)) {
+                  lld.defects.forEach(addD); (lld.reworks || []).forEach(addR);
+                } else {
+                  (data?.defectLogs || []).forEach(d => { if (d.productionLogId === log.id) addD(d); });
+                  (data?.reworkLogs || []).forEach(r => { if (r.productionLogId === log.id) addR(r); });
+                }
+                return { first, second };
+              };
+              // 입력된 Lot만 (BOM별)
+              const getLots = (log) => {
+                const lld = data?.lotData?.[log.id];
+                if (!lld) return [];
+                const out = [];
+                Object.keys(lld).forEach(k => {
+                  if (k === 'section' || k === 'item' || k === 'partNo') return;
+                  const arr = lld[k];
+                  if (!Array.isArray(arr)) return;
+                  const entered = arr.map(v => (v == null ? '' : String(v).trim())).filter(v => v);
+                  if (entered.length) out.push({ bom: k, lots: entered });
+                });
+                return out;
+              };
+              const buildRow = (log) => {
+                const prodQty = parseFloat(log.goodQuantity) || 0;            // 생산수량 (시스템 입력 양품)
+                const { first, second } = getSubtypes(log);
+                // 1차/2차 불량 = 화면에 표시되는 유형 컬럼 값의 합 (TCP는 4종 고정 컬럼만)
+                const sumCols = (map) => section === 'TCP'
+                  ? TCP_COLS.reduce((a, c) => a + (map[c] || 0), 0)
+                  : Object.values(map).reduce((a, b) => a + b, 0);
+                const firstBad = sumCols(first);                              // ① 1차 불량 = 1차 유형 합
+                const secondBad = sumCols(second);                            // ② 2차 불량 = 2차 유형 합
+                const good = prodQty + secondBad;                             // ③ 최종 양품 = 생산수량 + 2차 불량
+                const eol1Good = prodQty + secondBad - firstBad;              // ④ 1차 양품 = 생산수량 + 2차 불량 - 1차 불량
+                const eolFinGood = firstBad - secondBad;                      // ⑤ 2차(EOL 최종) 양품 = 1차 불량 - 2차 불량
+                const eolFinBad = secondBad;
+                const input1 = eol1Good + firstBad;                           // ⑥ 1차 투입 = 1차 양품 + 1차 불량 (마지막)
+                const ftfrRate = input1 > 0 ? (firstBad / input1 * 100) : 0;
+                const finRate = input1 > 0 ? (eolFinBad / input1 * 100) : 0;
+                const lots = getLots(log);
+                return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots };
+              };
+              // 아이템별 그룹 (TCP: 1PC/2PC 라인만)
+              const logs = (data.productionLogs || []).filter(l => {
+                if ((l.section || section) !== section) return false;
+                if (section === 'TCP' && !(l.lineName === '1PC' || l.lineName === '2PC')) return false;
+                const d = (l.productionDate || '').slice(0, 10);
+                if (lotFtfrFrom && d < lotFtfrFrom) return false;
+                if (lotFtfrTo && d > lotFtfrTo) return false;
+                return true;
+              });
+              // ===== FE: UCC / LVS / FTIV 전용 리포트 =====
+              if (section === 'FE') {
+                const feLine = lotFtfrFeLine;
+                const dateRange = (
+                  <div className="bg-white rounded-xl border border-slate-200 inline-flex items-center p-1.5 gap-1.5 text-xs">
+                    <input type="date" value={lotFtfrFrom} onChange={e => setLotFtfrFrom(e.target.value)} className="px-2 py-1 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none" />
+                    <span className="text-slate-400">~</span>
+                    <input type="date" value={lotFtfrTo} onChange={e => setLotFtfrTo(e.target.value)} className="px-2 py-1 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none" />
+                    {(lotFtfrFrom || lotFtfrTo) && (
+                      <button onClick={() => { setLotFtfrFrom(''); setLotFtfrTo(''); }} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-bold">전체</button>
+                    )}
+                  </div>
+                );
+                const header = (
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    {sectionToggle}
+                    <div className="bg-white rounded-xl border border-slate-200 inline-flex p-1 gap-1">
+                      {['UCC','LVS','FTIV'].map(ln => (
+                        <button key={ln} onClick={() => setLotFtfrFeLine(ln)} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${feLine===ln?'bg-indigo-600 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{ln}</button>
+                      ))}
+                    </div>
+                    {dateRange}
+                  </div>
+                );
+                if (feLine === 'FTIV') {
+                  return (<div>{header}<div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400">FTIV 리포트는 준비 중입니다.</div></div>);
+                }
+                if (feLine === 'LVS') {
+                  // --- LVS 리포트 ---
+                  const G_COLS = ['Leak', 'Flow', 'Re-open'];
+                  // 스테이션 분류: GVV 성능 / 융착 Leak / Final Test
+                  const lvsStage = (station) => {
+                    const st = norm(station);
+                    if (st.includes('gvv')) return 'G';
+                    if (st.includes('융착') || st.includes('welding')) return 'W';
+                    if (st.includes('final')) return 'F';
+                    return null;
+                  };
+                  const lvsCol = (entry, kind) => {
+                    const cand = kind === 'd' ? [entry.defectSubType, entry.subType, entry.defectType] : [entry.reworkSubType, entry.subType, entry.reworkType];
+                    for (const raw of cand) {
+                      if (!raw) continue;
+                      const t = norm(raw);
+                      if (t.includes('open')) return 'Re-open';
+                      if (t.includes('flow')) return 'Flow';
+                      if (t.includes('leak')) return 'Leak';
+                    }
+                    return null;
+                  };
+                  const lvsLogs = logs.filter(l => norm(l.lineName).includes('lvs'));
+                  const byKey = {};
+                  const keyOfLog = (l) => `${(l.productionDate||'').slice(0,10)}|${l.partNo||''}`;
+                  lvsLogs.forEach(l => {
+                    const k = keyOfLog(l);
+                    if (!byKey[k]) byKey[k] = { date: (l.productionDate||'').slice(0,10), item: l.item || '', partNo: l.partNo || '', good: 0, gFirst: {}, gFin: {}, wFirst: 0, wFin: 0, fFirst: 0, fFin: 0 };
+                    byKey[k].good += parseFloat(l.goodQuantity) || 0;
+                  });
+                  const idToKey = {};
+                  lvsLogs.forEach(l => { idToKey[l.id] = keyOfLog(l); });
+                  const addEntry = (entry, kind) => {
+                    const k = idToKey[entry.productionLogId]; if (!k) return;
+                    const stage = lvsStage(entry.station); if (!stage) return;
+                    const q = parseFloat(entry.quantity) || 0; if (!q) return;
+                    const row = byKey[k];
+                    if (stage === 'G') {
+                      const col = lvsCol(entry, kind); if (!col) return;
+                      if (kind === 'r') row.gFirst[col] = (row.gFirst[col]||0)+q; else row.gFin[col] = (row.gFin[col]||0)+q;
+                    } else if (stage === 'W') {
+                      const col = lvsCol(entry, kind); if (col !== 'Leak') return;
+                      if (kind === 'r') row.wFirst += q; else row.wFin += q;
+                    } else {
+                      const col = lvsCol(entry, kind); if (col !== 'Leak') return;
+                      if (kind === 'r') row.fFirst += q; else row.fFin += q;
+                    }
+                  };
+                  (data.defectLogs || []).forEach(d => addEntry(d, 'd'));
+                  (data.reworkLogs || []).forEach(r => addEntry(r, 'r'));
+                  const gSum = (map) => G_COLS.reduce((a, c) => a + (map[c]||0), 0);
+                  const lvsRows = Object.values(byKey).sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.partNo||'').localeCompare(b.partNo||'')).map(r => {
+                    const input = r.good + gSum(r.gFin) + r.wFin + r.fFin; // 투입 = 양품 + 최종불량 전체
+                    return { ...r, input };
+                  });
+                  const T = lvsRows.reduce((a, r) => {
+                    a.good += r.good; a.input += r.input; a.wFirst += r.wFirst; a.wFin += r.wFin; a.fFirst += r.fFirst; a.fFin += r.fFin;
+                    G_COLS.forEach(c => { a.gFirst[c] = (a.gFirst[c]||0)+(r.gFirst[c]||0); a.gFin[c] = (a.gFin[c]||0)+(r.gFin[c]||0); });
+                    return a;
+                  }, { good:0, input:0, wFirst:0, wFin:0, fFirst:0, fFin:0, gFirst:{}, gFin:{} });
+                  const pct = (n, d) => d > 0 ? rate1(n / d * 100) + '%' : '-';
+                  const fmtD = (s) => { const dd = new Date(s); if (isNaN(dd)) return s; return `${dd.getMonth()+1}/${String(dd.getDate()).padStart(2,'0')}`; };
+                  const exportLvsExcel = () => {
+                    const dataRows = lvsRows.map((r, i) => {
+                      const n = 4 + i;
+                      return [
+                        '', new Date(r.date + 'T00:00:00'), r.item, r.partNo,
+                        { formula: `F${n}+J${n}+L${n}+N${n}+K${n}+P${n}` }, r.good,
+                        r.gFirst['Leak'] || 0, r.gFirst['Flow'] || 0, r.gFirst['Re-open'] || 0,
+                        r.gFin['Leak'] || 0, r.gFin['Flow'] || 0, r.gFin['Re-open'] || 0,
+                        r.wFirst, r.wFin, r.fFirst, r.fFin,
+                        lotFtfrNotes[`lvsnote|${r.date}|${r.partNo}`] || '', '',
+                        { formula: `G${n}/E${n}` }, { formula: `H${n}/E${n}` }, { formula: `I${n}/E${n}` },
+                        { formula: `J${n}/E${n}` }, { formula: `K${n}/E${n}` }, { formula: `L${n}/E${n}` },
+                        { formula: `M${n}/E${n}` }, { formula: `N${n}/F${n}` }
+                      ];
+                    });
+                    const ymd = new Date().toISOString().slice(0,10).replace(/-/g,'');
+                    qprmExport('LVS Data', 4, 26, dataRows, `QPRM_LVS_${ymd}.xlsx`);
+                  };
+                  return (
+                    <div>
+                      {header}
+                      {lvsRows.length === 0 ? (
+                        <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400">LVS 생산 데이터가 없습니다.</div>
+                      ) : (
+                        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                          <div className="bg-slate-800 text-white px-4 py-2.5 font-bold flex items-center justify-between">
+                            <span>📦 LVS</span>
+                            <div className="flex items-center gap-3">
+                              <button onClick={exportLvsExcel} className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">📥 엑셀</button>
+                              <span className="text-xs font-medium text-slate-300">{lvsRows.length}건</span>
+                            </div>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="text-xs border-collapse w-full whitespace-nowrap">
+                              <thead>
+                                <tr>
+                                  <th rowSpan={2} className={TH+" sticky z-20"} style={{left: 0, minWidth: 64}}>생산일</th>
+                                  <th rowSpan={2} className={TH}>Part Name</th>
+                                  <th rowSpan={2} className={TH}>Part No</th>
+                                  <th rowSpan={2} className={TH}>투입수량</th>
+                                  <th rowSpan={2} className={TH}>양품 수량</th>
+                                  <th colSpan={3} className={TH+" bg-sky-100 text-sky-800"}>GVV 1차 불량</th>
+                                  <th colSpan={3} className={TH+" bg-yellow-100 text-yellow-800"}>최종 불량</th>
+                                  <th colSpan={2} className={TH+" bg-violet-100 text-violet-800"}>Welding 불량</th>
+                                  <th colSpan={2} className={TH+" bg-green-100 text-green-800"}>FLVV Leak</th>
+                                  <th rowSpan={2} className={TH+" min-w-[120px]"}>비고</th>
+                                  <th colSpan={3} className={TH+" bg-sky-100 text-sky-800"}>1차 불량률</th>
+                                  <th colSpan={3} className={TH+" bg-yellow-100 text-yellow-800"}>최종 불량률</th>
+                                  <th colSpan={2} className={TH+" bg-violet-100 text-violet-800"}>Welding 불량</th>
+                                </tr>
+                                <tr>
+                                  {G_COLS.map(c => <th key={'gf'+c} className={TH+" px-1 bg-sky-50"}>{c}</th>)}
+                                  {G_COLS.map(c => <th key={'gn'+c} className={TH+" px-1 bg-yellow-50"}>{c}</th>)}
+                                  <th className={TH+" px-1 bg-violet-50"}>1차</th>
+                                  <th className={TH+" px-1 bg-violet-50"}>최종</th>
+                                  <th className={TH+" px-1 bg-green-50"}>1차</th>
+                                  <th className={TH+" px-1 bg-green-50"}>최종</th>
+                                  {G_COLS.map(c => <th key={'rgf'+c} className={TH+" px-1 bg-sky-50"}>{c}</th>)}
+                                  {G_COLS.map(c => <th key={'rgn'+c} className={TH+" px-1 bg-yellow-50"}>{c}</th>)}
+                                  <th className={TH+" px-1 bg-violet-50"}>1차</th>
+                                  <th className={TH+" px-1 bg-violet-50"}>최종</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {lvsRows.map(r => {
+                                  const nk = `lvsnote|${r.date}|${r.partNo}`;
+                                  return (
+                                    <tr key={r.date+'|'+r.partNo} className="hover:bg-slate-50/60">
+                                      <td className={TD+" font-medium sticky bg-white z-10"} style={{left: 0, minWidth: 64}}>{fmtD(r.date)}</td>
+                                      <td className={TD}>{r.item || '-'}</td>
+                                      <td className={TD}>{r.partNo || '-'}</td>
+                                      <td className={TD+" font-semibold"}>{r.input.toLocaleString()}</td>
+                                      <td className={TD+" font-semibold"}>{r.good.toLocaleString()}</td>
+                                      {G_COLS.map(c => <td key={'gf'+c} className={TD+" bg-sky-50/30 px-1"}>{r.gFirst[c]||0}</td>)}
+                                      {G_COLS.map(c => <td key={'gn'+c} className={TD+" bg-yellow-50/40 px-1 text-rose-600 font-semibold"}>{r.gFin[c]||0}</td>)}
+                                      <td className={TD+" bg-violet-50/30 px-1"}>{r.wFirst}</td>
+                                      <td className={TD+" bg-violet-50/30 px-1 text-rose-600 font-semibold"}>{r.wFin}</td>
+                                      <td className={TD+" bg-green-50/30 px-1"}>{r.fFirst}</td>
+                                      <td className={TD+" bg-green-50/30 px-1 text-rose-600 font-semibold"}>{r.fFin}</td>
+                                      <td className={TD+" text-left"}>
+                                        <input type="text" defaultValue={lotFtfrNotes[nk] || ''} key={'ln-'+nk+'-'+(lotFtfrNotes[nk]||'')} onBlur={(e) => updateLotFtfrNote(nk, e.target.value)} placeholder="비고" className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
+                                      </td>
+                                      {G_COLS.map(c => <td key={'rgf'+c} className={TD+" px-1"}>{pct(r.gFirst[c]||0, r.input)}</td>)}
+                                      {G_COLS.map(c => <td key={'rgn'+c} className={TD+" px-1 font-semibold"}>{pct(r.gFin[c]||0, r.input)}</td>)}
+                                      <td className={TD+" px-1"}>{pct(r.wFirst, r.input)}</td>
+                                      <td className={TD+" px-1 font-semibold"}>{pct(r.wFin, r.input)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                                  <td className={TD+" font-bold sticky bg-slate-100 z-10"} style={{left: 0}} colSpan={1}>합계</td>
+                                  <td className={TD} colSpan={2}></td>
+                                  <td className={TD+" font-bold"}>{T.input.toLocaleString()}</td>
+                                  <td className={TD+" font-bold"}>{T.good.toLocaleString()}</td>
+                                  {G_COLS.map(c => <td key={'gf'+c} className={TD+" font-bold px-1"}>{T.gFirst[c]||0}</td>)}
+                                  {G_COLS.map(c => <td key={'gn'+c} className={TD+" font-bold px-1 text-rose-600"}>{T.gFin[c]||0}</td>)}
+                                  <td className={TD+" font-bold px-1"}>{T.wFirst}</td>
+                                  <td className={TD+" font-bold px-1 text-rose-600"}>{T.wFin}</td>
+                                  <td className={TD+" font-bold px-1"}>{T.fFirst}</td>
+                                  <td className={TD+" font-bold px-1 text-rose-600"}>{T.fFin}</td>
+                                  <td className={TD}></td>
+                                  {G_COLS.map(c => <td key={'rgf'+c} className={TD+" font-bold px-1"}>{pct(T.gFirst[c]||0, T.input)}</td>)}
+                                  {G_COLS.map(c => <td key={'rgn'+c} className={TD+" font-bold px-1"}>{pct(T.gFin[c]||0, T.input)}</td>)}
+                                  <td className={TD+" font-bold px-1"}>{pct(T.wFirst, T.input)}</td>
+                                  <td className={TD+" font-bold px-1"}>{pct(T.wFin, T.input)}</td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                // --- UCC 리포트 ---
+                const M_COLS = ['Leak', 'Flow'];
+                const U_COLS = ['Re-Open', 'Closing Angle', 'Leak'];
+                // 스테이션 우선 분류: FLVV 성능공정 → Module, EOL공정 → UCC Ass'y
+                const classifyUcc = (entry, kind) => {
+                  const cand = kind === 'd' ? [entry.defectSubType, entry.subType, entry.defectType] : [entry.reworkSubType, entry.subType, entry.reworkType];
+                  const st = norm(entry.station);
+                  let stage = null;
+                  if (st.includes('flvv')) stage = 'M';
+                  else if (st.includes('eol')) stage = 'U';
+                  else return null; // 그 외 스테이션 제외
+                  for (const raw of cand) {
+                    if (!raw) continue;
+                    const t = norm(raw);
+                    if (stage === 'M') {
+                      if (t.includes('leak')) return { stage, col: 'Leak' };
+                      if (t.includes('flow')) return { stage, col: 'Flow' };
+                    } else {
+                      if (t.includes('open')) return { stage, col: 'Re-Open' };
+                      if (t.includes('angle') || t.includes('clos')) return { stage, col: 'Closing Angle' };
+                      if (t.includes('leak')) return { stage, col: 'Leak' };
+                    }
+                  }
+                  return null; // 유형 미분류 → 제외
+                };
+                const uccLogs = logs.filter(l => norm(l.lineName).includes('ucc'));
+                const byDate = {};
+                uccLogs.forEach(l => {
+                  const d = (l.productionDate || '').slice(0, 10);
+                  if (!byDate[d]) byDate[d] = { date: d, good: 0, mFirst: {}, mFin: {}, uFirst: {}, uFin: {}, logIds: [] };
+                  const row = byDate[d];
+                  row.good += parseFloat(l.goodQuantity) || 0;
+                  row.logIds.push(l.id);
+                });
+                const idToDate = {};
+                uccLogs.forEach(l => { idToDate[l.id] = (l.productionDate || '').slice(0, 10); });
+                (data.defectLogs || []).forEach(dl => {
+                  const d = idToDate[dl.productionLogId]; if (!d) return;
+                  const c = classifyUcc(dl, 'd'); if (!c) return;
+                  const q = parseFloat(dl.quantity) || 0; if (!q) return;
+                  const row = byDate[d];
+                  if (c.stage === 'M') { row.mFin[c.col] = (row.mFin[c.col]||0)+q; }
+                  else { row.uFin[c.col] = (row.uFin[c.col]||0)+q; }
+                });
+                (data.reworkLogs || []).forEach(rl => {
+                  const d = idToDate[rl.productionLogId]; if (!d) return;
+                  const c = classifyUcc(rl, 'r'); if (!c) return;
+                  const q = parseFloat(rl.quantity) || 0; if (!q) return;
+                  const row = byDate[d];
+                  if (c.stage === 'M') row.mFirst[c.col] = (row.mFirst[c.col]||0)+q;
+                  else row.uFirst[c.col] = (row.uFirst[c.col]||0)+q;
+                });
+                const sum = (map, cols) => cols.reduce((a, c) => a + (map[c]||0), 0);
+                const uccRows = Object.values(byDate).sort((a, b) => a.date < b.date ? -1 : 1).map(r => {
+                  const modGood = parseFloat(lotFtfrNotes[`uccmod|${r.date}`]) || 0;
+                  const modInput = modGood + sum(r.mFin, M_COLS);
+                  const uccInput = r.good + sum(r.uFin, U_COLS);
+                  return { ...r, modGood, modInput, uccInput };
+                });
+                const T = uccRows.reduce((a, r) => {
+                  a.good += r.good; a.modGood += r.modGood; a.modInput += r.modInput; a.uccInput += r.uccInput;
+                  M_COLS.forEach(c => { a.mFirst[c] = (a.mFirst[c]||0)+(r.mFirst[c]||0); a.mFin[c] = (a.mFin[c]||0)+(r.mFin[c]||0); });
+                  U_COLS.forEach(c => { a.uFirst[c] = (a.uFirst[c]||0)+(r.uFirst[c]||0); a.uFin[c] = (a.uFin[c]||0)+(r.uFin[c]||0); });
+                  return a;
+                }, { good:0, modGood:0, modInput:0, uccInput:0, mFirst:{}, mFin:{}, uFirst:{}, uFin:{} });
+                const pct = (n, d) => d > 0 ? rate1(n / d * 100) + '%' : '-';
+                const fmtD = (s) => { const dd = new Date(s); if (isNaN(dd)) return s; return `${dd.getMonth()+1}/${String(dd.getDate()).padStart(2,'0')}`; };
+                const exportUccExcel = () => {
+                  const fr = (n, d) => d > 0 ? n / d : 0;
+                  const dataRows = uccRows.map(r => [
+                    new Date(r.date + 'T00:00:00'), r.modInput, r.modGood,
+                    r.mFirst['Leak'] || 0, r.mFirst['Flow'] || 0, r.mFin['Leak'] || 0, r.mFin['Flow'] || 0,
+                    r.uccInput, r.good,
+                    r.uFirst['Re-Open'] || 0, r.uFirst['Closing Angle'] || 0, r.uFirst['Leak'] || 0,
+                    r.uFin['Re-Open'] || 0, r.uFin['Closing Angle'] || 0, r.uFin['Leak'] || 0,
+                    lotFtfrNotes[`uccnote|${r.date}`] || '', '',
+                    fr(r.mFirst['Leak'] || 0, r.modInput), fr(r.mFirst['Flow'] || 0, r.modInput),
+                    fr(r.mFin['Leak'] || 0, r.modInput), fr(r.mFin['Flow'] || 0, r.modInput),
+                    fr(r.uFirst['Re-Open'] || 0, r.uccInput), fr(r.uFirst['Closing Angle'] || 0, r.uccInput), fr(r.uFirst['Leak'] || 0, r.uccInput),
+                    fr(r.uFin['Re-Open'] || 0, r.uccInput), fr(r.uFin['Closing Angle'] || 0, r.uccInput), fr(r.uFin['Leak'] || 0, r.uccInput)
+                  ]);
+                  const ymd = new Date().toISOString().slice(0,10).replace(/-/g,'');
+                  qprmExport('UCC Data', 5, 28, dataRows, `QPRM_UCC_${ymd}.xlsx`);
+                };
+                return (
+                  <div>
+                    {header}
+                    {uccRows.length === 0 ? (
+                      <div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400">UCC 생산 데이터가 없습니다.</div>
+                    ) : (
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-slate-800 text-white px-4 py-2.5 font-bold flex items-center justify-between">
+                          <span>📦 UCC</span>
+                          <div className="flex items-center gap-3">
+                            <button onClick={exportUccExcel} className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">📥 엑셀</button>
+                            <span className="text-xs font-medium text-slate-300">{uccRows.length}일</span>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="text-xs border-collapse w-full whitespace-nowrap">
+                            <thead>
+                              <tr>
+                                <th rowSpan={3} className={TH+" sticky z-20"} style={{left: 0, minWidth: 64}}>생산일</th>
+                                <th rowSpan={3} className={TH}>Module<br/>투입수량</th>
+                                <th rowSpan={3} className={TH+" bg-yellow-50"}>Module<br/>양품수량<br/><span className="text-[10px] font-normal text-amber-600">(직접입력)</span></th>
+                                <th colSpan={4} className={TH+" bg-green-100 text-green-800"}>Module FLVV</th>
+                                <th rowSpan={3} className={TH}>UCC Ass'y<br/>투입수량</th>
+                                <th rowSpan={3} className={TH}>UCC Ass'y<br/>양품수량</th>
+                                <th colSpan={6} className={TH+" bg-blue-100 text-blue-800"}>UCC Ass'Y</th>
+                                <th rowSpan={3} className={TH+" min-w-[120px]"}>변경사항</th>
+                                <th colSpan={4} className={TH+" bg-green-100 text-green-800"}>Module FLVV 불량률</th>
+                                <th colSpan={6} className={TH+" bg-blue-100 text-blue-800"}>UCC Ass'Y 불량률</th>
+                              </tr>
+                              <tr>
+                                <th colSpan={2} className={TH+" bg-green-50 text-green-700"}>1차 불량</th>
+                                <th colSpan={2} className={TH+" bg-green-50 text-green-700"}>최종 불량</th>
+                                <th colSpan={3} className={TH+" bg-blue-50 text-blue-700"}>1차 불량</th>
+                                <th colSpan={3} className={TH+" bg-yellow-100 text-yellow-800"}>최종 불량</th>
+                                <th colSpan={2} className={TH+" bg-green-50 text-green-700"}>1차 불량률</th>
+                                <th colSpan={2} className={TH+" bg-yellow-100 text-yellow-800"}>최종 불량률</th>
+                                <th colSpan={3} className={TH+" bg-blue-50 text-blue-700"}>1차 불량률</th>
+                                <th colSpan={3} className={TH+" bg-yellow-100 text-yellow-800"}>최종 불량률</th>
+                              </tr>
+                              <tr>
+                                {M_COLS.map(c => <th key={'mf'+c} className={TH+" px-1"}>{c}</th>)}
+                                {M_COLS.map(c => <th key={'mn'+c} className={TH+" px-1"}>{c}</th>)}
+                                {U_COLS.map(c => <th key={'uf'+c} className={TH+" px-1"}>{subLabel(c)}</th>)}
+                                {U_COLS.map(c => <th key={'un'+c} className={TH+" px-1"}>{subLabel(c)}</th>)}
+                                {M_COLS.map(c => <th key={'rmf'+c} className={TH+" px-1"}>{c}</th>)}
+                                {M_COLS.map(c => <th key={'rmn'+c} className={TH+" px-1"}>{c}</th>)}
+                                {U_COLS.map(c => <th key={'ruf'+c} className={TH+" px-1"}>{subLabel(c)}</th>)}
+                                {U_COLS.map(c => <th key={'run'+c} className={TH+" px-1"}>{subLabel(c)}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {uccRows.map(r => (
+                                <tr key={r.date} className="hover:bg-slate-50/60">
+                                  <td className={TD+" font-medium sticky bg-white z-10"} style={{left: 0, minWidth: 64}}>{fmtD(r.date)}</td>
+                                  <td className={TD+" font-semibold"}>{r.modInput.toLocaleString()}</td>
+                                  <td className={TD+" bg-yellow-50/50"}>
+                                    <input type="number" defaultValue={lotFtfrNotes[`uccmod|${r.date}`] || ''} key={'um-'+r.date+'-'+(lotFtfrNotes[`uccmod|${r.date}`]||'')} onBlur={(e) => updateLotFtfrNote(`uccmod|${r.date}`, e.target.value)} placeholder="입력" className="w-20 px-1.5 py-1 border border-amber-200 rounded text-xs text-right focus:border-amber-400 focus:outline-none" />
+                                  </td>
+                                  {M_COLS.map(c => <td key={'mf'+c} className={TD+" bg-green-50/30 px-1"}>{r.mFirst[c]||0}</td>)}
+                                  {M_COLS.map(c => <td key={'mn'+c} className={TD+" bg-green-50/30 px-1 text-rose-600 font-semibold"}>{r.mFin[c]||0}</td>)}
+                                  <td className={TD+" font-semibold"}>{r.uccInput.toLocaleString()}</td>
+                                  <td className={TD+" font-semibold"}>{r.good.toLocaleString()}</td>
+                                  {U_COLS.map(c => <td key={'uf'+c} className={TD+" bg-blue-50/30 px-1"}>{r.uFirst[c]||0}</td>)}
+                                  {U_COLS.map(c => <td key={'un'+c} className={TD+" bg-yellow-50/40 px-1 text-rose-600 font-semibold"}>{r.uFin[c]||0}</td>)}
+                                  <td className={TD+" text-left"}>
+                                    <input type="text" defaultValue={lotFtfrNotes[`uccnote|${r.date}`] || ''} key={'un-'+r.date+'-'+(lotFtfrNotes[`uccnote|${r.date}`]||'')} onBlur={(e) => updateLotFtfrNote(`uccnote|${r.date}`, e.target.value)} placeholder="변경사항" className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
+                                  </td>
+                                  {M_COLS.map(c => <td key={'rmf'+c} className={TD+" px-1"}>{pct(r.mFirst[c]||0, r.modInput)}</td>)}
+                                  {M_COLS.map(c => <td key={'rmn'+c} className={TD+" px-1 font-semibold"}>{pct(r.mFin[c]||0, r.modInput)}</td>)}
+                                  {U_COLS.map(c => <td key={'ruf'+c} className={TD+" px-1"}>{pct(r.uFirst[c]||0, r.uccInput)}</td>)}
+                                  {U_COLS.map(c => <td key={'run'+c} className={TD+" px-1 font-semibold"}>{pct(r.uFin[c]||0, r.uccInput)}</td>)}
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                                <td className={TD+" font-bold sticky bg-slate-100 z-10"} style={{left: 0}}>합계</td>
+                                <td className={TD+" font-bold"}>{T.modInput.toLocaleString()}</td>
+                                <td className={TD+" font-bold"}>{T.modGood.toLocaleString()}</td>
+                                {M_COLS.map(c => <td key={'mf'+c} className={TD+" font-bold px-1"}>{T.mFirst[c]||0}</td>)}
+                                {M_COLS.map(c => <td key={'mn'+c} className={TD+" font-bold px-1 text-rose-600"}>{T.mFin[c]||0}</td>)}
+                                <td className={TD+" font-bold"}>{T.uccInput.toLocaleString()}</td>
+                                <td className={TD+" font-bold"}>{T.good.toLocaleString()}</td>
+                                {U_COLS.map(c => <td key={'uf'+c} className={TD+" font-bold px-1"}>{T.uFirst[c]||0}</td>)}
+                                {U_COLS.map(c => <td key={'un'+c} className={TD+" font-bold px-1 text-rose-600"}>{T.uFin[c]||0}</td>)}
+                                <td className={TD}></td>
+                                {M_COLS.map(c => <td key={'rmf'+c} className={TD+" font-bold px-1"}>{pct(T.mFirst[c]||0, T.modInput)}</td>)}
+                                {M_COLS.map(c => <td key={'rmn'+c} className={TD+" font-bold px-1"}>{pct(T.mFin[c]||0, T.modInput)}</td>)}
+                                {U_COLS.map(c => <td key={'ruf'+c} className={TD+" font-bold px-1"}>{pct(T.uFirst[c]||0, T.uccInput)}</td>)}
+                                {U_COLS.map(c => <td key={'run'+c} className={TD+" font-bold px-1"}>{pct(T.uFin[c]||0, T.uccInput)}</td>)}
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              // ===== TCP: 아이템별 상세 =====
+              const groups = {};
+              logs.forEach(l => { const it = l.item || '(미지정)'; (groups[it] = groups[it] || []).push(l); });
+              const itemNames = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'ko'));
+              // BOM 품명 맵: settings 내 bom[]에서 name → productName
+              const bomNameMap = (() => {
+                const map = {};
+                const walk = (o) => {
+                  if (!o || typeof o !== 'object') return;
+                  if (Array.isArray(o)) { o.forEach(walk); return; }
+                  if (Array.isArray(o.bom)) o.bom.forEach(b => { if (b && b.name && b.productName) map[b.name] = b.productName; });
+                  Object.keys(o).forEach(k => { if (k !== 'bom') walk(o[k]); });
+                };
+                try { walk(data.settings); } catch {}
+                return map;
+              })();
+              const selItem = section === 'TCP' ? (itemNames.includes(lotFtfrItem) ? lotFtfrItem : itemNames[0]) : null;
+              const showItems = section === 'TCP' ? (selItem ? [selItem] : []) : itemNames;
+              const fmtDate = (s) => { const d = new Date(s); if (isNaN(d)) return s || ''; return `${d.getMonth()+1}월 ${String(d.getDate()).padStart(2,'0')}일`; };
+              return (
+                <div>
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    {sectionToggle}
+                    <div className="bg-white rounded-xl border border-slate-200 inline-flex items-center p-1.5 gap-1.5 text-xs">
+                      <input type="date" value={lotFtfrFrom} onChange={e => setLotFtfrFrom(e.target.value)} className="px-2 py-1 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none" />
+                      <span className="text-slate-400">~</span>
+                      <input type="date" value={lotFtfrTo} onChange={e => setLotFtfrTo(e.target.value)} className="px-2 py-1 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none" />
+                      {(lotFtfrFrom || lotFtfrTo) && (
+                        <button onClick={() => { setLotFtfrFrom(''); setLotFtfrTo(''); }} className="px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 font-bold">전체</button>
+                      )}
+                    </div>
+                    {section === 'TCP' && itemNames.length > 0 && (
+                      <div className="bg-white rounded-xl border border-slate-200 inline-flex p-1 gap-1 flex-wrap">
+                        {itemNames.map(it => (
+                          <button key={it} onClick={() => setLotFtfrItem(it)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${selItem===it?'bg-indigo-600 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{it}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {itemNames.length === 0 && (<div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400">{section} 생산 데이터가 없습니다.</div>)}
+                  <div className="space-y-8">
+                  {showItems.map(item => {
+                    const rows = groups[item].slice()
+                      .sort((a, b) => (a.productionDate < b.productionDate ? -1 : a.productionDate > b.productionDate ? 1 : (a.shift||'').localeCompare(b.shift||'')))
+                      .map(buildRow);
+                    let cols1, cols2;
+                    if (section === 'TCP') {
+                      cols1 = TCP_COLS; cols2 = TCP_COLS;
+                    } else {
+                      const so1 = [], so2 = [];
+                      rows.forEach(r => { Object.keys(r.first).forEach(s => { if (!so1.includes(s)) so1.push(s); }); Object.keys(r.second).forEach(s => { if (!so2.includes(s)) so2.push(s); }); });
+                      cols1 = so1.length ? so1 : ['-'];
+                      cols2 = so2.length ? so2 : ['-'];
+                    }
+                    // Lot 컬럼 (BOM별) — 헤더의 ▶/▼ 버튼으로 접기/펴기
+                    const bomCols = [];
+                    rows.forEach(r => r.lots.forEach(le => { if (!bomCols.includes(le.bom)) bomCols.push(le.bom); }));
+                    const lotKey = `lotcols-${section}-${item}`;
+                    const lotOpen = !!expandedLotRows[lotKey] && bomCols.length > 0;
+                    const lotColCount = lotOpen ? bomCols.length : 1;
+                    const tot = rows.reduce((a, r) => ({ good:a.good+r.good, input1:a.input1+r.input1, eol1Good:a.eol1Good+r.eol1Good, eol1Bad:a.eol1Bad+r.eol1Bad, eolFinGood:a.eolFinGood+r.eolFinGood, eolFinBad:a.eolFinBad+r.eolFinBad }), {good:0,input1:0,eol1Good:0,eol1Bad:0,eolFinGood:0,eolFinBad:0});
+                    const totFtfr = tot.input1 > 0 ? (tot.eol1Bad / tot.input1 * 100) : 0;
+                    const totFin = tot.input1 > 0 ? (tot.eolFinBad / tot.input1 * 100) : 0;
+                    const firstTot = {}, secondTot = {};
+                    rows.forEach(r => { cols1.forEach(s => { firstTot[s] = (firstTot[s]||0)+(r.first[s]||0); }); cols2.forEach(s => { secondTot[s] = (secondTot[s]||0)+(r.second[s]||0); }); });
+                    const exportTcpExcel = () => {
+                      const fd = (ds) => { const d = new Date(ds); if (isNaN(d)) return ds || ''; return `${String(d.getMonth()+1).padStart(2,'0')}월 ${String(d.getDate()).padStart(2,'0')}일`; };
+                      const dataRows = rows.map(r => [
+                        fd(r.log.productionDate), r.log.shift || '', item, lotFtfrNotes[r.log.id] || '',
+                        r.good, r.input1, r.eol1Good, r.eol1Bad, r.ftfrRate / 100, r.eolFinGood, r.eolFinBad, r.finRate / 100,
+                        ...TCP_COLS.map(c => r.first[c] || 0), ...TCP_COLS.map(c => r.second[c] || 0)
+                      ]);
+                      const ymd = new Date().toISOString().slice(0,10).replace(/-/g,'');
+                      qprmExport('GM11.5 Data', 4, 20, dataRows, `QPRM_${item}_${ymd}.xlsx`, `${item} Data`);
+                    };
+                    return (
+                      <div key={item} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-slate-800 text-white px-4 py-2.5 font-bold flex items-center justify-between">
+                          <span>📦 {item}</span>
+                          <div className="flex items-center gap-3">
+                            <button onClick={exportTcpExcel} className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">📥 엑셀</button>
+                            <span className="text-xs font-medium text-slate-300">{rows.length}건</span>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="text-xs border-collapse w-full whitespace-nowrap">
+                            <thead>
+                              <tr>
+                                <th rowSpan={2} className={TH+" sticky z-20"} style={{left: 0, minWidth: 72}}>Date</th>
+                                <th rowSpan={2} className={TH+" sticky z-20"} style={{left: 72, minWidth: 48}}>주야</th>
+                                <th rowSpan={2} className={TH}>Part</th>
+                                {lotOpen ? (
+                                  <th colSpan={bomCols.length} className={TH+" bg-indigo-50 text-indigo-700"}>
+                                    <button onClick={() => toggleLotRow(lotKey)} className="inline-flex items-center gap-1 font-bold hover:text-indigo-900">
+                                      <span className="text-[10px]">▼</span><span>Lot</span>
+                                    </button>
+                                  </th>
+                                ) : (
+                                  <th rowSpan={2} className={TH+" bg-indigo-50 text-indigo-700"}>
+                                    <button onClick={() => bomCols.length && toggleLotRow(lotKey)} className={`inline-flex items-center gap-1 font-bold ${bomCols.length?'hover:text-indigo-900':'opacity-50 cursor-default'}`}>
+                                      <span className="text-[10px]">▶</span><span>Lot</span>
+                                    </button>
+                                  </th>
+                                )}
+                                <th rowSpan={2} className={TH+" min-w-[140px]"}>비고</th>
+                                <th rowSpan={2} className={TH}>최종 양품<br/>수량</th>
+                                <th rowSpan={2} className={TH+" bg-sky-50 text-sky-700"}>1차 양품<br/>수량</th>
+                                <th rowSpan={2} className={TH+" bg-sky-50 text-sky-700"}>EOL 1차<br/>불량</th>
+                                <th rowSpan={2} className={TH+" bg-sky-50 text-sky-700"}>FTFR<br/>불량률</th>
+                                <th rowSpan={2} className={TH+" bg-blue-50 text-blue-700"}>EOL 최종<br/>양품</th>
+                                <th rowSpan={2} className={TH+" bg-blue-50 text-blue-700"}>EOL 최종<br/>불량</th>
+                                <th rowSpan={2} className={TH+" bg-blue-50 text-blue-700"}>최종<br/>불량률</th>
+                                <th rowSpan={2} className={TH}>1차 투입<br/>수량</th>
+                                <th colSpan={cols1.length} className={TH+" bg-amber-100 text-amber-800"}>1차 불량 유형</th>
+                                <th colSpan={cols2.length} className={TH+" bg-orange-100 text-orange-800"}>2차 불량 유형</th>
+                              </tr>
+                              <tr>
+                                {lotOpen && bomCols.map(b => <th key={'lb'+b} className={TH+" bg-indigo-50/60 text-indigo-600 font-medium px-1"}>{b}{bomNameMap[b] && (<><br/><span className="text-[10px] font-normal text-indigo-400">({bomNameMap[b]})</span></>)}</th>)}
+                                {cols1.map(s => <th key={'h1'+s} className={TH+" bg-amber-50 text-amber-700 px-1"}>{subLabel(s)}</th>)}
+                                {cols2.map(s => <th key={'h2'+s} className={TH+" bg-orange-50 text-orange-700 px-1"}>{subLabel(s)}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((r, idx) => {
+                                const lid = r.log.id || `${item}-${idx}`;
+                                return (
+                                  <tr key={lid} className="hover:bg-slate-50/60">
+                                    <td className={TD+" font-medium sticky bg-white z-10"} style={{left: 0, minWidth: 72}}>{fmtDate(r.log.productionDate)}</td>
+                                    <td className={TD+" sticky bg-white z-10"} style={{left: 72, minWidth: 48}}>{r.log.shift || '-'}</td>
+                                    <td className={TD}>{r.log.partNo || '-'}</td>
+                                    {lotOpen ? (
+                                      bomCols.map(b => {
+                                        const le = r.lots.find(x => x.bom === b);
+                                        return <td key={'lc'+b} className={TD+" bg-indigo-50/20 text-[11px]"}>{le ? le.lots.join(', ') : '—'}</td>;
+                                      })
+                                    ) : (
+                                      <td className={TD+" bg-indigo-50/20 text-[11px] text-slate-400"}>{r.lots.length ? `${r.lots.length}건` : '—'}</td>
+                                    )}
+                                    <td className={TD+" text-left"}>
+                                      <input type="text" defaultValue={lotFtfrNotes[lid] || ''} key={'note-'+lid+'-'+(lotFtfrNotes[lid]||'')} onBlur={(e) => updateLotFtfrNote(lid, e.target.value)} placeholder="비고 입력" className="w-32 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
+                                    </td>
+                                    <td className={TD+" font-semibold"}>{r.good.toLocaleString()}</td>
+                                    <td className={TD+" bg-sky-50/40"}>{r.eol1Good.toLocaleString()}</td>
+                                    <td className={TD+" bg-sky-50/40 text-rose-600 font-semibold"}>{r.eol1Bad.toLocaleString()}</td>
+                                    <td className={TD+" bg-sky-50/40 font-semibold"}>{rate1(r.ftfrRate)}%</td>
+                                    <td className={TD+" bg-blue-50/40"}>{r.eolFinGood.toLocaleString()}</td>
+                                    <td className={TD+" bg-blue-50/40 text-rose-600 font-semibold"}>{r.eolFinBad.toLocaleString()}</td>
+                                    <td className={TD+" bg-blue-50/40 font-semibold"}>{rate1(r.finRate)}%</td>
+                                    <td className={TD}>{r.input1.toLocaleString()}</td>
+                                    {cols1.map(s => <td key={'b1'+s} className={TD+" bg-amber-50/30 px-1"}>{s==='-'?0:(r.first[s]||0)}</td>)}
+                                    {cols2.map(s => <td key={'b2'+s} className={TD+" bg-orange-50/30 px-1"}>{s==='-'?0:(r.second[s]||0)}</td>)}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                                <td className={TD+" font-bold"} colSpan={4 + lotColCount}>합계</td>
+                                <td className={TD+" font-bold"}>{tot.good.toLocaleString()}</td>
+                                <td className={TD+" font-bold"}>{tot.eol1Good.toLocaleString()}</td>
+                                <td className={TD+" font-bold text-rose-600"}>{tot.eol1Bad.toLocaleString()}</td>
+                                <td className={TD+" font-bold"}>{rate1(totFtfr)}%</td>
+                                <td className={TD+" font-bold"}>{tot.eolFinGood.toLocaleString()}</td>
+                                <td className={TD+" font-bold text-rose-600"}>{tot.eolFinBad.toLocaleString()}</td>
+                                <td className={TD+" font-bold"}>{rate1(totFin)}%</td>
+                                <td className={TD+" font-bold"}>{tot.input1.toLocaleString()}</td>
+                                {cols1.map(s => <td key={'t1'+s} className={TD+" font-bold"}>{s==='-'?0:(firstTot[s]||0)}</td>)}
+                                {cols2.map(s => <td key={'t2'+s} className={TD+" font-bold"}>{s==='-'?0:(secondTot[s]||0)}</td>)}
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  </div>
                 </div>
               );
             })()}
