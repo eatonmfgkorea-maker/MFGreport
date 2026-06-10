@@ -2105,9 +2105,10 @@
         const data = log.section === 'TCP' ? tcpData : feData;
         // Recompute defects and reworks with filter
         let defects = 0, rework = 0;
-        const lotData = data?.lotData;
-        if (lotData && log.id) {
-          const lld = lotData[log.id];
+        const lld0 = log.id ? data?.lotData?.[log.id] : null;
+        const hasEmbedded0 = lld0 && (Array.isArray(lld0.defects) || Array.isArray(lld0.reworks));
+        if (hasEmbedded0) {
+          const lld = lld0;
           if (lld?.defects) lld.defects.forEach(d => {
             if (isFtfrIncluded({ ...d, productionLogId: log.id }, 'defect')) defects += parseFloat(d.quantity) || 0;
           });
@@ -2190,10 +2191,11 @@
         }
         let plannedDt = 0, unplannedDt = 0, defects = 0, rework = 0;
 
-        // Method 1: lotData (newer format)
-        const lotData = data?.lotData;
-        if (lotData && log.id && lotData[log.id]) {
-          const lld = lotData[log.id];
+        // Method 1: lotData (구버전 임베디드 형식 — defects/reworks/downtimes 배열이 실제 존재할 때만)
+        const lldE = log.id ? data?.lotData?.[log.id] : null;
+        const hasEmbedded = lldE && (Array.isArray(lldE.defects) || Array.isArray(lldE.reworks) || Array.isArray(lldE.downtimes));
+        if (hasEmbedded) {
+          const lld = lldE;
           if (lld?.downtimes) lld.downtimes.forEach(dt => {
             const dur = parseFloat(dt.duration) || 0;
             if (dt.category === '계획') plannedDt += dur;
@@ -4109,7 +4111,7 @@
                   {/* Drilldown modal */}
                   {odDrillModal && (() => {
                     const computeFromLogs = (logArr) => {
-                      let lt=0, ot=0, gq=0, df=0, rw=0, exp=0, totalQ=0;
+                      let lt=0, ot=0, gq=0, df=0, rw=0, exp=0, totalQ=0, gqP=0, excludedP=0;
                       logArr.forEach(l => {
                         const c = computeLogContribution(l);
                         if (!c) return;
@@ -4118,13 +4120,19 @@
                         gq += c.goodQty || 0;
                         df += c.defects || 0;
                         rw += c.rework || 0;
-                        exp += c.expectedOutput || 0;
+                        // 기대 생산량이 0인 로그(기준 CT/기준수량 미설정)는 P 계산에서 제외
+                        if ((c.expectedOutput || 0) > 0) {
+                          exp += c.expectedOutput;
+                          gqP += c.goodQty || 0;
+                        } else {
+                          excludedP += 1;
+                        }
                       });
                       totalQ = gq + df;
                       const A = lt > 0 ? Math.min(100, ot/lt*100) : 0;
-                      const P = exp > 0 ? gq/exp*100 : 0;
+                      const P = exp > 0 ? gqP/exp*100 : 0;
                       const Q = totalQ > 0 ? Math.min(100, (gq-rw)/totalQ*100) : 100;
-                      return { lt, ot, gq, df, rw, exp, totalQ, A, P, Q, OEE: A*P*Q/10000 };
+                      return { lt, ot, gq, gqP, excludedP, df, rw, exp, totalQ, A, P, Q, OEE: A*P*Q/10000 };
                     };
 
                     const m = odDrillModal;
@@ -4329,8 +4337,11 @@
                                 )}
                                 <div className="flex justify-between"><span className="text-slate-600">작업시간:</span><span>{Math.round(agg.ot).toLocaleString()}분</span></div>
                                 <div className="flex justify-between"><span className="text-slate-600"><Info term="기대 생산량" label="기대 생산량" />:</span><span>{Math.round(agg.exp).toLocaleString()}개</span></div>
-                                <div className="flex justify-between"><span className="text-slate-600">실제 생산량 (양품):</span><span className="text-emerald-600 font-medium">{Math.round(agg.gq).toLocaleString()}개</span></div>
-                                <div className="bg-slate-50 mt-2 px-3 py-1.5 rounded text-xs text-slate-500">계산식: {Math.round(agg.gq).toLocaleString()}개 ÷ {Math.round(agg.exp).toLocaleString()}개 × 100 = {agg.P.toFixed(1)}%</div>
+                                <div className="flex justify-between"><span className="text-slate-600">실제 생산량 (양품):</span><span className="text-emerald-600 font-medium">{Math.round(agg.gqP !== undefined ? agg.gqP : agg.gq).toLocaleString()}개</span></div>
+                                <div className="bg-slate-50 mt-2 px-3 py-1.5 rounded text-xs text-slate-500">계산식: {Math.round(agg.gqP !== undefined ? agg.gqP : agg.gq).toLocaleString()}개 ÷ {Math.round(agg.exp).toLocaleString()}개 × 100 = {agg.P.toFixed(1)}%</div>
+                                {agg.excludedP > 0 && (
+                                  <div className="bg-amber-50 border border-amber-200 mt-1 px-3 py-1.5 rounded text-xs text-amber-700">⚠ 기준 CT(기대 생산량) 미설정 작업 {agg.excludedP}건은 P 계산에서 제외됨 (해당 일자 P 0.0% 표시)</div>
+                                )}
                                 {m.focus === 'P' && Object.keys(focusItems).length > 0 && (
                                   <div className="mt-4 border-t border-slate-200 pt-3">
                                     <div className="font-bold text-slate-700 mb-2">아이템별 P</div>
