@@ -1388,6 +1388,28 @@
         }
         return rows;
       };
+      // ★ LOT 자동계산용 맵: 모품목(품번→REV코드) + 오라클바코드출력용(라인명→라인코드)
+      const extractLotMaps = (wb) => {
+        const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-_./]/g, '');
+        const revMap = {};
+        const wsM = wb.Sheets['모품목'];
+        if (wsM && wsM['!ref']) {
+          const rg = XLSX.utils.decode_range(wsM['!ref']);
+          for (let r = 2; r <= rg.e.r; r++) {
+            const i = getCell(wsM, r, 8), j = getCell(wsM, r, 9);   // I, J열
+            if (i != null && j != null && String(i).trim() && String(j).trim()) revMap[norm(i)] = String(j).trim();
+          }
+        }
+        const lineCodes = {};
+        const wsB = wb.Sheets['오라클 바코드출력용'];
+        if (wsB && wsB['!ref']) {
+          for (let r = 3; r <= 20; r++) {                            // A4:B21
+            const a = getCell(wsB, r, 0), b = getCell(wsB, r, 1);
+            if (a != null && b != null && String(a).trim() && String(b).trim()) lineCodes[norm(a)] = String(b).trim();
+          }
+        }
+        return { revMap, lineCodes };
+      };
       const readFePlanRaw = () => { try { return JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || 'null'); } catch { return null; } };
       
       // 계획수량 조회
@@ -7777,8 +7799,8 @@
                       if (typeStr.includes('안전점검')) return;
                       if (/마스터|master/i.test(typeStr)) return;
                       const content = (d.content || '').trim();
-                      // ★ Rework(재작업): 비가동 시간 아님 → 내용만 표시(분 제거), 집계 제외(minutes 0)
-                      if (/rework|재작업/i.test(typeStr)) {
+                      // ★ Rework(재작업)/Retest(재검사): 비가동 시간 아님 → 내용만 표시(분 제거), 집계 제외(minutes 0)
+                      if (/rework|재작업|retest|리테스트|재검사/i.test(typeStr)) {
                         g.downtimeAll.push({
                           sortTime: d.startTime || '99:99',
                           isSwap: false,
@@ -8554,7 +8576,7 @@
                                 const cnt = Object.keys(plan).length;
                                 if (cnt === 0) { alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)'); return; }
                                 // ★ 원본 행 저장 (현장 점검표 앱 연동용) — 매핑 여부와 무관
-                                try { const rawRows = parseFePlanRaw(wb); if (rawRows.length) localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({ rows: rawRows, file: file.name, uploadedAt: new Date().toISOString() })); } catch (e) {}
+                                try { const rawRows = parseFePlanRaw(wb); if (rawRows.length) { const lotMaps = extractLotMaps(wb); localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({ rows: rawRows, file: file.name, uploadedAt: new Date().toISOString(), revMap: lotMaps.revMap, lineCodes: lotMaps.lineCodes })); } } catch (e) {}
                                 const unmapped = items.filter(it => !planItemMapping[`FE|${it.pno}`]);
                                 if (unmapped.length === 0) {
                                   // 기존 매핑으로 전부 연결됨 → 즉시 저장 (월별 누적)
