@@ -2690,6 +2690,102 @@
 
       const FE_LINE_ORDER = ['LVS','A/FLVV','M/FLVV','C/FLVV','A/GVV','M/GVV','FTIV','UCC','ICV','MEMBRANE'];
 
+      // ===== FTFR 기본 매칭 규칙 (사용자 제공 엑셀 내장) =====
+      const FTFR_DEFAULT_RULES = [{"sec":"TCP","kind":"rework","lineRaw":"1PC","station":"Performance Test","type":"전체","sub":"전체"},{"sec":"TCP","kind":"defect","lineRaw":"1PC","station":"Performance Test","type":"기능불량","sub":"전체"},{"sec":"TCP","kind":"rework","lineRaw":"2PC","station":"전체 (station 무관)","type":"기능불량","sub":"전체"},{"sec":"TCP","kind":"defect","lineRaw":"2PC","station":"Performance Test","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"rework","lineRaw":"NEW ICV\nOLD ICV","station":"성능 공정","type":"전체","sub":"Door Force\nLeak"},{"sec":"FE","kind":"defect","lineRaw":"NEW ICV\nOLD ICV","station":"성능 공정","type":"기능불량","sub":"Door Force\nLeak"},{"sec":"FE","kind":"rework","lineRaw":"FLVV\nManual FLVV","station":"성능 공정","type":"전체","sub":"Leak\nFlow"},{"sec":"FE","kind":"defect","lineRaw":"FLVV\nManual FLVV","station":"성능 공정","type":"기능불량","sub":"Leak\nFlow"},{"sec":"FE","kind":"rework","lineRaw":"COMOBO FLVV","station":"성능 공정","type":"전체","sub":"전체"},{"sec":"FE","kind":"defect","lineRaw":"COMOBO FLVV","station":"성능 공정","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"rework","lineRaw":"Auto GVV","station":"FINAL 성능 공정","type":"전체","sub":"전체"},{"sec":"FE","kind":"defect","lineRaw":"Auto GVV","station":"FINAL 성능 공정","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"rework","lineRaw":"Manual GVV","station":"성능 공정","type":"전체","sub":"전체"},{"sec":"FE","kind":"defect","lineRaw":"Manual GVV","station":"성능 공정","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"rework","lineRaw":"LVS","station":"GVV 성능 공정\nFinal TEST 공정","type":"전체","sub":"전체"},{"sec":"FE","kind":"defect","lineRaw":"LVS","station":"GVV 성능 공정\nFinal TEST 공정","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"rework","lineRaw":"UCC","station":"EOL 공정","type":"전체","sub":"전체"},{"sec":"FE","kind":"defect","lineRaw":"UCC","station":"EOL 공정","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"rework","lineRaw":"MEMBRANE","station":"전체 (station 무관)","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"defect","lineRaw":"MEMBRANE","station":"전체 (station 무관)","type":"기능불량","sub":"전체"},{"sec":"FE","kind":"rework","lineRaw":"FTIV","station":"Op60.Coil Resistance Test\nOp70.Housing Leak Test\nOp80.OPR Leak Test\nOp90.OVR Leak Test\nOp100.Pressure drop Test","type":"전체","sub":"전체"},{"sec":"FE","kind":"defect","lineRaw":"FTIV","station":"Op60.Coil Resistance Test\nOp70.Housing Leak Test\nOp80.OPR Leak Test\nOp90.OVR Leak Test\nOp100.Pressure drop Test","type":"전체","sub":"전체 (단, 품질(단품) 제외)"}];
+      // 라인별 옵션(스테이션·유형·세부유형) 추출 — 모달 getOptions와 동일 로직(컴포넌트 레벨 공용)
+      const getFtfrOptions = (sec, line) => {
+        const data = sec === 'TCP' ? tcpData : feData;
+        const settings = data?.settings?.[sec];
+        const stations = new Set();
+        const defectTypeMap = {}, reworkTypeMap = {};
+        const addType = (map, typeName, subList) => {
+          if (!typeName) return;
+          if (!map[typeName]) map[typeName] = new Set();
+          if (Array.isArray(subList)) subList.forEach(st => { const n = typeof st === 'string' ? st : st?.name; if (n) map[typeName].add(n); });
+        };
+        const rawLines = [];
+        (settings?.lines || []).forEach(l => { if (!l?.name) return; if (isFtfrExcludedLine(sec, l.name)) return; if (resolveLineName(sec, l.name) === line) rawLines.push(l.name); });
+        if (rawLines.length === 0) rawLines.push(line);
+        if (settings) {
+          rawLines.forEach(rawLine => { const ld = (settings.lines || []).find(l => l.name === rawLine); if (ld && Array.isArray(ld.stations)) ld.stations.forEach(s => stations.add(s)); });
+          (settings.defectTypes || []).forEach(dt => { if (dt.lineName && !rawLines.includes(dt.lineName)) return; addType(defectTypeMap, dt.name, dt.subTypes); addType(reworkTypeMap, dt.name, dt.subTypes); });
+        }
+        if (data) {
+          const logIds = new Set((data.productionLogs || []).filter(l => rawLines.includes(l.lineName)).map(l => l.id));
+          (data.defectLogs || []).forEach(d => { if (!logIds.has(d.productionLogId)) return; if (d.station) stations.add(d.station); const t = d.defectType || d.type; if (t) { if (!defectTypeMap[t]) defectTypeMap[t] = new Set(); if (d.defectSubType) defectTypeMap[t].add(d.defectSubType); } });
+          (data.reworkLogs || []).forEach(r => { if (!logIds.has(r.productionLogId)) return; if (r.station) stations.add(r.station); const t = r.reworkType || r.type; if (t) { if (!reworkTypeMap[t]) reworkTypeMap[t] = new Set(); if (r.reworkSubType) reworkTypeMap[t].add(r.reworkSubType); } });
+        }
+        const flatten = (map) => Object.keys(map).sort().map(name => ({ name, subTypes: Array.from(map[name]).sort() }));
+        return { stations: Array.from(stations).sort(), defectTypes: flatten(defectTypeMap), reworkTypes: flatten(reworkTypeMap) };
+      };
+      // 규칙 배열 → ftfrConfig 빌드 (가져오기·기본값 공용)
+      const buildFtfrConfigFromRules = (rules, base) => {
+        const cfg = { ...(base || {}) };
+        const ensure = (key) => { if (!cfg[key]) cfg[key] = { stations: [], defectTypes: {}, reworkTypes: {}, _init: {} }; if (!cfg[key]._init) cfg[key]._init = {}; return cfg[key]; };
+        const isAllSt = (v) => { const t = String(v||'').trim().toLowerCase(); return !t || t === '—' || t.includes('전체') || t.includes('무관') || t.includes('필터') || t.includes('재현'); };
+        const isAllTy = (v) => { const t = String(v||'').trim(); return !t || t === '전체' || t === '—'; };
+        const splitMulti = (v) => String(v == null ? '' : v).split(/[\n,，]+/).map(x => x.trim()).filter(x => x && x !== '—' && !/전체|필터|무관|재현/.test(x));
+        const splitSubs = (v) => String(v == null ? '' : v).split(/[\n,，]+/).map(x => x.trim()).filter(Boolean);
+        const buildMap = (typeRaw, subRaw, names, subIndex) => {
+          const map = {};
+          let types = isAllTy(typeRaw) ? names.slice() : splitMulti(typeRaw);
+          if (types.length === 0) types = isAllTy(typeRaw) ? ['기능불량'] : [String(typeRaw).trim()];
+          const subStr = String(subRaw || '');
+          const excludeMode = /제외|except|not|빼/i.test(subStr);
+          let subs;
+          if (excludeMode) {
+            let work = subStr.trim().replace(/^전체\s*/, '').replace(/^[\(（]\s*/, '').replace(/[\)）]\s*$/, '').replace(/^단\s*[,，]?\s*/, '').replace(/\s*(제외|except|not|빼[고다]?)\s*$/i, '');
+            const ex = work.split(/[\n,，]+/).map(x => x.trim()).filter(x => x && x !== '전체' && x !== '—');
+            subs = ['__exclude__', ...ex];
+          } else {
+            subs = splitSubs(subRaw).filter(x => x !== '전체' && x !== '—');
+          }
+          types.forEach(t => {
+            if (excludeMode) map[t] = subs.slice();
+            else if (subs.length === 0) map[t] = (subIndex[t] || []).slice();
+            else map[t] = subs.slice();
+          });
+          return map;
+        };
+        rules.forEach(rule => {
+          const displays = new Set();
+          String(rule.lineRaw || '').split(/[\n,，]+/).map(x => x.trim()).filter(Boolean).forEach(raw => displays.add(resolveLineName(rule.sec, raw)));
+          displays.forEach(line => {
+            const key = `${rule.sec}|${line}`;
+            const opts = getFtfrOptions(rule.sec, line);
+            const tlist = rule.kind === 'rework' ? opts.reworkTypes : opts.defectTypes;
+            const subIndex = {}; const names = [];
+            tlist.forEach(t => { subIndex[t.name] = t.subTypes || []; names.push(t.name); });
+            const stFld = rule.kind === 'rework' ? 'reworkStations' : 'defectStations';
+            const c = ensure(key);
+            c[stFld] = isAllSt(rule.station) ? [] : splitMulti(rule.station);
+            c._init[stFld] = true;
+            const tyFld = rule.kind === 'rework' ? 'reworkTypes' : 'defectTypes';
+            c[tyFld] = buildMap(rule.type || (rule.kind === 'defect' ? '기능불량' : '전체'), rule.sub, names, subIndex);
+            c._init[tyFld] = true;
+          });
+        });
+        return cfg;
+      };
+      // 데이터가 로드되고 ftfrConfig가 비어있으면 기본 규칙 자동 적용 (1회)
+      const h52DefaultApplied = React.useRef(false);
+      React.useEffect(() => {
+        if (h52DefaultApplied.current) return;
+        if (!tcpData && !feData) return;
+        const isEmpty = !ftfrConfig || Object.keys(ftfrConfig).length === 0;
+        if (!isEmpty) { h52DefaultApplied.current = true; return; }
+        try {
+          const built = buildFtfrConfigFromRules(FTFR_DEFAULT_RULES, {});
+          if (Object.keys(built).length) {
+            built.__fromDefault = true;
+            setFtfrConfig(built);
+            try { localStorage.setItem('mfg_ftfr_config', JSON.stringify(built)); } catch {}
+          }
+          h52DefaultApplied.current = true;
+        } catch (e) { /* noop */ }
+      }, [tcpData, feData]);
+
+
       // Get the unique list of display line names for a section (after applying linkedLines)
       const getSectionDisplayLines = (section) => {
         const data = section === 'TCP' ? tcpData : feData;
@@ -12353,11 +12449,12 @@
                 const next = { ...ftfrConfig };
                 if (!next[key]) next[key] = { stations: [], defectTypes: {}, reworkTypes: {}, _init: {} };
                 if (!next[key]._init) next[key]._init = {};
-                if (!next[key]._init[fld]) {
-                  next[key][fld] = [...allStations];
+                let cur = Array.isArray(next[key][fld]) ? next[key][fld] : [];
+                // 미초기화 or '무관(빈 목록=전체)' 상태면 전체에서 시작
+                if (!next[key]._init[fld] || cur.length === 0) {
+                  cur = [...allStations];
                   next[key]._init[fld] = true;
                 }
-                const cur = Array.isArray(next[key][fld]) ? next[key][fld] : [];
                 if (cur.includes(value)) next[key][fld] = cur.filter(x => x !== value);
                 else next[key][fld] = [...cur, value];
                 saveFtfrConfig(next);
@@ -12444,16 +12541,17 @@
                 saveFtfrConfig(next);
               };
 
-              // isChecked: stations (per kind)
+              // isChecked: stations (per kind). 빈 목록+init = '무관(전체 포함)' → 전부 체크로 표시
               const isStationChecked = (key, value, kind) => {
                 const fld = stationFieldOf(kind);
                 const cfg = ftfrConfig[key];
                 if (!cfg || !cfg._init || !cfg._init[fld]) {
-                  // 분리 미초기화 시 공유 stations로 폴백
                   if (cfg && cfg._init && cfg._init.stations) return Array.isArray(cfg.stations) && cfg.stations.includes(value);
-                  return true; // 전체 포함
+                  return true;
                 }
-                return Array.isArray(cfg[fld]) && cfg[fld].includes(value);
+                const arr = Array.isArray(cfg[fld]) ? cfg[fld] : [];
+                if (arr.length === 0) return true; // 무관 = 전체 포함
+                return arr.includes(value);
               };
 
               // isChecked: type (parent checkbox)
@@ -12578,102 +12676,40 @@
                   const sh = wbk.SheetNames.find(n => n.includes('매칭') || n.includes('규칙')) || wbk.SheetNames[0];
                   const aoa = XLSX.utils.sheet_to_json(wbk.Sheets[sh], { header: 1, raw: false, defval: '' });
                   const hi = aoa.findIndex(r => r && r.some(c => String(c).includes('지표')));
-                  if (hi < 0) { alert('헤더(지표 열)를 찾지 못했습니다. 내보내기 양식을 사용하세요.'); return; }
+                  if (hi < 0) { alert('헤더(지표 열)를 찾지 못했습니다. 제공된 양식을 사용하세요.'); return; }
                   const H = aoa[hi].map(c => String(c).trim());
-                  const col = (kw) => H.findIndex(h => h.includes(kw));
+                  const find = (...kws) => H.findIndex(h => kws.every(k => h.includes(k)));
                   const ci = {
-                    sec: col('섹션'), line: H.findIndex(h => h.includes('표시라인') || h.includes('엑셀 시트') || (h.includes('라인') && !h.includes('백업'))),
-                    metric: col('지표'),
-                    bkLine: H.findIndex(h => h.includes('백업 lineName') || h.includes('백업 라인')),
-                    station: H.findIndex(h => h.includes('스테이션') || h.includes('station')),
-                    dtype: H.findIndex(h => h.includes('불량유형') || (h.includes('유형') && h.includes('Type') && !h.includes('재작업') && !h.includes('세부'))),
-                    dsub: H.findIndex(h => h.includes('불량 세부') || (h.includes('세부') && !h.includes('재작업'))),
-                    rtype: H.findIndex(h => h.includes('재작업유형') || (h.includes('재작업') && !h.includes('세부'))),
-                    rsub: H.findIndex(h => h.includes('재작업 세부')),
-                    bkType: H.findIndex(h => h.includes('백업 유형')),
-                    bkSub: H.findIndex(h => h.includes('백업 세부')),
+                    sec: find('섹션'), metric: find('지표'),
+                    line: find('백업', 'lineName') >= 0 ? find('백업', 'lineName') : (find('백업', '라인') >= 0 ? find('백업', '라인') : find('시트')),
+                    station: find('백업', 'station') >= 0 ? find('백업', 'station') : find('스테이션'),
+                    type: find('백업', '유형') >= 0 ? find('백업', '유형') : find('유형'),
+                    sub: find('백업', '세부') >= 0 ? find('백업', '세부') : find('세부'),
                   };
-                  // 백업원본 양식(섹션/엑셀시트/지표/.../백업 station/백업 유형/백업 세부유형) 도 지원
-                  const isBackupForm = ci.bkLine >= 0 && ci.bkType >= 0;
-                  if (ci.metric < 0) { alert('지표 열을 찾지 못했습니다.'); return; }
-
-                  const next = { ...ftfrConfig };
-                  let curSec = '', curLines = [];
-                  const ensure = (key) => { if (!next[key]) next[key] = { stations: [], defectTypes: {}, reworkTypes: {}, _init: {} }; if (!next[key]._init) next[key]._init = {}; return next[key]; };
-                  const setStations = (key, kindKey, listStr) => {
-                    const cfg = ensure(key);
-                    if (isAllStations(listStr)) { cfg[kindKey] = []; cfg._init[kindKey] = true; } // 전체 = station 무관
-                    else { cfg[kindKey] = splitLines(listStr); cfg._init[kindKey] = true; }
-                  };
-                  const buildTypeMap = (typeStr, subStr, opts) => {
-                    // opts.allTypes: 이 라인에서 가능한 유형 목록 (전체 처리용)
-                    const map = {};
-                    const subs = splitSubs(subStr);
-                    const excludeMode = /제외|except|not/i.test(String(subStr));
-                    if (isAllTypes(typeStr)) {
-                      (opts.allTypes || []).forEach(t => { map[t] = []; });
-                      // 전체 유형 + 세부 전체 → 빈 배열은 '세부 없는 것만'이 되므로, 전체 포함 의도면 subList를 풀세트로
-                      Object.keys(map).forEach(t => { map[t] = (opts.subIndex[t] || []).slice(); });
-                    } else {
-                      splitLines(typeStr).forEach(t => { map[t] = []; });
-                    }
-                    if (subs.length) {
-                      // 세부유형 지정: 모든 선택 유형에 동일 적용 (대소문자 무시는 필터에서 처리)
-                      Object.keys(map).forEach(t => {
-                        map[t] = excludeMode ? ['__exclude__', ...subs.filter(s => !/제외/.test(s))] : subs.slice();
-                      });
-                      if (Object.keys(map).length === 0) {
-                        // 유형이 '기능불량' 등으로 안 잡힌 경우 기본 키
-                        map['기능불량'] = excludeMode ? ['__exclude__', ...subs] : subs.slice();
-                      }
-                    }
-                    return map;
-                  };
-
+                  if (ci.metric < 0 || ci.line < 0) { alert('필수 열(지표·백업 lineName)을 찾지 못했습니다.'); return; }
+                  // 엑셀 → 규칙 배열로 변환 (병합셀 대비 직전값 유지)
+                  const rules = [];
+                  let curSec = '', curLine = '';
                   for (let r = hi + 1; r < aoa.length; r++) {
                     const row = aoa[r]; if (!row) continue;
-                    const secCell = ci.sec >= 0 ? String(row[ci.sec] || '').trim() : '';
-                    const lineCell = ci.line >= 0 ? String(row[ci.line] || '').trim() : '';
+                    const sec = ci.sec >= 0 ? String(row[ci.sec] || '').trim() : '';
                     const metric = String(row[ci.metric] || '').trim();
-                    if (secCell) curSec = secCell;
-                    if (lineCell) {
-                      // 표시라인 결정: 백업form이면 백업 lineName으로 resolve, 아니면 그대로
-                      if (isBackupForm) {
-                        const bk = String(row[ci.bkLine] || '').trim() || lineCell;
-                        curLines = resolveDisplayFromRaw(curSec, bk);
-                        if (curLines.length === 0) curLines = [lineCell];
-                      } else {
-                        curLines = [lineCell];
-                      }
-                    }
-                    if (!curSec || curLines.length === 0) continue;
-                    if (!/1차|2차/.test(metric)) continue; // 완제품/투입/폐기 행은 설정과 무관
-
-                    const stationStr = ci.station >= 0 ? row[ci.station] : '';
-                    const isRework = metric.includes('1차');
-                    curLines.forEach(line => {
-                      const key = `${curSec}|${line}`;
-                      const opts = getOptions(curSec, line);
-                      const subIndex = {}; const allTypeNames = [];
-                      (isRework ? opts.reworkTypes : opts.defectTypes).forEach(t => { subIndex[t.name] = t.subTypes || []; allTypeNames.push(t.name); });
-                      if (isRework) {
-                        setStations(key, 'reworkStations', stationStr);
-                        const tStr = ci.rtype >= 0 ? row[ci.rtype] : (ci.bkType >= 0 ? row[ci.bkType] : '전체');
-                        const sStr = ci.rsub >= 0 ? row[ci.rsub] : (ci.bkSub >= 0 ? row[ci.bkSub] : '전체');
-                        ensure(key).reworkTypes = buildTypeMap(tStr, sStr, { allTypes: allTypeNames, subIndex });
-                        ensure(key)._init.reworkTypes = true;
-                      } else {
-                        setStations(key, 'defectStations', stationStr);
-                        const tStr = ci.dtype >= 0 ? row[ci.dtype] : (ci.bkType >= 0 ? row[ci.bkType] : '기능불량');
-                        const sStr = ci.dsub >= 0 ? row[ci.dsub] : (ci.bkSub >= 0 ? row[ci.bkSub] : '전체');
-                        // 2차불량 유형이 비어있으면 기능불량 기본
-                        ensure(key).defectTypes = buildTypeMap(tStr || '기능불량', sStr, { allTypes: allTypeNames, subIndex });
-                        ensure(key)._init.defectTypes = true;
-                      }
-                    });
+                    const line = String(row[ci.line] || '').trim();
+                    if (sec) curSec = sec;
+                    if (line) curLine = line;
+                    if (!/1차|2차/.test(metric)) continue;
+                    if (!curSec || !curLine) continue;
+                    rules.push({ sec: curSec, kind: metric.includes('1차') ? 'rework' : 'defect', lineRaw: curLine, station: ci.station >= 0 ? String(row[ci.station] || '') : '', type: ci.type >= 0 ? String(row[ci.type] || '') : '', sub: ci.sub >= 0 ? String(row[ci.sub] || '') : '' });
                   }
-                  saveFtfrConfig(next);
-                  alert('규칙을 적용했습니다. 라인별 스테이션·유형 설정이 갱신되었습니다.');
+                  if (!rules.length) { alert('규칙 행(1차불량/2차불량)을 찾지 못했습니다.'); return; }
+                  const built = buildFtfrConfigFromRules(rules, {});
+                  saveFtfrConfig(built);
+                  // 매칭 안 된(백업 데이터 없는) 라인 안내
+                  const unmatched = [];
+                  Object.keys(built).forEach(k => { if (k.startsWith('__')) return; const [sc, ln] = k.split('|'); const o = getFtfrOptions(sc, ln); if (o.stations.length === 0 && o.defectTypes.length === 0 && o.reworkTypes.length === 0) unmatched.push(k); });
+                  let msg = `규칙 적용 완료 — ${rules.length}개 규칙 반영.`;
+                  if (unmatched.length) msg += `\n\n⚠ 백업에 데이터가 아직 없어 매칭만 저장된 라인: ${unmatched.join(', ')}`;
+                  alert(msg);
                 } catch (err) { alert('규칙 파일 처리 오류: ' + err.message); }
               };
 
