@@ -1181,6 +1181,147 @@
       const setFeDataMerged = (data) => setFeData(mergeProcessDefects(data));
       
       const [activeTab, setActiveTab] = useState('dashboard');
+      // 52시간 탭 상태
+      const [h52Data, setH52Data] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mfg_52h_data') || '{}'); } catch { return {}; }
+      });
+      const [h52Config, setH52Config] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('mfg_52h_config') || '{}'); } catch { return {}; }
+      });
+      const [h52Dept, setH52Dept] = useState('ALL');
+      const [h52From, setH52From] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 21); return d.toISOString().slice(0,10); });
+      const [h52To, setH52To] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 13); return d.toISOString().slice(0,10); });
+      const [h52HolInput, setH52HolInput] = useState('');
+      const [h52ShowSettings, setH52ShowSettings] = useState(false);
+      const [h52FileNames, setH52FileNames] = useState([]);
+      const [h52SyncAt, setH52SyncAt] = useState('');
+      // 한국 공휴일 내장 (대체공휴일 포함, 2025~2026)
+      const H52_KR_HOLIDAYS = {
+        '2025-01-01':'신정','2025-01-27':'임시공휴일','2025-01-28':'설날연휴','2025-01-29':'설날','2025-01-30':'설날연휴',
+        '2025-03-01':'삼일절','2025-03-03':'대체공휴일','2025-05-05':'어린이날·부처님오신날','2025-05-06':'대체공휴일',
+        '2025-06-03':'임시공휴일','2025-06-06':'현충일','2025-08-15':'광복절','2025-10-03':'개천절',
+        '2025-10-05':'추석연휴','2025-10-06':'추석','2025-10-07':'추석연휴','2025-10-08':'대체공휴일','2025-10-09':'한글날','2025-12-25':'성탄절',
+        '2026-01-01':'신정','2026-02-16':'설날연휴','2026-02-17':'설날','2026-02-18':'설날연휴',
+        '2026-03-01':'삼일절','2026-03-02':'대체공휴일','2026-05-05':'어린이날','2026-05-24':'부처님오신날','2026-05-25':'대체공휴일',
+        '2026-06-06':'현충일','2026-08-15':'광복절','2026-08-17':'대체공휴일','2026-09-24':'추석연휴','2026-09-25':'추석','2026-09-26':'추석연휴',
+        '2026-10-03':'개천절','2026-10-05':'대체공휴일','2026-10-09':'한글날','2026-12-25':'성탄절'
+      };
+      // 파일 핸들 저장용 IndexedDB (고정 경로 자동 연결)
+      const h52OpenDb = () => new Promise((res, rej) => {
+        const r = indexedDB.open('mfg_h52_files', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('h');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+      });
+      const h52SaveHandles = async (handles) => {
+        const db = await h52OpenDb();
+        return new Promise((res, rej) => { const tx = db.transaction('h', 'readwrite'); tx.objectStore('h').put(handles, 'list'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+      };
+      const h52LoadHandles = async () => {
+        const db = await h52OpenDb();
+        return new Promise((res) => { const q = db.transaction('h').objectStore('h').get('list'); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); });
+      };
+      // OT보고서 파싱 (업로드/경로 공용)
+      const h52ParseFiles = async (files) => {
+        const fmtDd = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const results = []; // {dept, rows, meta, roster}
+        for (const file of files) {
+          const buf = await file.arrayBuffer();
+          const wbk = XLSX.read(buf, { type: 'array', cellDates: true });
+          const shName = wbk.SheetNames.find(n => n.includes('OT')) || wbk.SheetNames[0];
+          const aoa = XLSX.utils.sheet_to_json(wbk.Sheets[shName], { header: 1, raw: true, defval: null });
+          const hi = aoa.findIndex(r => r && r.includes('이름') && r.includes('작업시간'));
+          if (hi < 0) { alert(`${file.name}: OT보고서 헤더(이름/작업시간)를 찾지 못했습니다.`); continue; }
+          const hdr = aoa[hi];
+          const ix = { date: hdr.findIndex(v => v === '일자' || v === '열1'), dept: hdr.indexOf('부서'), name: hdr.indexOf('이름'), work: hdr.indexOf('작업시간'), hol: hdr.indexOf('휴일시간') };
+          if (ix.date < 0 || ix.name < 0) { alert(`${file.name}: 일자/이름 열을 찾지 못했습니다.`); continue; }
+          const toDateStr = (v) => {
+            if (v instanceof Date && !isNaN(v)) return fmtDd(v);
+            if (typeof v === 'number') { const dd = new Date(Math.round((v - 25569) * 86400 * 1000)); return `${dd.getUTCFullYear()}-${String(dd.getUTCMonth()+1).padStart(2,'0')}-${String(dd.getUTCDate()).padStart(2,'0')}`; }
+            if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+            return null;
+          };
+          const parsed = []; const depts = {};
+          for (let r = hi + 1; r < aoa.length; r++) {
+            const row = aoa[r]; if (!row) continue;
+            const d = toDateStr(row[ix.date]); if (!d) continue;
+            const n = row[ix.name] ? String(row[ix.name]).trim() : ''; if (!n) continue;
+            const dp = ix.dept >= 0 && row[ix.dept] ? String(row[ix.dept]).trim() : '';
+            const w = ix.work >= 0 ? row[ix.work] : null;
+            const h = ix.hol >= 0 ? (parseFloat(row[ix.hol]) || 0) : 0;
+            parsed.push([d, n, dp, (w === null || w === undefined) ? null : (typeof w === 'number' ? w : String(w).trim()), h || null]);
+            if (dp) depts[dp] = (depts[dp] || 0) + 1;
+          }
+          if (!parsed.length) { alert(`${file.name}: 데이터 행이 없습니다.`); continue; }
+          const fileDept = Object.keys(depts).sort((a, b) => depts[b] - depts[a])[0] || '기타';
+          const ds = parsed.map(x => x[0]).sort();
+          const roster = {};
+          const listSh = wbk.SheetNames.find(n => n.includes('명단'));
+          if (listSh) {
+            const la = XLSX.utils.sheet_to_json(wbk.Sheets[listSh], { header: 1, raw: true, defval: null });
+            for (let r = 0; r < la.length; r++) {
+              const row = la[r] || [];
+              const c = row.findIndex(v => v === '열1');
+              if (c >= 0) {
+                for (let rr = r + 1; rr < la.length; rr++) {
+                  const v = la[rr] && la[rr][c];
+                  if (v && typeof v === 'string' && v.trim()) roster[v.trim()] = fileDept;
+                }
+                break;
+              }
+            }
+          }
+          results.push({ dept: fileDept, rows: parsed, meta: { count: parsed.length, from: ds[0], to: ds[ds.length - 1], at: new Date().toLocaleString() }, roster });
+        }
+        if (!results.length) return;
+        setH52Data(prev => {
+          let newRows = (prev.rows || []).slice();
+          const newMeta = { ...(prev.meta || {}) };
+          const newRoster = { ...(prev.roster || {}) };
+          results.forEach(r => {
+            newRows = newRows.filter(x => x[2] !== r.dept).concat(r.rows);
+            newMeta[r.dept] = r.meta;
+            Object.assign(newRoster, r.roster);
+          });
+          const next = { rows: newRows, meta: newMeta, roster: newRoster };
+          try { localStorage.setItem('mfg_52h_data', JSON.stringify(next)); } catch (err) { alert('저장 공간 부족: 데이터가 너무 큽니다.'); }
+          return next;
+        });
+        setH52SyncAt(new Date().toLocaleTimeString());
+      };
+      // 고정 경로 연결 / 새로고침 (File System Access API — Chrome/Edge)
+      const h52ConnectPath = async () => {
+        try {
+          const handles = await window.showOpenFilePicker({ multiple: true, types: [{ description: 'Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+          await h52SaveHandles(handles);
+          setH52FileNames(handles.map(h => h.name));
+          const files = await Promise.all(handles.map(h => h.getFile()));
+          await h52ParseFiles(files);
+        } catch (e) { if (e && e.name !== 'AbortError') alert('경로 연결 실패: ' + e.message); }
+      };
+      const h52Refresh = async (silent) => {
+        try {
+          const handles = await h52LoadHandles();
+          if (!handles.length) { if (!silent) alert('연결된 파일이 없습니다. 먼저 "경로 연결"을 해주세요.'); return; }
+          const files = [];
+          for (const h of handles) {
+            let perm = await h.queryPermission({ mode: 'read' });
+            if (perm !== 'granted') {
+              if (silent) return; // 자동 로드는 권한 있을 때만
+              perm = await h.requestPermission({ mode: 'read' });
+            }
+            if (perm === 'granted') files.push(await h.getFile());
+          }
+          if (files.length) { setH52FileNames(handles.map(h => h.name)); await h52ParseFiles(files); }
+        } catch (e) { if (!silent) alert('불러오기 실패: ' + e.message); }
+      };
+      // 52시간 탭 진입 시 연결된 경로에서 자동 로드 (권한 유지 시)
+      React.useEffect(() => {
+        if (activeTab !== 'h52') return;
+        h52LoadHandles().then(hs => {
+          if (hs && hs.length) { setH52FileNames(hs.map(h => h.name)); h52Refresh(true); }
+        }).catch(() => {});
+      }, [activeTab]);
       // Lot & FTFR 탭 상태
       const [lotFtfrSection, setLotFtfrSection] = useState('TCP');
       const [lotFtfrItem, setLotFtfrItem] = useState('');
@@ -1485,7 +1626,7 @@
           try {
             const payload = {
               filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-              data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() }
+              data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() }
             };
             await fetch(GAS_URL, {
               method: 'POST',
@@ -1744,7 +1885,7 @@
         try {
           const payload = {
             filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-            data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() }
+            data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() }
           };
           const res = await fetch(GAS_URL, {
             method: 'POST',
@@ -2105,8 +2246,18 @@
         const cfg = ftfrConfig[key];
         if (!cfg) return true; // no config = include all (default)
         const init = cfg._init || {};
-        // Check station: only if initialized
-        if (init.stations) {
+        // Station: per-kind override (defectStations / reworkStations) takes precedence over shared stations
+        const kindStationKey = kind === 'defect' ? 'defectStations' : 'reworkStations';
+        const kindStations = cfg[kindStationKey];
+        const kindStationsInit = init[kindStationKey];
+        if (kindStationsInit) {
+          // 분리 모드: 이 종류 전용 station 목록이 진실
+          if (!Array.isArray(kindStations) || kindStations.length === 0) {
+            // 빈 목록 = 전체 제외 아님, station 무관(전체 포함) 의도로 사용 → 통과
+          } else if (!log.station || !kindStations.includes(log.station)) {
+            return false;
+          }
+        } else if (init.stations) {
           if (!log.station || !cfg.stations || !cfg.stations.includes(log.station)) return false;
         } else if (cfg.stations && cfg.stations.length > 0 && !init.stations) {
           // Legacy: array exists but no init flag — treat as filter
@@ -2133,12 +2284,20 @@
           // SubType filter: list determines what's included
           const subList = typeMap[typeField];
           if (!Array.isArray(subList)) return true;
+          // 제외(NOT) 모드: ['__exclude__', sub1, sub2] → 나열된 세부유형만 빼고 전부 포함
+          if (subList.length > 0 && subList[0] === '__exclude__') {
+            const ex = subList.slice(1).map(x => String(x).toLowerCase());
+            if (!subField) return true;
+            return !ex.includes(String(subField).toLowerCase());
+          }
           // If subList is empty AND log has subField, exclude (no subtypes selected)
           // If subList is empty AND log has NO subField, include (type-level entry without subtype detail)
           if (subList.length === 0) {
             return !subField; // include only logs without subtype info
           }
-          return !!subField && subList.includes(subField);
+          // 대소문자 무시 포함 매칭 (백업에 LEAK·Leak 혼재)
+          const subLower = subList.map(x => String(x).toLowerCase());
+          return !!subField && subLower.includes(String(subField).toLowerCase());
         } else if (typeMap && !Array.isArray(typeMap) && typeof typeMap === 'object' && Object.keys(typeMap).length > 0) {
           // Legacy: object exists but no init flag (saved before init system)
           const allowedTypes = Object.keys(typeMap);
@@ -2968,6 +3127,7 @@
         { id: 'pcsmh',     icon: '👤', label: 'PCS/MH' },
         { id: 'tool',      icon: '🔧', label: 'Tool 교체' },
         { id: 'workhour',  icon: '⏱️', label: 'Working Hour' },
+        { id: 'h52',       icon: '🕐', label: '52시간' },
         { id: 'lotftfr',   icon: '📦', label: 'Lot & FTFR' },
         { id: 'ftfr',      icon: '✨', label: 'FTFR' },
         { id: 'ftfrdetail',icon: '🔬', label: 'FTFR(세부)' },
@@ -8478,7 +8638,7 @@
                           try {
                             const payload = {
                               filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`,
-                              data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() }
+                              data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() }
                             };
                             const res = await fetch(GAS_URL, {
                               method: 'POST',
@@ -8768,7 +8928,7 @@
                           }} className="px-3 py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 rounded text-sm">전체 계획 삭제</button>
                           <button onClick={async () => {
                             try {
-                              const payload = { filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`, data: { version: 7, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() } };
+                              const payload = { filename: `mfg-settings-${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`, data: { version: 8, exportedAt: new Date().toISOString(), oeeManual, ftfrConfig, formulaConfig, achPlanData, prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, fePlanRaw: readFePlanRaw() } };
                               const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
                               const result = await res.json();
                               alert(result.ok ? '✅ 저장 완료' : '저장 실패');
@@ -9359,6 +9519,359 @@
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+{activeTab === 'h52' && (() => {
+              const TH = "border border-slate-200 px-2 py-1.5 bg-slate-50 text-slate-600 font-semibold text-center align-middle";
+              const TD = "border border-slate-100 px-1.5 py-1 text-center text-slate-700";
+              const todayStr = (() => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; })();
+              const rows = h52Data.rows || [];
+              const meta = h52Data.meta || {};
+              const rosterFromList = h52Data.roster || {};
+              const holidays = h52Config.holidays || [];
+              const excluded = h52Config.excluded || [];
+              const removedHols = h52Config.removedHolidays || [];
+              const builtinHols = Object.keys(H52_KR_HOLIDAYS).filter(d => !removedHols.includes(d));
+              const holidaySet = new Set([...holidays, ...builtinHols]);
+              const persons = h52Config.persons || {};
+              // 인별·일별 집계 맵 + 자동 특근일 감지(휴일시간 입력이 있는 날짜)
+              const pdMap = {};
+              const autoHol = new Set();
+              const rosterMap = {}; // name → dept
+              rows.forEach(r => {
+                const [d, n, s, w, h] = r;
+                if (!d || !n) return;
+                if (s && !rosterMap[n]) rosterMap[n] = s;
+                const key = n + '|' + d;
+                if (!pdMap[key]) pdMap[key] = { labels: [], num: 0, hol: 0 };
+                const rec = pdMap[key];
+                if (w !== null && w !== undefined && w !== '') {
+                  const f = parseFloat(w);
+                  if (isNaN(f)) rec.labels.push(String(w)); else rec.num += f;
+                }
+                if (h) { rec.hol += parseFloat(h) || 0; autoHol.add(d); }
+              });
+              Object.keys(rosterFromList).forEach(n => { if (!rosterMap[n]) rosterMap[n] = rosterFromList[n]; });
+              // 주차 생성 (시작일의 월요일부터 종료일까지)
+              const parseD = (s) => { const [y,m,dd] = s.split('-').map(Number); return new Date(y, m-1, dd); };
+              const fmtD = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              const weeks = [];
+              if (h52From && h52To && h52From <= h52To) {
+                const start = parseD(h52From);
+                const dow0 = start.getDay();
+                start.setDate(start.getDate() - (dow0 === 0 ? 6 : dow0 - 1)); // 월요일로 정렬
+                const end = parseD(h52To);
+                let cur = new Date(start);
+                while (cur <= end && weeks.length < 16) {
+                  const days = [];
+                  for (let i = 0; i < 7; i++) { days.push(fmtD(cur)); cur.setDate(cur.getDate() + 1); }
+                  const m1 = parseD(days[0]), m2 = parseD(days[6]);
+                  weeks.push({ days, label: `${m1.getMonth()+1}/${m1.getDate()}~${m2.getMonth()+1}/${m2.getDate()}` });
+                }
+              }
+              const DOW = ['월','화','수','목','금','토','일'];
+              // 일별 근무시간 (엑셀 수식 로직 그대로)
+              const dayHours = (name, dstr) => {
+                const pc = persons[name];
+                if (pc && ((pc.join && dstr < pc.join) || (pc.leave && dstr > pc.leave))) return { v: 0, out: true };
+                const d = parseD(dstr);
+                const dow = d.getDay(); // 0 일 ~ 6 토
+                const isHolType = dow === 0 || dow === 6 || holidaySet.has(dstr) || autoHol.has(dstr);
+                if (dstr > todayStr) {
+                  // 미래 = 예상: 평일 10, 토/공휴일 8, 일 0
+                  return { v: isHolType ? (dow === 0 ? 0 : 8) : 10, future: true, hol: isHolType };
+                }
+                const rec = pdMap[name + '|' + dstr];
+                if (isHolType) return { v: rec ? rec.hol : 0, hol: true };
+                if (rec) {
+                  if (rec.labels.some(l => l.includes('반차'))) return { v: 4, half: true };
+                  if (rec.labels.length) return { v: 0, leave: rec.labels[0] };
+                  return { v: 8 + rec.num };
+                }
+                return { v: 8 };
+              };
+              // 명단 구성
+              const rangeFirst = weeks.length ? weeks[0].days[0] : '';
+              const rangeLast = weeks.length ? weeks[weeks.length-1].days[6] : '';
+              const people = Object.keys(rosterMap)
+                .filter(n => h52Dept === 'ALL' || rosterMap[n] === h52Dept)
+                .filter(n => !excluded.includes(n))
+                .filter(n => {
+                  const pc = persons[n]; if (!pc || !weeks.length) return true;
+                  if (pc.leave && pc.leave < rangeFirst) return false;
+                  if (pc.join && pc.join > rangeLast) return false;
+                  return true;
+                })
+                .sort((a, b) => {
+                  const da = rosterMap[a] || '', db = rosterMap[b] || '';
+                  if (da !== db) return da.localeCompare(db);
+                  return a.localeCompare(b, 'ko');
+                });
+              const excludedPeople = Object.keys(rosterMap).filter(n => excluded.includes(n));
+              // 이번 주 요약
+              const curWeek = weeks.find(w => w.days[0] <= todayStr && todayStr <= w.days[6]);
+              let over52 = [], warn48 = [];
+              if (curWeek) {
+                people.forEach(n => {
+                  const tot = curWeek.days.reduce((a, ds) => a + dayHours(n, ds).v, 0);
+                  if (tot > 52) over52.push({ n, tot });
+                  else if (tot >= 48) warn48.push({ n, tot });
+                });
+              }
+              const fmtH = (v) => (Math.round(v * 10) / 10).toLocaleString();
+              // 엑셀 업로드 파싱
+              const handleH52Upload = (e) => {
+                const files = Array.from(e.target.files || []);
+                e.target.value = '';
+                if (files.length) h52ParseFiles(files);
+              };
+              const updateH52Config = (next) => {
+                setH52Config(next);
+                try { localStorage.setItem('mfg_52h_config', JSON.stringify(next)); } catch {}
+              };
+              return (
+                <div>
+                  <div className="flex flex-wrap items-center gap-3 mb-4">
+                    <div className="bg-white rounded-xl border border-slate-200 inline-flex p-1 gap-1">
+                      {[{k:'ALL',l:'전체'},{k:'TCP',l:'TCP'},{k:'FE',l:'FE'}].map(s => (
+                        <button key={s.k} onClick={() => setH52Dept(s.k)} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${h52Dept===s.k?'bg-slate-800 text-white':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{s.l}</button>
+                      ))}
+                    </div>
+                    <div className="bg-white rounded-xl border border-slate-200 inline-flex items-center p-1.5 gap-1.5 text-xs">
+                      <input type="date" value={h52From} onChange={e => setH52From(e.target.value)} className="px-2 py-1 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none" />
+                      <span className="text-slate-400">~</span>
+                      <input type="date" value={h52To} onChange={e => setH52To(e.target.value)} className="px-2 py-1 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none" />
+                    </div>
+                    {'showOpenFilePicker' in window && (
+                      <button onClick={h52ConnectPath} className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold">📂 경로 연결 (TCP/FE 파일 선택)</button>
+                    )}
+                    {'showOpenFilePicker' in window && h52FileNames.length > 0 && (
+                      <button onClick={() => h52Refresh(false)} className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">🔄 새로고침</button>
+                    )}
+                    <label className="px-3 py-2 rounded-xl bg-slate-600 hover:bg-slate-500 text-white text-xs font-bold cursor-pointer">
+                      📁 직접 업로드
+                      <input type="file" accept=".xlsx,.xls" multiple onChange={handleH52Upload} className="hidden" />
+                    </label>
+                    <button onClick={() => setH52ShowSettings(v => !v)} className={`px-3 py-2 rounded-xl text-xs font-bold ${h52ShowSettings ? 'bg-amber-500 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>👥 인원 설정</button>
+                    {h52FileNames.length > 0 && (
+                      <span className="text-[11px] text-slate-400">연결: {h52FileNames.join(', ')}{h52SyncAt && ` · 동기화 ${h52SyncAt}`}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    {Object.keys(meta).map(k => (
+                      <div key={k} className="bg-white rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-600">
+                        <span className="font-bold text-slate-800">{k}</span> · {meta[k].count.toLocaleString()}건 · {meta[k].from} ~ {meta[k].to} <span className="text-slate-400">(업로드 {meta[k].at})</span>
+                      </div>
+                    ))}
+                    {curWeek && (
+                      <div className={`rounded-xl border px-3 py-2 text-xs font-bold ${over52.length ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+                        이번 주 52h 초과 {over52.length}명{over52.length > 0 && `: ${over52.map(o => `${o.n}(${fmtH(o.tot)}h)`).join(', ')}`}
+                      </div>
+                    )}
+                    {curWeek && warn48.length > 0 && (
+                      <div className="rounded-xl border bg-amber-50 border-amber-200 text-amber-700 px-3 py-2 text-xs font-bold">
+                        48h 이상 주의 {warn48.length}명: {warn48.map(o => `${o.n}(${fmtH(o.tot)}h)`).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 p-3 mb-4 text-xs">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-bold text-slate-700">공휴일(특근일) 설정:</span>
+                      <input type="date" value={h52HolInput} onChange={e => setH52HolInput(e.target.value)} className="px-2 py-1 border border-slate-200 rounded-lg" />
+                      <button onClick={() => { if (h52HolInput && !holidaySet.has(h52HolInput)) { updateH52Config({ ...h52Config, holidays: [...holidays, h52HolInput].sort() }); setH52HolInput(''); } }} className="px-2.5 py-1 rounded-lg bg-slate-700 text-white font-bold">추가</button>
+                      {holidays.map(h => (
+                        <span key={h} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
+                          {h}<button onClick={() => updateH52Config({ ...h52Config, holidays: holidays.filter(x => x !== h) })} className="font-bold hover:text-rose-800">×</button>
+                        </span>
+                      ))}
+                      <span className="text-slate-300">|</span>
+                      <span className="text-slate-500">기본 공휴일(대체공휴일 포함, 표시 기간 내):</span>
+                      {builtinHols.filter(d => weeks.some(w => w.days.includes(d))).map(h => (
+                        <span key={h} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-200" title={H52_KR_HOLIDAYS[h]}>
+                          {h} {H52_KR_HOLIDAYS[h]}<button onClick={() => updateH52Config({ ...h52Config, removedHolidays: [...removedHols, h] })} className="font-bold hover:text-violet-900" title="공휴일에서 제외">×</button>
+                        </span>
+                      ))}
+                      {removedHols.length > 0 && removedHols.map(h => (
+                        <span key={h} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-400 border border-slate-200 line-through">
+                          {h}<button onClick={() => updateH52Config({ ...h52Config, removedHolidays: removedHols.filter(x => x !== h) })} className="font-bold hover:text-slate-700 no-underline" title="복원">↺</button>
+                        </span>
+                      ))}
+                      {autoHol.size > 0 && <span className="text-slate-400">| 자동 감지(휴일시간 입력일): {[...autoHol].filter(d => weeks.some(w => w.days.includes(d))).sort().join(', ') || '표시 기간 내 없음'}</span>}
+                    </div>
+                    {excludedPeople.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                        <span className="font-bold text-slate-700">제외 인원:</span>
+                        {excludedPeople.map(n => (
+                          <span key={n} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                            {n}<button onClick={() => updateH52Config({ ...h52Config, excluded: excluded.filter(x => x !== n) })} className="font-bold hover:text-slate-800">↺</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {h52ShowSettings && (() => {
+                    const allNames = Object.keys(rosterMap).sort((a, b) => {
+                      const da = rosterMap[a] || '', db = rosterMap[b] || '';
+                      if (da !== db) return da.localeCompare(db);
+                      return a.localeCompare(b, 'ko');
+                    });
+                    const toDateStr = (v) => {
+                      if (v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+                      if (typeof v === 'number') { const dd = new Date(Math.round((v - 25569) * 86400 * 1000)); return `${dd.getUTCFullYear()}-${String(dd.getUTCMonth()+1).padStart(2,'0')}-${String(dd.getUTCDate()).padStart(2,'0')}`; }
+                      if (typeof v === 'string') { const t = v.trim(); if (!t) return ''; const m = t.match(/(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})/); if (m) return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`; }
+                      return '';
+                    };
+                    const downloadPersonTemplate = () => {
+                      const aoa = [['이름', '부서', '입사일', '퇴사일']];
+                      allNames.forEach(n => { const pc = persons[n] || {}; aoa.push([n, rosterMap[n] || '', pc.join || '', pc.leave || '']); });
+                      const ws = XLSX.utils.aoa_to_sheet(aoa);
+                      ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 14 }];
+                      const wb = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(wb, ws, '인원명단');
+                      XLSX.writeFile(wb, `52시간_인원명단_${new Date().toISOString().slice(0,10)}.xlsx`);
+                    };
+                    const handlePersonUpload = async (e) => {
+                      const file = (e.target.files || [])[0]; e.target.value = '';
+                      if (!file) return;
+                      try {
+                        const buf = await file.arrayBuffer();
+                        const wbk = XLSX.read(buf, { type: 'array', cellDates: true });
+                        const sh = wbk.SheetNames.find(n => n.includes('인원') || n.includes('명단')) || wbk.SheetNames[0];
+                        const aoa = XLSX.utils.sheet_to_json(wbk.Sheets[sh], { header: 1, raw: true, defval: null });
+                        const hi = aoa.findIndex(r => r && r.some(c => c === '이름'));
+                        if (hi < 0) { alert('헤더(이름)를 찾지 못했습니다. 양식 다운로드 후 사용하세요.'); return; }
+                        const hdr = aoa[hi];
+                        const ci = { name: hdr.indexOf('이름'), join: hdr.findIndex(v => v && String(v).includes('입사')), leave: hdr.findIndex(v => v && String(v).includes('퇴사')) };
+                        if (ci.name < 0) { alert('이름 열을 찾지 못했습니다.'); return; }
+                        const next = { ...persons };
+                        let cnt = 0;
+                        for (let r = hi + 1; r < aoa.length; r++) {
+                          const row = aoa[r]; if (!row) continue;
+                          const n = row[ci.name] ? String(row[ci.name]).trim() : ''; if (!n) continue;
+                          const join = ci.join >= 0 ? toDateStr(row[ci.join]) : '';
+                          const leave = ci.leave >= 0 ? toDateStr(row[ci.leave]) : '';
+                          if (join || leave) { next[n] = { ...(next[n] || {}), ...(join ? { join } : {}), ...(leave ? { leave } : {}) }; cnt++; }
+                          else if (next[n]) delete next[n];
+                        }
+                        updateH52Config({ ...h52Config, persons: next });
+                        alert(`인원 ${cnt}명의 입사·퇴사일을 반영했습니다.`);
+                      } catch (err) { alert('파일 읽기 오류: ' + err.message); }
+                    };
+                    return (
+                    <div className="bg-white rounded-xl border border-amber-300 p-4 mb-4">
+                      <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                        <div className="font-bold text-slate-800 text-sm">👥 인원 설정 — 입사일·퇴사일</div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={downloadPersonTemplate} className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold">📥 양식 다운로드</button>
+                          <label className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">
+                            📤 명단 업로드
+                            <input type="file" accept=".xlsx,.xls" onChange={handlePersonUpload} className="hidden" />
+                          </label>
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mb-3">입사일 이전 / 퇴사일 이후는 근무시간 계산에서 제외(· 표시)됩니다. 표시 기간과 재직 기간이 안 겹치는 인원은 표에서 자동으로 빠집니다. 비워두면 전체 기간 재직으로 간주. <span className="text-slate-500">엑셀 일괄 입력: 양식 다운로드 → 입사일·퇴사일 작성(YYYY-MM-DD) → 명단 업로드.</span></div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-1">
+                        {allNames.map(n => {
+                          const pc = persons[n] || {};
+                          const setPc = (field, val) => {
+                            const next = { ...persons, [n]: { ...pc, [field]: val } };
+                            if (!next[n].join && !next[n].leave) delete next[n];
+                            updateH52Config({ ...h52Config, persons: next });
+                          };
+                          return (
+                            <div key={n} className="flex items-center gap-2 text-xs py-0.5">
+                              <span className="w-9 text-slate-400">{rosterMap[n]}</span>
+                              <span className={`w-16 font-semibold ${pc.leave ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{n}</span>
+                              <span className="text-slate-400">입사</span>
+                              <input type="date" value={pc.join || ''} onChange={e => setPc('join', e.target.value)} className="px-1.5 py-0.5 border border-slate-200 rounded" />
+                              <span className="text-slate-400">퇴사</span>
+                              <input type="date" value={pc.leave || ''} onChange={e => setPc('leave', e.target.value)} className="px-1.5 py-0.5 border border-slate-200 rounded" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    );
+                  })()}
+                  {rows.length === 0 ? (
+                    <div className="bg-white rounded-lg border border-slate-200 p-10 text-center text-slate-400">
+                      TCP / FE OT보고서 엑셀 파일을 경로 연결 또는 업로드하면 52시간 현황이 자동 계산됩니다.<br/>
+                      <span className="text-xs">평일 = 8h + 잔업(작업시간), 반차 = 4h, 연차 등 = 0h, 토·공휴일 = 휴일시간 합, 미래 = 예상(평일 10h / 특근 8h)</span>
+                    </div>
+                  ) : people.length === 0 ? (
+                    <div className="bg-white rounded-lg border border-slate-200 p-10 text-center text-slate-400">표시할 인원이 없습니다.</div>
+                  ) : (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="bg-slate-800 text-white px-4 py-2.5 font-bold flex items-center justify-between">
+                        <span>🕐 52시간 관리</span>
+                        <span className="text-xs font-medium text-slate-300">{people.length}명 · {weeks.length}주</span>
+                      </div>
+                      <div className="overflow-x-auto" style={{maxHeight: '70vh'}}>
+                        <table className="text-xs border-collapse w-full whitespace-nowrap">
+                          <thead className="sticky top-0 z-30">
+                            <tr>
+                              <th rowSpan={2} className={TH+" sticky z-40"} style={{left: 0, minWidth: 36}}>No</th>
+                              <th rowSpan={2} className={TH+" sticky z-40"} style={{left: 36, minWidth: 44}}>구분</th>
+                              <th rowSpan={2} className={TH+" sticky z-40"} style={{left: 80, minWidth: 70}}>이름</th>
+                              {weeks.map(w => (
+                                <th key={w.label} colSpan={8} className={TH+(curWeek && w === curWeek ? " bg-indigo-100 text-indigo-800" : "")}>{w.label}{curWeek && w === curWeek ? ' (이번 주)' : ''}</th>
+                              ))}
+                            </tr>
+                            <tr>
+                              {weeks.map(w => (
+                                <React.Fragment key={w.label}>
+                                  {w.days.map((ds, i) => {
+                                    const isHol = i >= 5 || holidaySet.has(ds) || autoHol.has(ds);
+                                    return <th key={ds} className={TH+" px-1 font-medium "+(i === 6 ? "text-rose-500" : i === 5 ? "text-blue-500" : isHol ? "text-rose-500" : "text-slate-500")}>{parseD(ds).getDate()}<br/>{DOW[i]}</th>;
+                                  })}
+                                  <th className={TH+" px-1 bg-slate-100"}>TOTAL</th>
+                                </React.Fragment>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {people.map((n, pi) => (
+                              <tr key={n} className="hover:bg-slate-50/60 group">
+                                <td className={TD+" sticky bg-white z-20 text-slate-400"} style={{left: 0, minWidth: 36}}>{pi + 1}</td>
+                                <td className={TD+" sticky bg-white z-20"} style={{left: 36, minWidth: 44}}>{rosterMap[n] || '-'}</td>
+                                <td className={TD+" sticky bg-white z-20 font-semibold text-left"} style={{left: 80, minWidth: 70}}>
+                                  {n}
+                                  <button onClick={() => updateH52Config({ ...h52Config, excluded: [...excluded, n] })} title="명단에서 제외" className="ml-1 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100">×</button>
+                                </td>
+                                {weeks.map(w => {
+                                  let tot = 0;
+                                  const cells = w.days.map((ds, i) => {
+                                    const r = dayHours(n, ds);
+                                    tot += r.v;
+                                    let cls = TD + " px-1";
+                                    if (r.out) cls += " bg-slate-50 text-slate-200";
+                                    else if (r.future) cls += " text-slate-300 italic";
+                                    else if (r.leave) cls += " bg-slate-100 text-slate-400";
+                                    else if (r.half) cls += " bg-cyan-50 text-cyan-700";
+                                    else if (r.hol) cls += " bg-amber-50" + (r.v > 0 ? " text-amber-700 font-semibold" : " text-slate-300");
+                                    else if (r.v > 8) cls += " text-indigo-700 font-semibold";
+                                    return <td key={ds} className={cls} title={r.out ? '재직 기간 외' : (r.leave || '')}>{r.out ? '·' : (r.leave ? r.leave.slice(0, 2) : (r.v === 0 ? '-' : fmtH(r.v)))}</td>;
+                                  });
+                                  const totCls = TD + " font-bold " + (tot > 52 ? "bg-rose-100 text-rose-700" : tot >= 48 ? "bg-amber-100 text-amber-700" : "bg-slate-50");
+                                  return (
+                                    <React.Fragment key={w.label}>
+                                      {cells}
+                                      <td className={totCls}>{fmtH(tot)}</td>
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="px-4 py-2 text-[11px] text-slate-400 border-t border-slate-100">
+                        평일 = 8h + 잔업(작업시간 숫자 합) · 반차 = 4h · 연차 등 라벨 = 0h · 토/공휴일 = 휴일시간 합 · <span className="italic">회색 기울임 = 미래 예상(평일 10h, 특근 8h)</span> · TOTAL: <span className="text-rose-600 font-bold">빨강 52h 초과</span> / <span className="text-amber-600 font-bold">노랑 48h 이상</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -11833,36 +12346,38 @@
                 return idx;
               };
 
-              // Station toggle (unchanged — still array)
-              const toggleStation = (key, value, allStations) => {
+              // Station toggle — per kind (defectStations / reworkStations)
+              const stationFieldOf = (kind) => kind === 'defect' ? 'defectStations' : 'reworkStations';
+              const toggleStation = (key, value, allStations, kind) => {
+                const fld = stationFieldOf(kind);
                 const next = { ...ftfrConfig };
                 if (!next[key]) next[key] = { stations: [], defectTypes: {}, reworkTypes: {}, _init: {} };
                 if (!next[key]._init) next[key]._init = {};
-                // Initialize stations with all selected on first interaction
-                if (!next[key]._init.stations) {
-                  next[key].stations = [...allStations];
-                  next[key]._init.stations = true;
+                if (!next[key]._init[fld]) {
+                  next[key][fld] = [...allStations];
+                  next[key]._init[fld] = true;
                 }
-                const cur = Array.isArray(next[key].stations) ? next[key].stations : [];
-                if (cur.includes(value)) next[key].stations = cur.filter(x => x !== value);
-                else next[key].stations = [...cur, value];
+                const cur = Array.isArray(next[key][fld]) ? next[key][fld] : [];
+                if (cur.includes(value)) next[key][fld] = cur.filter(x => x !== value);
+                else next[key][fld] = [...cur, value];
                 saveFtfrConfig(next);
               };
-
-              const setStationsAll = (key, all) => {
+              const setStationsAll = (key, all, kind) => {
+                const fld = stationFieldOf(kind);
                 const next = { ...ftfrConfig };
                 if (!next[key]) next[key] = { stations: [], defectTypes: {}, reworkTypes: {}, _init: {} };
                 if (!next[key]._init) next[key]._init = {};
-                next[key].stations = [...all];
-                next[key]._init.stations = true;
+                next[key][fld] = [...all];
+                next[key]._init[fld] = true;
                 saveFtfrConfig(next);
               };
-              const clearStations = (key) => {
+              const clearStations = (key, kind) => {
+                const fld = stationFieldOf(kind);
                 const next = { ...ftfrConfig };
                 if (!next[key]) next[key] = { stations: [], defectTypes: {}, reworkTypes: {}, _init: {} };
                 if (!next[key]._init) next[key]._init = {};
-                next[key].stations = [];
-                next[key]._init.stations = true;
+                next[key][fld] = [];
+                next[key]._init[fld] = true;
                 saveFtfrConfig(next);
               };
 
@@ -11929,11 +12444,16 @@
                 saveFtfrConfig(next);
               };
 
-              // isChecked: stations
-              const isStationChecked = (key, value) => {
+              // isChecked: stations (per kind)
+              const isStationChecked = (key, value, kind) => {
+                const fld = stationFieldOf(kind);
                 const cfg = ftfrConfig[key];
-                if (!cfg || !cfg._init || !cfg._init.stations) return true; // not initialized = include all
-                return Array.isArray(cfg.stations) && cfg.stations.includes(value);
+                if (!cfg || !cfg._init || !cfg._init[fld]) {
+                  // 분리 미초기화 시 공유 stations로 폴백
+                  if (cfg && cfg._init && cfg._init.stations) return Array.isArray(cfg.stations) && cfg.stations.includes(value);
+                  return true; // 전체 포함
+                }
+                return Array.isArray(cfg[fld]) && cfg[fld].includes(value);
               };
 
               // isChecked: type (parent checkbox)
@@ -11989,15 +12509,192 @@
                 </div>
               );
 
+              // ===== 규칙 엑셀 ↔ ftfrConfig 변환 =====
+              // 표시라인 → 백업 raw 라인명 매핑 도우미 (역방향)
+              const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();
+              // 엑셀 백업 lineName(여러 줄 가능) → 표시 라인명 + 섹션
+              const resolveDisplayFromRaw = (sec, rawMulti) => {
+                const out = new Set();
+                String(rawMulti || '').split(/[\n,]+/).map(s => s.trim()).filter(Boolean).forEach(raw => {
+                  out.add(resolveLineName(sec, raw));
+                });
+                return [...out];
+              };
+              const splitLines = (v) => String(v == null ? '' : v).split(/[\n,]+/).map(s => s.trim()).filter(s => s && s !== '—' && s !== '전체' && !/전체/.test(s) && !/필터/.test(s));
+              const isAllStations = (v) => { const t = norm(v); return !t || t === '—' || t.includes('전체') || t.includes('무관') || t.includes('필터'); };
+              const isAllTypes = (v) => { const t = norm(v); return !t || t === '전체' || t === '—'; };
+              const splitSubs = (v) => String(v == null ? '' : v).split(/[\n,]+/).map(s => s.trim()).filter(s => s && s !== '전체' && s !== '—');
+
+              const exportFtfrRules = () => {
+                // 현재 설정을 규칙 엑셀 양식으로 출력
+                const header = ['섹션', '표시라인', '지표', '스테이션(쉼표구분, 비우면 전체)', '불량유형(2차)', '불량 세부유형', '재작업유형(1차)', '재작업 세부유형', '비고'];
+                const aoa = [header];
+                sections.forEach(({ sec, lines }) => {
+                  lines.forEach(line => {
+                    const key = `${sec}|${line}`;
+                    const cfg = ftfrConfig[key] || {};
+                    const init = cfg._init || {};
+                    const stationsOf = (kindKey, sharedInit) => {
+                      if (init[kindKey]) return (cfg[kindKey] || []).join(', ');
+                      if (sharedInit && init.stations) return (cfg.stations || []).join(', ');
+                      return '전체';
+                    };
+                    const typeStr = (field) => {
+                      if (!init[field]) return '전체';
+                      const map = cfg[field] || {};
+                      const ks = Object.keys(map);
+                      return ks.length ? ks.join(', ') : '(없음)';
+                    };
+                    const subStr = (field) => {
+                      if (!init[field]) return '전체';
+                      const map = cfg[field] || {};
+                      const parts = [];
+                      Object.keys(map).forEach(t => {
+                        const sl = map[t];
+                        if (Array.isArray(sl) && sl.length) {
+                          if (sl[0] === '__exclude__') parts.push(`${t}: 제외[${sl.slice(1).join('·')}]`);
+                          else parts.push(`${t}: ${sl.join('·')}`);
+                        }
+                      });
+                      return parts.join(' / ') || '전체';
+                    };
+                    aoa.push([sec, line, '1차불량', stationsOf('reworkStations', true), '', '', typeStr('reworkTypes'), subStr('reworkTypes'), '']);
+                    aoa.push(['', '', '2차불량', stationsOf('defectStations', true), typeStr('defectTypes'), subStr('defectTypes'), '', '', '']);
+                  });
+                });
+                const ws = XLSX.utils.aoa_to_sheet(aoa);
+                ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 9 }, { wch: 30 }, { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 20 }, { wch: 24 }];
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, '매칭규칙');
+                XLSX.writeFile(wb, `FTFR_집계설정_${new Date().toISOString().slice(0, 10)}.xlsx`);
+              };
+
+              const handleRuleImport = async (e) => {
+                const file = (e.target.files || [])[0]; e.target.value = '';
+                if (!file) return;
+                try {
+                  const buf = await file.arrayBuffer();
+                  const wbk = XLSX.read(buf, { type: 'array' });
+                  const sh = wbk.SheetNames.find(n => n.includes('매칭') || n.includes('규칙')) || wbk.SheetNames[0];
+                  const aoa = XLSX.utils.sheet_to_json(wbk.Sheets[sh], { header: 1, raw: false, defval: '' });
+                  const hi = aoa.findIndex(r => r && r.some(c => String(c).includes('지표')));
+                  if (hi < 0) { alert('헤더(지표 열)를 찾지 못했습니다. 내보내기 양식을 사용하세요.'); return; }
+                  const H = aoa[hi].map(c => String(c).trim());
+                  const col = (kw) => H.findIndex(h => h.includes(kw));
+                  const ci = {
+                    sec: col('섹션'), line: H.findIndex(h => h.includes('표시라인') || h.includes('엑셀 시트') || (h.includes('라인') && !h.includes('백업'))),
+                    metric: col('지표'),
+                    bkLine: H.findIndex(h => h.includes('백업 lineName') || h.includes('백업 라인')),
+                    station: H.findIndex(h => h.includes('스테이션') || h.includes('station')),
+                    dtype: H.findIndex(h => h.includes('불량유형') || (h.includes('유형') && h.includes('Type') && !h.includes('재작업') && !h.includes('세부'))),
+                    dsub: H.findIndex(h => h.includes('불량 세부') || (h.includes('세부') && !h.includes('재작업'))),
+                    rtype: H.findIndex(h => h.includes('재작업유형') || (h.includes('재작업') && !h.includes('세부'))),
+                    rsub: H.findIndex(h => h.includes('재작업 세부')),
+                    bkType: H.findIndex(h => h.includes('백업 유형')),
+                    bkSub: H.findIndex(h => h.includes('백업 세부')),
+                  };
+                  // 백업원본 양식(섹션/엑셀시트/지표/.../백업 station/백업 유형/백업 세부유형) 도 지원
+                  const isBackupForm = ci.bkLine >= 0 && ci.bkType >= 0;
+                  if (ci.metric < 0) { alert('지표 열을 찾지 못했습니다.'); return; }
+
+                  const next = { ...ftfrConfig };
+                  let curSec = '', curLines = [];
+                  const ensure = (key) => { if (!next[key]) next[key] = { stations: [], defectTypes: {}, reworkTypes: {}, _init: {} }; if (!next[key]._init) next[key]._init = {}; return next[key]; };
+                  const setStations = (key, kindKey, listStr) => {
+                    const cfg = ensure(key);
+                    if (isAllStations(listStr)) { cfg[kindKey] = []; cfg._init[kindKey] = true; } // 전체 = station 무관
+                    else { cfg[kindKey] = splitLines(listStr); cfg._init[kindKey] = true; }
+                  };
+                  const buildTypeMap = (typeStr, subStr, opts) => {
+                    // opts.allTypes: 이 라인에서 가능한 유형 목록 (전체 처리용)
+                    const map = {};
+                    const subs = splitSubs(subStr);
+                    const excludeMode = /제외|except|not/i.test(String(subStr));
+                    if (isAllTypes(typeStr)) {
+                      (opts.allTypes || []).forEach(t => { map[t] = []; });
+                      // 전체 유형 + 세부 전체 → 빈 배열은 '세부 없는 것만'이 되므로, 전체 포함 의도면 subList를 풀세트로
+                      Object.keys(map).forEach(t => { map[t] = (opts.subIndex[t] || []).slice(); });
+                    } else {
+                      splitLines(typeStr).forEach(t => { map[t] = []; });
+                    }
+                    if (subs.length) {
+                      // 세부유형 지정: 모든 선택 유형에 동일 적용 (대소문자 무시는 필터에서 처리)
+                      Object.keys(map).forEach(t => {
+                        map[t] = excludeMode ? ['__exclude__', ...subs.filter(s => !/제외/.test(s))] : subs.slice();
+                      });
+                      if (Object.keys(map).length === 0) {
+                        // 유형이 '기능불량' 등으로 안 잡힌 경우 기본 키
+                        map['기능불량'] = excludeMode ? ['__exclude__', ...subs] : subs.slice();
+                      }
+                    }
+                    return map;
+                  };
+
+                  for (let r = hi + 1; r < aoa.length; r++) {
+                    const row = aoa[r]; if (!row) continue;
+                    const secCell = ci.sec >= 0 ? String(row[ci.sec] || '').trim() : '';
+                    const lineCell = ci.line >= 0 ? String(row[ci.line] || '').trim() : '';
+                    const metric = String(row[ci.metric] || '').trim();
+                    if (secCell) curSec = secCell;
+                    if (lineCell) {
+                      // 표시라인 결정: 백업form이면 백업 lineName으로 resolve, 아니면 그대로
+                      if (isBackupForm) {
+                        const bk = String(row[ci.bkLine] || '').trim() || lineCell;
+                        curLines = resolveDisplayFromRaw(curSec, bk);
+                        if (curLines.length === 0) curLines = [lineCell];
+                      } else {
+                        curLines = [lineCell];
+                      }
+                    }
+                    if (!curSec || curLines.length === 0) continue;
+                    if (!/1차|2차/.test(metric)) continue; // 완제품/투입/폐기 행은 설정과 무관
+
+                    const stationStr = ci.station >= 0 ? row[ci.station] : '';
+                    const isRework = metric.includes('1차');
+                    curLines.forEach(line => {
+                      const key = `${curSec}|${line}`;
+                      const opts = getOptions(curSec, line);
+                      const subIndex = {}; const allTypeNames = [];
+                      (isRework ? opts.reworkTypes : opts.defectTypes).forEach(t => { subIndex[t.name] = t.subTypes || []; allTypeNames.push(t.name); });
+                      if (isRework) {
+                        setStations(key, 'reworkStations', stationStr);
+                        const tStr = ci.rtype >= 0 ? row[ci.rtype] : (ci.bkType >= 0 ? row[ci.bkType] : '전체');
+                        const sStr = ci.rsub >= 0 ? row[ci.rsub] : (ci.bkSub >= 0 ? row[ci.bkSub] : '전체');
+                        ensure(key).reworkTypes = buildTypeMap(tStr, sStr, { allTypes: allTypeNames, subIndex });
+                        ensure(key)._init.reworkTypes = true;
+                      } else {
+                        setStations(key, 'defectStations', stationStr);
+                        const tStr = ci.dtype >= 0 ? row[ci.dtype] : (ci.bkType >= 0 ? row[ci.bkType] : '기능불량');
+                        const sStr = ci.dsub >= 0 ? row[ci.dsub] : (ci.bkSub >= 0 ? row[ci.bkSub] : '전체');
+                        // 2차불량 유형이 비어있으면 기능불량 기본
+                        ensure(key).defectTypes = buildTypeMap(tStr || '기능불량', sStr, { allTypes: allTypeNames, subIndex });
+                        ensure(key)._init.defectTypes = true;
+                      }
+                    });
+                  }
+                  saveFtfrConfig(next);
+                  alert('규칙을 적용했습니다. 라인별 스테이션·유형 설정이 갱신되었습니다.');
+                } catch (err) { alert('규칙 파일 처리 오류: ' + err.message); }
+              };
+
               return (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowFtfrConfig(false)}>
-                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
                     <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-4 flex items-center justify-between">
                       <div>
                         <div className="text-lg font-bold">⚙️ FTFR 집계 설정</div>
                         <div className="text-xs text-emerald-100 mt-0.5">각 라인별로 FTFR 계산에 포함할 스테이션과 불량/재작업 유형(세부유형 포함)을 선택하세요. 아무것도 선택하지 않으면 전체가 포함됩니다.</div>
                       </div>
                       <button onClick={() => setShowFtfrConfig(false)} className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded text-sm font-bold">닫기</button>
+                    </div>
+                    <div className="bg-emerald-50/60 border-b border-emerald-100 px-6 py-2.5 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-emerald-800">규칙 일괄 적용:</span>
+                      <label className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">
+                        📥 규칙 가져오기 (엑셀)
+                        <input type="file" accept=".xlsx,.xls" onChange={handleRuleImport} className="hidden" />
+                      </label>
+                      <button onClick={exportFtfrRules} className="px-2.5 py-1 rounded-lg bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs font-bold">📤 현재 설정 내보내기</button>
+                      <span className="text-[11px] text-slate-500">엑셀 양식: 섹션·표시라인·지표(1차불량/2차불량)·스테이션·유형·세부유형. 1차(재작업)·2차(불량) 스테이션을 각각 지정할 수 있습니다.</span>
                     </div>
                     <div className="overflow-y-auto p-4 space-y-4 flex-1">
                       {sections.map(({sec, lines, color}) => (
@@ -12017,27 +12714,45 @@
                                     {!hasAnyData && <span className="text-xs text-slate-400">데이터 없음</span>}
                                   </div>
                                   {hasAnyData && (
-                                    <div className="p-3 grid grid-cols-3 gap-3">
-                                      {/* Stations */}
+                                    <div className="p-3 grid grid-cols-4 gap-3">
+                                      {/* Stations - 1차(재작업) */}
                                       <div>
                                         <div className="flex items-center justify-between mb-1.5">
-                                          <div className="text-xs font-bold text-slate-700">스테이션 ({opts.stations.length})</div>
+                                          <div className="text-xs font-bold text-amber-700">1차 스테이션 ({opts.stations.length})</div>
                                           <div className="flex gap-1">
-                                            <button onClick={() => setStationsAll(key, opts.stations)} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded">전체</button>
-                                            <button onClick={() => clearStations(key)} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded">해제</button>
+                                            <button onClick={() => setStationsAll(key, opts.stations, 'rework')} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded">전체</button>
+                                            <button onClick={() => clearStations(key, 'rework')} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded">해제</button>
                                           </div>
                                         </div>
-                                        <div className="max-h-48 overflow-y-auto border border-slate-200 rounded p-1.5 space-y-0.5 bg-slate-50/50">
+                                        <div className="max-h-48 overflow-y-auto border border-slate-200 rounded p-1.5 space-y-0.5 bg-amber-50/30">
                                           {opts.stations.length === 0 ? <div className="text-[10px] text-slate-400 px-1">없음</div> : opts.stations.map(s => (
                                             <label key={s} className="flex items-center gap-1.5 text-[11px] cursor-pointer hover:bg-white px-1 py-0.5 rounded">
-                                              <input type="checkbox" checked={isStationChecked(key, s)} onChange={() => toggleStation(key, s, opts.stations)} className="w-3 h-3" />
+                                              <input type="checkbox" checked={isStationChecked(key, s, 'rework')} onChange={() => toggleStation(key, s, opts.stations, 'rework')} className="w-3 h-3" />
                                               <span className="truncate">{s}</span>
                                             </label>
                                           ))}
                                         </div>
                                       </div>
-                                      {renderTypeTree(key, 'defectTypes', opts.defectTypes, 'text-rose-700', 'bg-rose-50/30', '불량 유형')}
-                                      {renderTypeTree(key, 'reworkTypes', opts.reworkTypes, 'text-amber-700', 'bg-amber-50/30', '재작업 유형')}
+                                      {/* Stations - 2차(불량) */}
+                                      <div>
+                                        <div className="flex items-center justify-between mb-1.5">
+                                          <div className="text-xs font-bold text-rose-700">2차 스테이션 ({opts.stations.length})</div>
+                                          <div className="flex gap-1">
+                                            <button onClick={() => setStationsAll(key, opts.stations, 'defect')} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded">전체</button>
+                                            <button onClick={() => clearStations(key, 'defect')} className="text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 rounded">해제</button>
+                                          </div>
+                                        </div>
+                                        <div className="max-h-48 overflow-y-auto border border-slate-200 rounded p-1.5 space-y-0.5 bg-rose-50/30">
+                                          {opts.stations.length === 0 ? <div className="text-[10px] text-slate-400 px-1">없음</div> : opts.stations.map(s => (
+                                            <label key={s} className="flex items-center gap-1.5 text-[11px] cursor-pointer hover:bg-white px-1 py-0.5 rounded">
+                                              <input type="checkbox" checked={isStationChecked(key, s, 'defect')} onChange={() => toggleStation(key, s, opts.stations, 'defect')} className="w-3 h-3" />
+                                              <span className="truncate">{s}</span>
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      {renderTypeTree(key, 'defectTypes', opts.defectTypes, 'text-rose-700', 'bg-rose-50/30', '불량 유형(2차)')}
+                                      {renderTypeTree(key, 'reworkTypes', opts.reworkTypes, 'text-amber-700', 'bg-amber-50/30', '재작업 유형(1차)')}
                                     </div>
                                   )}
                                 </div>
