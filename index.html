@@ -10724,6 +10724,126 @@
               const itemBottom = [...itemRows].sort((a,b) => a.ftfr - b.ftfr).slice(0, 10);
               const itemTop = [...itemRows].sort((a,b) => b.ftfr - a.ftfr).slice(0, 10);
 
+              // ===== 파레토 차트용: 해당 '연도'에 1차불량이 있었던 품번만 =====
+              const yearLogsForPareto = (() => {
+                const collect = (data, sec) => (data?.productionLogs || []).filter(l => {
+                  const d = new Date(l.productionDate);
+                  if (d.getFullYear() !== ftfrYear) return false;
+                  if (sec === 'TCP' && !(l.section === 'TCP' && ['1PC','2PC','Nospin'].includes(l.lineName))) return false;
+                  if (sec === 'FE' && l.section !== 'FE') return false;
+                  if (sec === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return false;
+                  return true;
+                });
+                if (ftfrSection === 'ALL') return [...collect(tcpData, 'TCP'), ...collect(feData, 'FE')];
+                return collect(ftfrSection === 'TCP' ? tcpData : feData, ftfrSection);
+              })();
+              const paretoMap = {};
+              yearLogsForPareto.forEach(l => {
+                const it = l.item || '미지정';
+                if (!paretoMap[it]) paretoMap[it] = { item: it, partNo: l.partNo || '', logs: [] };
+                paretoMap[it].logs.push(l);
+                if (!paretoMap[it].partNo && l.partNo) paretoMap[it].partNo = l.partNo;
+              });
+              let paretoRows = Object.values(paretoMap).map(v => {
+                const a = aggFtfr(v.logs);
+                return { item: v.item, partNo: v.partNo || '', ng: Math.round(a.rework || 0) }; // ★ 1차불량(재작업)만
+              }).filter(r => r.ng > 0).sort((a, b) => b.ng - a.ng || a.item.localeCompare(b.item));
+              const paretoTotalNg = paretoRows.reduce((s, r) => s + r.ng, 0);
+              { let cum = 0; paretoRows.forEach(r => { cum += r.ng; r.cum = cum; r.cumPct = paretoTotalNg > 0 ? cum / paretoTotalNg * 100 : 0; r.label = r.item + (r.partNo ? `(${r.partNo})` : ''); }); }
+
+              // ===== 월별 파레토: 가로축은 '연간 전체 품번' 그대로, 값만 선택한 월의 1차불량 =====
+              const monthNgByItem = {};
+              monthLogs.forEach(l => {
+                const it = l.item || '미지정';
+                if (!monthNgByItem[it]) monthNgByItem[it] = [];
+                monthNgByItem[it].push(l);
+              });
+              const monthNgCalc = {};
+              Object.entries(monthNgByItem).forEach(([it, logs]) => { monthNgCalc[it] = Math.round(aggFtfr(logs).rework || 0); });
+              // 연간 품번 순서(paretoRows) 유지 + 연간에 없던(그 해 불량 0이지만 이번 달 발생) 품번도 뒤에 추가
+              let paretoRowsM = paretoRows.map(r => ({ item: r.item, partNo: r.partNo, label: r.label, ng: monthNgCalc[r.item] || 0 }));
+              const yearItemSet = new Set(paretoRows.map(r => r.item));
+              Object.entries(monthNgCalc).forEach(([it, ng]) => {
+                if (ng > 0 && !yearItemSet.has(it)) {
+                  const pn = (monthNgByItem[it] || []).map(l => l.partNo).find(Boolean) || '';
+                  paretoRowsM.push({ item: it, partNo: pn, label: it + (pn ? `(${pn})` : ''), ng });
+                }
+              });
+              // 월별은 그 달 1차불량 큰 순으로 좌측 정렬 (0인 품번은 뒤로, 동률은 이름순)
+              paretoRowsM.sort((a, b) => b.ng - a.ng || a.item.localeCompare(b.item));
+              const paretoTotalNgM = paretoRowsM.reduce((s, r) => s + r.ng, 0);
+              { let cum = 0; paretoRowsM.forEach(r => { cum += r.ng; r.cum = cum; r.cumPct = paretoTotalNgM > 0 ? cum / paretoTotalNgM * 100 : 0; }); }
+
+              // 파레토 SVG 렌더 (연/월 공용)
+              const renderParetoSvg = (rows) => {
+                const n = rows.length;
+                const padL = 56, padR = 50, padT = 24, padB = 150;
+                const W = 980;
+                const plotW = W - padL - padR;
+                const step = plotW / n;
+                const barW = Math.max(2, Math.min(20, step * 0.7));
+                const H = 470;
+                const plotH = H - padT - padB;
+                const maxNg = Math.max(...rows.map(r => r.ng), 1);
+                const niceMax = (() => {
+                  const t = maxNg * 1.1;
+                  const exp = Math.pow(10, Math.floor(Math.log10(t)));
+                  const rel = t / exp; let mult = rel <= 1 ? 1 : rel <= 2 ? 2 : rel <= 2.5 ? 2.5 : rel <= 5 ? 5 : 10;
+                  return mult * exp;
+                })();
+                const steps = 5;
+                const yL = Array.from({ length: steps + 1 }, (_, i) => niceMax * i / steps);
+                const fmtK = (v) => v >= 1000 ? `${Math.round(v / 1000).toLocaleString()}k` : `${Math.round(v)}`;
+                const xAt = (i) => padL + i * step + (step - barW) / 2;
+                const yBar = (v) => padT + plotH * (1 - v / niceMax);
+                const yPct = (p) => padT + plotH * (1 - p / 100);
+                const labelEvery = step < 7 ? Math.ceil(7 / step) : 1;
+                const fontLbl = step < 5 ? 7 : step < 9 ? 8 : 9;
+                const linePts = rows.map((r, i) => `${xAt(i) + barW / 2},${yPct(r.cumPct)}`).join(' ');
+                return (
+                  <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ display: 'block' }}>
+                    {yL.map(v => { const y = yBar(v); return (
+                      <g key={'yl' + v}>
+                        <line x1={padL} y1={y} x2={padL + plotW} y2={y} stroke="#eef2f7" strokeWidth="1" />
+                        <text x={padL - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#64748b">{fmtK(v)}</text>
+                      </g>
+                    ); })}
+                    {[0,20,40,60,80,100].map(p => { const y = yPct(p); return (
+                      <text key={'yr' + p} x={padL + plotW + 8} y={y + 4} textAnchor="start" fontSize="11" fill="#dc2626">{p}%</text>
+                    ); })}
+                    {rows.map((r, i) => { const y = yBar(r.ng); return (
+                      <g key={'b' + i}>
+                        <rect x={xAt(i)} y={y} width={barW} height={padT + plotH - y} fill="#4472C4">
+                          <title>{`${r.label}\n1차불량 ${r.ng.toLocaleString()}\n누적 ${r.cumPct.toFixed(1)}%`}</title>
+                        </rect>
+                        {i % labelEvery === 0 && (
+                          <text x={xAt(i) + barW / 2} y={H - padB + 6} transform={`rotate(-90 ${xAt(i) + barW / 2} ${H - padB + 6})`} textAnchor="end" fontSize={fontLbl} fill="#475569">{r.label}</text>
+                        )}
+                      </g>
+                    ); })}
+                    <polyline points={linePts} fill="none" stroke="#C0504D" strokeWidth="2" />
+                    {rows.map((r, i) => (
+                      <circle key={'c' + i} cx={xAt(i) + barW / 2} cy={yPct(r.cumPct)} r={step < 6 ? 1.5 : 2.5} fill="#C0504D" />
+                    ))}
+                    <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="#94a3b8" strokeWidth="1" />
+                    <line x1={padL + plotW} y1={padT} x2={padL + plotW} y2={padT + plotH} stroke="#dc2626" strokeWidth="1" />
+                    <line x1={padL} y1={padT + plotH} x2={padL + plotW} y2={padT + plotH} stroke="#94a3b8" strokeWidth="1" />
+                  </svg>
+                );
+              };
+              const paretoSummary = (rows, total) => {
+                if (!rows.length) return null;
+                const idx80 = rows.findIndex(r => r.cumPct >= 80);
+                return (
+                  <div className="px-4 pb-3 text-[11px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                    <span>총 1차불량: <b className="text-slate-700">{total.toLocaleString()}</b></span>
+                    <span>품번 수: <b className="text-slate-700">{rows.length}</b></span>
+                    <span>상위 1개: <b className="text-slate-700">{rows[0].label}</b> ({rows[0].cumPct.toFixed(1)}%)</span>
+                    {idx80 >= 0 && <span>누적 80% 도달: 상위 <b className="text-slate-700">{idx80 + 1}</b>개 품번</span>}
+                  </div>
+                );
+              };
+
               const yearOpts = [now0.getFullYear()-2, now0.getFullYear()-1, now0.getFullYear(), now0.getFullYear()+1];
               const monthOpts = [1,2,3,4,5,6,7,8,9,10,11,12];
 
@@ -10854,6 +10974,49 @@
                           );
                         })()}
                       </div>
+                    </div>
+
+                    {/* 파레토 차트: 품번별 NG수량 */}
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200 flex items-center justify-between">
+                        <span>📊 {ftfrYear} FTFR Trend — 품번별 1차불량 (연간)</span>
+                        <span className="text-[11px] font-normal text-slate-400">막대=1차불량(재작업) · 빨강선=누적% · 불량 발생 품번만</span>
+                      </div>
+                      <div className="p-4">
+                        {paretoRows.length === 0 ? (
+                          <div className="text-center py-10 text-slate-400 text-sm">{ftfrYear}년 1차불량 데이터가 없습니다</div>
+                        ) : renderParetoSvg(paretoRows)}
+                      </div>
+                      {paretoSummary(paretoRows, paretoTotalNg)}
+                    </div>
+
+                    {/* 파레토 차트: 월별 1차불량 */}
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+                        <span>📊 {ftfrYear}.{String(ftfrMonth).padStart(2,'0')} FTFR — 품번별 1차불량 (월별)</span>
+                        <div className="flex items-center gap-1.5">
+                          <select value={ftfrMonth} onChange={(e) => setFtfrMonth(Number(e.target.value))} className="px-2 py-1 border border-slate-200 rounded text-xs font-bold">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}월</option>)}
+                          </select>
+                          <span className="text-[11px] font-normal text-slate-400">동일 품번 · 해당월 큰 순 정렬</span>
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        {paretoRowsM.length === 0 ? (
+                          <div className="text-center py-10 text-slate-400 text-sm">{ftfrYear}년 1차불량 데이터가 없습니다</div>
+                        ) : renderParetoSvg(paretoRowsM)}
+                      </div>
+                      {paretoRowsM.length > 0 && (() => {
+                        const withNg = paretoRowsM.filter(r => r.ng > 0);
+                        const topM = withNg.slice().sort((a, b) => b.ng - a.ng)[0];
+                        return (
+                          <div className="px-4 pb-3 text-[11px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                            <span>해당월 1차불량: <b className="text-slate-700">{paretoTotalNgM.toLocaleString()}</b></span>
+                            <span>불량 발생 품번: <b className="text-slate-700">{withNg.length}</b> / 전체 {paretoRowsM.length}</span>
+                            {topM && <span>해당월 최다: <b className="text-slate-700">{topM.label}</b> ({topM.ng.toLocaleString()})</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Per-line breakdown */}
