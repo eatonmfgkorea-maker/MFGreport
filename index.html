@@ -1611,8 +1611,8 @@
       
       // 계획수량 조회
       const getPlanQty = (section, line, shift, date, item) => {
-        if (section === 'TCP') return productionPlan[`TCP|${line}|${shift}|${date}|${item}`] || 0;
-        return productionPlan[`FE|${shift}|${date}|${item}`] || 0;
+        const raw = section === 'TCP' ? (productionPlan[`TCP|${line}|${shift}|${date}|${item}`] || 0) : (productionPlan[`FE|${shift}|${date}|${item}`] || 0);
+        return Math.round(raw);
       };
       
       // ★ 자동 백업: 변경 시 10초 후 silent 백업
