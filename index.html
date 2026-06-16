@@ -1793,9 +1793,9 @@
               body: JSON.stringify(payload)
             });
           } catch {}
-        }, 10000);
+        }, 3000);
         return () => clearTimeout(timer);
-      }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping]);
+      }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes]);
       const [expandedNotes, setExpandedNotes] = useState({});
       const toggleNote = (key) => setExpandedNotes(prev => ({ ...prev, [key]: !prev[key] }));
       const updateProdNote = (key, value) => {
