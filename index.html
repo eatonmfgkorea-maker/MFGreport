@@ -1376,6 +1376,165 @@
           setTimeout(() => URL.revokeObjectURL(a.href), 5000);
         } catch (e) { alert('엑셀 출력 오류: ' + (e && e.message ? e.message : e)); }
       };
+      // 여러 시트(아이템/라인)를 한 워크북에 담아 파일 1개로 저장
+      // specs: [{ baseSheet, sheetName, startRow, maxCol, dataRows }]
+      const qprmMultiExport = async (specs, fname) => {
+        try {
+          const master = new ExcelJS.Workbook();
+          for (const sp of specs) {
+            // 각 시트마다 템플릿을 새로 로드해 해당 base 시트만 채운 뒤, 그 시트를 master로 복제
+            const bin = atob(window.QPRM_TEMPLATE_B64);
+            const buf = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+            const wb = new ExcelJS.Workbook();
+            await wb.xlsx.load(buf.buffer);
+            const ws = wb.getWorksheet(sp.baseSheet);
+            const tplRow = ws.getRow(sp.startRow);
+            const styles = [];
+            for (let c = 1; c <= sp.maxCol; c++) styles[c] = tplRow.getCell(c).style;
+            const tplH = tplRow.height;
+            sp.dataRows.forEach((vals, i) => {
+              const row = ws.getRow(sp.startRow + i);
+              if (tplH) row.height = tplH;
+              for (let c = 1; c <= sp.maxCol; c++) {
+                const cell = row.getCell(c);
+                if (styles[c]) cell.style = JSON.parse(JSON.stringify(styles[c]));
+                const v = vals[c - 1];
+                cell.value = (v === undefined || v === '') ? null : v;
+              }
+            });
+            // master에 새 시트 만들고 model 복사 (열폭/병합/스타일 보존)
+            const safeName = sp.sheetName.replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31);
+            const dest = master.addWorksheet(safeName);
+            dest.model = { ...ws.model, name: safeName };
+          }
+          if (master.worksheets.length === 0) { alert('출력할 데이터가 없습니다.'); return; }
+          const out = await master.xlsx.writeBuffer();
+          const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = fname;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        } catch (e) { alert('엑셀 출력 오류: ' + (e && e.message ? e.message : e)); }
+      };
+      const buildQprmExports = async (fromDate, toDate, which) => {
+        const qnorm = (v) => String(v||'').replace(/\s+/g,'').toLowerCase();
+        const inR = (l) => { const d = (l.productionDate||'').slice(0,10); if (fromDate && d < fromDate) return false; if (toDate && d > toDate) return false; return true; };
+        const td = tcpData, fdat = feData;
+        const ymd = (toDate||new Date().toISOString().slice(0,10)).replace(/-/g,'');
+        // ---------- TCP: 아이템별 시트 → 파일 1개 ----------
+        if (which === 'tcp') {
+          if (!td) { alert('TCP 데이터가 없습니다.'); return; }
+          const TCP_COLS = ['Lockup NG', 'Unlock NG', '10V Lockup NG', '10V Unlock NG'];
+          const classify = (cands) => {
+            for (const raw of cands) { if (!raw) continue; const t = qnorm(raw); const is10v = t.includes('10v');
+              if (t.includes('unlock')) return is10v ? '10V Unlock NG' : 'Unlock NG';
+              if (t.includes('lockup') || t.includes('lock')) return is10v ? '10V Lockup NG' : 'Lockup NG'; }
+            return cands.find(c => c) || '기타';
+          };
+          const getSub = (log) => {
+            const first = {}, second = {};
+            const addD = (d) => { const q = parseFloat(d.quantity)||0; if (!q) return; const k = classify([d.defectSubType,d.subType,d.defectType]); first[k]=(first[k]||0)+q; second[k]=(second[k]||0)+q; };
+            const addR = (r) => { const q = parseFloat(r.quantity)||0; if (!q) return; const k = classify([r.reworkSubType,r.subType,r.reworkType]); first[k]=(first[k]||0)+q; };
+            const lld = td?.lotData?.[log.id];
+            if (lld && Array.isArray(lld.defects)) { lld.defects.forEach(addD); (lld.reworks||[]).forEach(addR); }
+            else { (td?.defectLogs||[]).forEach(d => { if (d.productionLogId===log.id) addD(d); }); (td?.reworkLogs||[]).forEach(r => { if (r.productionLogId===log.id) addR(r); }); }
+            return { first, second };
+          };
+          const buildRow = (log) => {
+            const prodQty = parseFloat(log.goodQuantity)||0;
+            const { first, second } = getSub(log);
+            const sumCols = (map) => TCP_COLS.reduce((a,c) => a+(map[c]||0), 0);
+            const firstBad = sumCols(first), secondBad = sumCols(second);
+            const good = prodQty + secondBad;
+            const eol1Good = prodQty + secondBad - firstBad;
+            const eolFinGood = firstBad - secondBad, eolFinBad = secondBad;
+            const input1 = eol1Good + firstBad;
+            const ftfrRate = input1 > 0 ? (firstBad/input1*100) : 0;
+            const finRate = input1 > 0 ? (eolFinBad/input1*100) : 0;
+            return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second };
+          };
+          const logs = (td.productionLogs||[]).filter(l => (l.section||'TCP')==='TCP' && (l.lineName==='1PC'||l.lineName==='2PC') && inR(l));
+          const groups = {};
+          logs.forEach(l => { const it = l.item || '(미지정)'; (groups[it]=groups[it]||[]).push(l); });
+          const items = Object.keys(groups).sort((a,b) => a.localeCompare(b,'ko'));
+          const fd2 = (ds) => { const d = new Date(ds); if (isNaN(d)) return ds||''; return `${String(d.getMonth()+1).padStart(2,'0')}월 ${String(d.getDate()).padStart(2,'0')}일`; };
+          const specs = [];
+          for (const item of items) {
+            const rows = groups[item].slice().sort((a,b) => (a.productionDate<b.productionDate?-1:a.productionDate>b.productionDate?1:(a.shift||'').localeCompare(b.shift||''))).map(buildRow);
+            const dataRows = rows.map(r => [ fd2(r.log.productionDate), r.log.shift||'', item, lotFtfrNotes[r.log.id]||'',
+              r.good, r.input1, r.eol1Good, r.eol1Bad, r.ftfrRate/100, r.eolFinGood, r.eolFinBad, r.finRate/100,
+              ...TCP_COLS.map(c => r.first[c]||0), ...TCP_COLS.map(c => r.second[c]||0) ]);
+            if (dataRows.length) specs.push({ baseSheet: 'GM11.5 Data', sheetName: item, startRow: 4, maxCol: 20, dataRows });
+          }
+          if (specs.length === 0) { alert('해당 기간에 출력할 TCP Lot & FTFR 데이터가 없습니다.'); return; }
+          await qprmMultiExport(specs, `QPRM_TCP_${ymd}.xlsx`);
+          return;
+        }
+        // ---------- FE: UCC + LVS 시트 → 파일 1개 ----------
+        if (which === 'fe') {
+          if (!fdat) { alert('FE 데이터가 없습니다.'); return; }
+          const specs = [];
+          {
+            const M_COLS = ['Leak','Flow'], U_COLS = ['Re-Open','Closing Angle','Leak'];
+            const classifyUcc = (entry, kind) => {
+              const cand = kind==='d' ? [entry.defectSubType,entry.subType,entry.defectType] : [entry.reworkSubType,entry.subType,entry.reworkType];
+              const st = qnorm(entry.station); let stage = null;
+              if (st.includes('flvv')) stage = 'M'; else if (st.includes('eol')) stage = 'U'; else return null;
+              for (const raw of cand) { if (!raw) continue; const t = qnorm(raw);
+                if (stage==='M') { if (t.includes('leak')) return {stage,col:'Leak'}; if (t.includes('flow')) return {stage,col:'Flow'}; }
+                else { if (t.includes('open')) return {stage,col:'Re-Open'}; if (t.includes('angle')||t.includes('clos')) return {stage,col:'Closing Angle'}; if (t.includes('leak')) return {stage,col:'Leak'}; } }
+              return null;
+            };
+            const uccLogs = (fdat.productionLogs||[]).filter(l => (l.section||'FE')==='FE' && qnorm(l.lineName).includes('ucc') && inR(l));
+            const byDate = {}; const idToDate = {};
+            uccLogs.forEach(l => { const d = (l.productionDate||'').slice(0,10); if (!byDate[d]) byDate[d] = {date:d,good:0,mFirst:{},mFin:{},uFirst:{},uFin:{}}; byDate[d].good += parseFloat(l.goodQuantity)||0; idToDate[l.id]=d; });
+            (fdat.defectLogs||[]).forEach(dl => { const d = idToDate[dl.productionLogId]; if (!d) return; const c = classifyUcc(dl,'d'); if (!c) return; const q = parseFloat(dl.quantity)||0; if (!q) return; const row = byDate[d]; if (c.stage==='M') row.mFin[c.col]=(row.mFin[c.col]||0)+q; else row.uFin[c.col]=(row.uFin[c.col]||0)+q; });
+            (fdat.reworkLogs||[]).forEach(rl => { const d = idToDate[rl.productionLogId]; if (!d) return; const c = classifyUcc(rl,'r'); if (!c) return; const q = parseFloat(rl.quantity)||0; if (!q) return; const row = byDate[d]; if (c.stage==='M') row.mFirst[c.col]=(row.mFirst[c.col]||0)+q; else row.uFirst[c.col]=(row.uFirst[c.col]||0)+q; });
+            const sum = (map, cols) => cols.reduce((a,c) => a+(map[c]||0), 0);
+            const uccRows = Object.values(byDate).sort((a,b) => a.date<b.date?-1:1).map(r => { const modGood = parseFloat(lotFtfrNotes[`uccmod|${r.date}`])||0; return {...r, modGood, modInput: modGood+sum(r.mFin,M_COLS), uccInput: r.good+sum(r.uFin,U_COLS)}; });
+            if (uccRows.length) {
+              const fr = (n,d) => d>0 ? n/d : 0;
+              const dataRows = uccRows.map(r => [ new Date(r.date+'T00:00:00'), r.modInput, r.modGood,
+                r.mFirst['Leak']||0, r.mFirst['Flow']||0, r.mFin['Leak']||0, r.mFin['Flow']||0, r.uccInput, r.good,
+                r.uFirst['Re-Open']||0, r.uFirst['Closing Angle']||0, r.uFirst['Leak']||0, r.uFin['Re-Open']||0, r.uFin['Closing Angle']||0, r.uFin['Leak']||0,
+                lotFtfrNotes[`uccnote|${r.date}`]||'', '',
+                fr(r.mFirst['Leak']||0,r.modInput), fr(r.mFirst['Flow']||0,r.modInput), fr(r.mFin['Leak']||0,r.modInput), fr(r.mFin['Flow']||0,r.modInput),
+                fr(r.uFirst['Re-Open']||0,r.uccInput), fr(r.uFirst['Closing Angle']||0,r.uccInput), fr(r.uFirst['Leak']||0,r.uccInput),
+                fr(r.uFin['Re-Open']||0,r.uccInput), fr(r.uFin['Closing Angle']||0,r.uccInput), fr(r.uFin['Leak']||0,r.uccInput) ]);
+              specs.push({ baseSheet: 'UCC Data', sheetName: 'UCC Data', startRow: 5, maxCol: 28, dataRows });
+            }
+          }
+          {
+            const G_COLS = ['Leak','Flow','Re-open'];
+            const lvsStage = (station) => { const st = qnorm(station); if (st.includes('gvv')) return 'G'; if (st.includes('융착')||st.includes('welding')) return 'W'; if (st.includes('final')) return 'F'; return null; };
+            const lvsCol = (entry, kind) => { const cand = kind==='d' ? [entry.defectSubType,entry.subType,entry.defectType] : [entry.reworkSubType,entry.subType,entry.reworkType]; for (const raw of cand) { if (!raw) continue; const t = qnorm(raw); if (t.includes('open')) return 'Re-open'; if (t.includes('flow')) return 'Flow'; if (t.includes('leak')) return 'Leak'; } return null; };
+            const lvsLogs = (fdat.productionLogs||[]).filter(l => (l.section||'FE')==='FE' && qnorm(l.lineName).includes('lvs') && inR(l));
+            const byKey = {}; const keyOf = (l) => `${(l.productionDate||'').slice(0,10)}|${l.partNo||''}`; const idToKey = {};
+            lvsLogs.forEach(l => { const k = keyOf(l); if (!byKey[k]) byKey[k] = {date:(l.productionDate||'').slice(0,10),item:l.item||'',partNo:l.partNo||'',good:0,gFirst:{},gFin:{},wFirst:0,wFin:0,fFirst:0,fFin:0}; byKey[k].good += parseFloat(l.goodQuantity)||0; idToKey[l.id]=k; });
+            const addEntry = (entry, kind) => { const k = idToKey[entry.productionLogId]; if (!k) return; const stage = lvsStage(entry.station); if (!stage) return; const q = parseFloat(entry.quantity)||0; if (!q) return; const row = byKey[k];
+              if (stage==='G') { const col = lvsCol(entry,kind); if (!col) return; if (kind==='r') row.gFirst[col]=(row.gFirst[col]||0)+q; else row.gFin[col]=(row.gFin[col]||0)+q; }
+              else if (stage==='W') { const col = lvsCol(entry,kind); if (col!=='Leak') return; if (kind==='r') row.wFirst+=q; else row.wFin+=q; }
+              else { const col = lvsCol(entry,kind); if (col!=='Leak') return; if (kind==='r') row.fFirst+=q; else row.fFin+=q; } };
+            (fdat.defectLogs||[]).forEach(d => addEntry(d,'d')); (fdat.reworkLogs||[]).forEach(r => addEntry(r,'r'));
+            const gSum = (map) => G_COLS.reduce((a,c) => a+(map[c]||0), 0);
+            const lvsRows = Object.values(byKey).sort((a,b) => a.date<b.date?-1:a.date>b.date?1:(a.partNo||'').localeCompare(b.partNo||'')).map(r => ({...r, input: r.good+gSum(r.gFin)+r.wFin+r.fFin}));
+            if (lvsRows.length) {
+              const dataRows = lvsRows.map((r,i) => { const n = 4+i; return [ '', new Date(r.date+'T00:00:00'), r.item, r.partNo,
+                { formula: `F${n}+J${n}+L${n}+N${n}+K${n}+P${n}` }, r.good,
+                r.gFirst['Leak']||0, r.gFirst['Flow']||0, r.gFirst['Re-open']||0, r.gFin['Leak']||0, r.gFin['Flow']||0, r.gFin['Re-open']||0,
+                r.wFirst, r.wFin, r.fFirst, r.fFin, lotFtfrNotes[`lvsnote|${r.date}|${r.partNo}`]||'', '',
+                { formula: `G${n}/E${n}` }, { formula: `H${n}/E${n}` }, { formula: `I${n}/E${n}` }, { formula: `J${n}/E${n}` }, { formula: `K${n}/E${n}` }, { formula: `L${n}/E${n}` }, { formula: `M${n}/E${n}` }, { formula: `N${n}/F${n}` } ]; });
+              specs.push({ baseSheet: 'LVS Data', sheetName: 'LVS Data', startRow: 4, maxCol: 26, dataRows });
+            }
+          }
+          if (specs.length === 0) { alert('해당 기간에 출력할 FE Lot & FTFR 데이터가 없습니다.'); return; }
+          await qprmMultiExport(specs, `QPRM_FE_${ymd}.xlsx`);
+          return;
+        }
+      };
+
       const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
       const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
       const today = new Date().toISOString().split('T')[0];
@@ -12912,6 +13071,27 @@
                         </p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Lot & FTFR (QPRM 양식) 엑셀 카드 */}
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                    <div className="flex items-center gap-3 mb-1">
+                      <span className="text-3xl">📦</span>
+                      <h2 className="text-2xl font-bold text-slate-800">Lot & FTFR 엑셀 (QPRM 양식)</h2>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-4">선택한 <b>{exportYear}년 {exportMonth}월</b> 전체 기간에 대해 QPRM 보고 양식 엑셀을 내려받습니다. <b>TCP는 파일 1개에 아이템별 시트</b>, <b>FE는 파일 1개에 UCC·LVS 시트</b>로 만들어집니다. 템플릿 서식(병합·색·헤더)을 그대로 채웁니다.</p>
+                    {(() => {
+                      const lastDay = new Date(exportYear, exportMonth, 0).getDate();
+                      const from = `${exportYear}-${String(exportMonth).padStart(2,'0')}-01`;
+                      const to = `${exportYear}-${String(exportMonth).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => buildQprmExports(from, to, 'tcp')} disabled={!tcpData} className="px-5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:bg-slate-300 text-white text-sm font-bold flex items-center gap-2">📥 TCP (아이템별 시트)</button>
+                          <button onClick={() => buildQprmExports(from, to, 'fe')} disabled={!feData} className="px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white text-sm font-bold flex items-center gap-2">📥 FE (UCC·LVS 시트)</button>
+                        </div>
+                      );
+                    })()}
+                    <p className="text-xs text-slate-400 mt-3">※ 비고·모듈 양품수량 등 Lot & FTFR 탭에서 입력한 값이 그대로 반영됩니다. 파일명: QPRM_TCP_YYYYMMDD.xlsx / QPRM_FE_YYYYMMDD.xlsx</p>
                   </div>
 
                   {/* PPT 월간 보고서 카드 */}
