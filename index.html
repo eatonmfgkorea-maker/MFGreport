@@ -1710,7 +1710,8 @@
       const [dtViewMode, setDtViewMode] = useState('all'); // 'all' | 'detail'
       const [dtTypeFilter, setDtTypeFilter] = useState('ALL'); // 세부: 선택 유형
       const [dtSearch, setDtSearch] = useState(''); // 내용 검색
-      const [dtColFilters, setDtColFilters] = useState({}); // {date,line,partNo,shift,workers} → 선택 배열
+      const [dtColFilters, setDtColFilters] = useState({}); // {date,line,item,partNo,shift,workers} → 선택 배열
+      const [dtItemFilter, setDtItemFilter] = useState(['ALL']); // 세부: 아이템 다중 선택
       const [whYear, setWhYear] = useState(new Date().getFullYear());
       const [whSection, setWhSection] = useState('TCP');
       const [whSelectedLines, setWhSelectedLines] = useState(['ALL']);
@@ -5604,6 +5605,7 @@
                 return {
                   date: log.productionDate,
                   line: resolveLineName(dtSection, log.lineName),
+                  item: log.item || '-',
                   partNo: log.partNo || '-',
                   shift: log.shift || '-',
                   workers: wc,
@@ -5622,16 +5624,20 @@
               })();
               // 유형 필터 적용
               const typeFilteredRows = dtTypeFilter === 'ALL' ? allDtRows : allDtRows.filter(r => r.type === dtTypeFilter);
+              // 아이템(품명) 목록 — 세부 좌측 아이템 필터용
+              const dtItemOptions = Array.from(new Set(allDtRows.map(r => r.item))).sort((a,b) => a.localeCompare(b, 'ko'));
+              const itemFilteredRows = (dtItemFilter.includes('ALL') || dtItemFilter.length === 0) ? typeFilteredRows : typeFilteredRows.filter(r => dtItemFilter.includes(r.item));
               // 열 필터 고유값
-              const uniqVals = (key) => Array.from(new Set(typeFilteredRows.map(r => String(r[key])))).sort((a,b) => {
+              const uniqVals = (key) => Array.from(new Set(itemFilteredRows.map(r => String(r[key])))).sort((a,b) => {
                 if (key === 'workers') return Number(a) - Number(b);
                 return a.localeCompare(b, 'ko');
               });
               const colFilterActive = (key, val) => { const sel = dtColFilters[key]; return !sel || sel.length === 0 || sel.includes(val); };
               const searchLower = dtSearch.trim().toLowerCase();
-              const detailRows = typeFilteredRows.filter(r => {
+              const detailRows = itemFilteredRows.filter(r => {
                 if (!colFilterActive('date', String(r.date))) return false;
                 if (!colFilterActive('line', String(r.line))) return false;
+                if (!colFilterActive('item', String(r.item))) return false;
                 if (!colFilterActive('partNo', String(r.partNo))) return false;
                 if (!colFilterActive('shift', String(r.shift))) return false;
                 if (!colFilterActive('workers', String(r.workers))) return false;
@@ -5702,6 +5708,29 @@
                         ))}
                       </div>
                     </div>
+                    {dtViewMode === 'detail' && (
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm">아이템</div>
+                        <div className="p-3 space-y-1.5 max-h-64 overflow-y-auto">
+                          <label className="flex items-center gap-2 text-xs cursor-pointer">
+                            <input type="checkbox" checked={dtItemFilter.includes('ALL')} onChange={(e) => setDtItemFilter(e.target.checked ? ['ALL'] : [])} className="accent-indigo-600" />
+                            <span className="font-bold">모두 선택</span>
+                          </label>
+                          {dtItemOptions.map(it => (
+                            <label key={it} className="flex items-center gap-2 text-xs cursor-pointer">
+                              <input type="checkbox" checked={dtItemFilter.includes('ALL') || dtItemFilter.includes(it)} onChange={() => {
+                                setDtItemFilter(prev => {
+                                  if (prev.includes('ALL')) return dtItemOptions.filter(x => x !== it);
+                                  if (prev.includes(it)) { const n = prev.filter(x => x !== it); return n.length === 0 ? ['ALL'] : n; }
+                                  const n = [...prev, it]; return n.length === dtItemOptions.length ? ['ALL'] : n;
+                                });
+                              }} className="accent-indigo-600" />
+                              <span className="truncate">{it}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0 space-y-3">
@@ -5904,6 +5933,7 @@
                                     {colHeader('date','날짜')}
                                     {colHeader('line','라인')}
                                     {colHeader('partNo','Part No')}
+                                    {colHeader('item','품명')}
                                     {colHeader('shift','주야')}
                                     {colHeader('workers','인원')}
                                     <th className="px-2 py-2 border text-center text-xs font-bold text-slate-600">비가동(분)<br/><span className="text-[10px] font-normal text-slate-400">실제</span></th>
@@ -5913,12 +5943,13 @@
                                 </thead>
                                 <tbody>
                                   {detailRows.length === 0 ? (
-                                    <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-400 border">조건에 맞는 비가동 내역이 없습니다</td></tr>
+                                    <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400 border">조건에 맞는 비가동 내역이 없습니다</td></tr>
                                   ) : detailRows.map((r, i) => (
                                     <tr key={i} className="hover:bg-slate-50/60">
                                       <td className="px-2 py-1.5 border text-center text-slate-600">{fmtDate(r.date)}</td>
                                       <td className="px-2 py-1.5 border text-center text-slate-600">{r.line}</td>
                                       <td className="px-2 py-1.5 border text-center text-slate-500 text-xs">{r.partNo}</td>
+                                      <td className="px-2 py-1.5 border text-center text-slate-600 text-xs">{r.item}</td>
                                       <td className="px-2 py-1.5 border text-center text-slate-600">{r.shift}</td>
                                       <td className="px-2 py-1.5 border text-center text-slate-600">{r.workers}</td>
                                       <td className="px-2 py-1.5 border text-center font-semibold text-slate-800">{Math.round(r.realMin).toLocaleString()}</td>
@@ -5929,7 +5960,7 @@
                                 </tbody>
                                 <tfoot>
                                   <tr className="bg-indigo-50 font-bold border-t-2 border-indigo-200">
-                                    <td colSpan={5} className="px-2 py-2 border text-right text-indigo-900">검색 결과 {detailRows.length}건 · 비가동 총합</td>
+                                    <td colSpan={6} className="px-2 py-2 border text-right text-indigo-900">검색 결과 {detailRows.length}건 · 비가동 총합</td>
                                     <td className="px-2 py-2 border text-center text-indigo-900">{Math.round(detailTotalReal).toLocaleString()}<div className="text-[10px] font-normal text-indigo-500">분(실제)</div></td>
                                     <td className="px-2 py-2 border text-center text-indigo-700">{Math.round(detailTotalMin).toLocaleString()}<div className="text-[10px] font-normal text-indigo-500">분(공수)</div></td>
                                     <td className="px-2 py-2 border"></td>
