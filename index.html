@@ -31,6 +31,7 @@
   const PORTAL_URL = 'https://eatonmfgkorea-maker.github.io/MFGManagement/';
   
   function isAuthed() {
+    if (localStorage.getItem('mfg_guest') === '1') return true;
     const token = localStorage.getItem('mfg_auth_token');
     const expiry = parseInt(localStorage.getItem('mfg_auth_expiry') || '0');
     return token && Date.now() < expiry;
@@ -57,6 +58,8 @@
         <input id="mfgAuthPassword" type="password" autocomplete="current-password" placeholder="••••••••" style="width:100%;padding:0.625rem 1rem;background:#1e293b;border:1px solid #334155;border-radius:0.5rem;color:#fff;outline:none;font-size:1rem;margin-bottom:1rem;box-sizing:border-box;" />
         <div id="mfgAuthError" style="display:none;font-size:0.875rem;color:#f87171;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:0.5rem;padding:0.5rem 0.75rem;margin-bottom:1rem;"></div>
         <button id="mfgAuthBtn" style="width:100%;padding:0.625rem;background:#2563eb;color:#fff;font-weight:600;border:none;border-radius:0.5rem;cursor:pointer;font-size:1rem;">로그인</button>
+        <button id="mfgGuestBtn" style="width:100%;padding:0.625rem;margin-top:0.625rem;background:transparent;color:#cbd5e1;font-weight:600;border:1px solid #334155;border-radius:0.5rem;cursor:pointer;font-size:0.95rem;">게스트로 둘러보기</button>
+        <p style="font-size:0.75rem;color:#64748b;text-align:center;margin-top:0.5rem;margin-bottom:0;">게스트는 일부 화면만 조회할 수 있습니다</p>
         <div style="margin-top:1rem;text-align:center;">
           <a href="${PORTAL_URL}" style="font-size:0.875rem;color:#94a3b8;text-decoration:none;">← 메인 포털로 돌아가기</a>
         </div>
@@ -113,6 +116,15 @@
     btnEl.addEventListener('click', doLogin);
     pwdEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') doLogin(); });
     userIdEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') pwdEl.focus(); });
+
+    // 게스트 진입 — GAS 호출 없이 제한 모드로 입장
+    const guestBtn = document.getElementById('mfgGuestBtn');
+    if (guestBtn) guestBtn.addEventListener('click', () => {
+      localStorage.setItem('mfg_guest', '1');
+      localStorage.setItem('mfg_auth_user', 'guest');
+      document.getElementById('mfgAuthOverlay').remove();
+      document.body.style.overflow = '';
+    });
   }
   
   if (document.readyState === 'loading') {
@@ -172,10 +184,20 @@
         return arr;
       }, [tcpData, feData]);
 
-      // 필터 적용된 로그
+      // 필터 적용된 로그 — 핵심 라인만 검사 (TCP: 1PC/2PC/Nospin, FE: ATV 제외)
+      const includeValidLine = (l) => {
+        if (l.section === 'TCP') return ['1PC','2PC','Nospin'].includes(l.lineName);
+        if (l.section === 'FE') {
+          const ln = String(l.lineName || '').replace(/\s+/g,'').toLowerCase();
+          if (ln === 'atv') return false;
+          return true;
+        }
+        return true;
+      };
       const filteredLogs = useMemo(() => {
         return allLogs.filter(l => {
           if (!l.productionDate) return false;
+          if (!includeValidLine(l)) return false;
           if (dateFrom && l.productionDate < dateFrom) return false;
           if (dateTo && l.productionDate > dateTo) return false;
           return true;
@@ -1334,6 +1356,7 @@
       const [expandedLotRows, setExpandedLotRows] = useState({});
       const toggleLotRow = (key) => setExpandedLotRows(prev => ({ ...prev, [key]: !prev[key] }));
       const updateLotFtfrNote = (key, value) => {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1') return; // 게스트는 입력 불가
         setLotFtfrNotes(prev => {
           const next = { ...prev };
           if (value === '' || value === undefined || value === null) delete next[key];
@@ -3397,6 +3420,18 @@
         { id: 'export',    icon: '📤', label: '데이터 출력' },
       ];
 
+      // ===== 게스트 모드: 허용된 탭만 노출 =====
+      const isGuest = (typeof localStorage !== 'undefined') && localStorage.getItem('mfg_guest') === '1';
+      // 게스트가 볼 수 있는 탭 id 목록 (여기서 조정)
+      const GUEST_TABS = ['dashboard', 'oee', 'oeedetail', 'quantity', 'defect', 'rework', 'tool', 'lotftfr'];
+      const visibleTabs = isGuest ? TABS.filter(t => GUEST_TABS.includes(t.id)) : TABS;
+      // 게스트가 허용 안 된 탭에 있으면 첫 허용 탭으로 이동
+      React.useEffect(() => {
+        if (isGuest && !GUEST_TABS.includes(activeTab)) {
+          setActiveTab(visibleTabs[0]?.id || 'dashboard');
+        }
+      }, [isGuest, activeTab]);
+
       return (
         <div className="min-h-screen flex bg-slate-50">
           {/* Sidebar */}
@@ -3431,7 +3466,7 @@
                     }
                   });
                 } catch {}
-                return TABS.map(tab => {
+                return visibleTabs.map(tab => {
                   const isActive = activeTab === tab.id;
                   const hasAlert = (tab.id === 'defect' && alerts.defect) || (tab.id === 'oee' && alerts.oee);
                   return (
@@ -3482,6 +3517,13 @@
           <main className="flex-1 min-w-0 overflow-x-auto">
             <div className="px-6 py-5 mx-auto" style={{maxWidth: '1400px'}}>
               <div className="mb-5">
+                {isGuest && (
+                  <div className="mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+                    <span className="text-sm text-amber-800 font-medium">👤 게스트 모드 — 일부 화면만 조회할 수 있습니다</span>
+                    <button onClick={() => { localStorage.removeItem('mfg_guest'); localStorage.removeItem('mfg_auth_user'); location.reload(); }}
+                      className="text-xs px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-100 font-semibold">로그인하기</button>
+                  </div>
+                )}
                 <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
                   {TABS.find(t => t.id === activeTab)?.label || 'Dashboard'}
                 </h1>
@@ -4244,7 +4286,7 @@
                           <React.Fragment key={line}>
                             <tr className="border-t border-slate-200 hover:bg-slate-50">
                               <td className="px-3 py-2">
-                                <button onClick={() => setExpandedLines({...expandedLines, [line]: !expandedLines[line]})} className="w-5 h-5 border border-slate-400 rounded text-xs font-bold flex items-center justify-center">{expandedLines[line] ? '−' : '+'}</button>
+                                {!isGuest && <button onClick={() => setExpandedLines({...expandedLines, [line]: !expandedLines[line]})} className="w-5 h-5 border border-slate-400 rounded text-xs font-bold flex items-center justify-center">{expandedLines[line] ? '−' : '+'}</button>}
                               </td>
                               <td className="px-3 py-2 font-bold text-right text-base">{LINE_ALIAS[line] || line}</td>
                               <td className="px-3 py-2 text-right">{Math.round(d.totalQty).toLocaleString()}</td>
@@ -4381,6 +4423,7 @@
               const grandTotal = aggregateContribs(logs);
 
               const Gauge = ({ label, value, color, onClick }) => {
+                if (isGuest) onClick = undefined; // 게스트는 드릴다운 비활성화
                 const displayValue = Math.max(0, value); // 텍스트 표시 (캡 없음)
                 const pct = Math.max(0, Math.min(100, value)); // 호 그리기용 (시각적 한계)
                 const r = 70, cx = 90, cy = 90;
@@ -4525,7 +4568,7 @@
                               <React.Fragment key={sec}>
                                 <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
                                   <td className="px-2 py-2 text-center">
-                                    <button onClick={() => setOdExpanded({...odExpanded, [sec]: !expanded})} className="w-5 h-5 border border-slate-400 rounded text-xs font-bold flex items-center justify-center mx-auto">{expanded ? '−' : '+'}</button>
+                                    {!isGuest && <button onClick={() => setOdExpanded({...odExpanded, [sec]: !expanded})} className="w-5 h-5 border border-slate-400 rounded text-xs font-bold flex items-center justify-center mx-auto">{expanded ? '−' : '+'}</button>}
                                   </td>
                                   <td className="px-3 py-2">{sec}</td>
                                   <td className="px-3 py-2 text-right">{Math.round(d.agg.totalQty).toLocaleString()}</td>
@@ -4554,10 +4597,10 @@
                                     <td className="px-3 py-1.5 text-right">{iAgg.A.toFixed(1)}%</td>
                                     <td className="px-3 py-1.5 text-right">{iAgg.P.toFixed(1)}%</td>
                                     <td className="px-3 py-1.5 text-right">{iAgg.Q.toFixed(1)}%</td>
-                                    <td className="px-3 py-1.5 text-right text-indigo-600 font-bold cursor-pointer hover:bg-indigo-50 underline decoration-dotted" onClick={() => {
+                                    <td className={`px-3 py-1.5 text-right text-indigo-600 font-bold ${isGuest ? '' : 'cursor-pointer hover:bg-indigo-50 underline decoration-dotted'}`} onClick={isGuest ? undefined : () => {
                                       const itemLogs = logs.filter(l => l.section === sec && l.item === it);
                                       setOdDrillModal({ stage: 1, sec, item: it, logs: itemLogs, singleLog: null });
-                                    }} title="클릭하여 상세 분석">{iAgg.OEE.toFixed(1)}%</td>
+                                    }} title={isGuest ? undefined : "클릭하여 상세 분석"}>{iAgg.OEE.toFixed(1)}%</td>
                                   </tr>
                                 ))}
                               </React.Fragment>
@@ -10877,7 +10920,7 @@
                                       <td className={TD+" bg-green-50/30 px-1"}>{r.fFirst}</td>
                                       <td className={TD+" bg-green-50/30 px-1 text-rose-600 font-semibold"}>{r.fFin}</td>
                                       <td className={TD+" text-left"}>
-                                        <input type="text" defaultValue={lotFtfrNotes[nk] || ''} key={'ln-'+nk+'-'+(lotFtfrNotes[nk]||'')} onBlur={(e) => updateLotFtfrNote(nk, e.target.value)} placeholder="비고" className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
+                                        <input type="text" defaultValue={lotFtfrNotes[nk] || ''} key={'ln-'+nk+'-'+(lotFtfrNotes[nk]||'')} onBlur={(e) => updateLotFtfrNote(nk, e.target.value)} disabled={isGuest} placeholder={isGuest?'-':'비고'} className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
                                       </td>
                                       {G_COLS.map(c => <td key={'rgf'+c} className={TD+" px-1"}>{pct(r.gFirst[c]||0, r.input)}</td>)}
                                       {G_COLS.map(c => <td key={'rgn'+c} className={TD+" px-1 font-semibold"}>{pct(r.gFin[c]||0, r.input)}</td>)}
@@ -11053,7 +11096,7 @@
                                   <td className={TD+" font-medium sticky bg-white z-10"} style={{left: 0, minWidth: 64}}>{fmtD(r.date)}</td>
                                   <td className={TD+" font-semibold"}>{r.modInput.toLocaleString()}</td>
                                   <td className={TD+" bg-yellow-50/50"}>
-                                    <input type="number" defaultValue={lotFtfrNotes[`uccmod|${r.date}`] || ''} key={'um-'+r.date+'-'+(lotFtfrNotes[`uccmod|${r.date}`]||'')} onBlur={(e) => updateLotFtfrNote(`uccmod|${r.date}`, e.target.value)} placeholder="입력" className="w-20 px-1.5 py-1 border border-amber-200 rounded text-xs text-right focus:border-amber-400 focus:outline-none" />
+                                    <input type="number" defaultValue={lotFtfrNotes[`uccmod|${r.date}`] || ''} key={'um-'+r.date+'-'+(lotFtfrNotes[`uccmod|${r.date}`]||'')} onBlur={(e) => updateLotFtfrNote(`uccmod|${r.date}`, e.target.value)} disabled={isGuest} placeholder={isGuest?'-':'입력'} className="w-20 px-1.5 py-1 border border-amber-200 rounded text-xs text-right focus:border-amber-400 focus:outline-none" />
                                   </td>
                                   {M_COLS.map(c => <td key={'mf'+c} className={TD+" bg-green-50/30 px-1"}>{r.mFirst[c]||0}</td>)}
                                   {M_COLS.map(c => <td key={'mn'+c} className={TD+" bg-green-50/30 px-1 text-rose-600 font-semibold"}>{r.mFin[c]||0}</td>)}
@@ -11062,7 +11105,7 @@
                                   {U_COLS.map(c => <td key={'uf'+c} className={TD+" bg-blue-50/30 px-1"}>{r.uFirst[c]||0}</td>)}
                                   {U_COLS.map(c => <td key={'un'+c} className={TD+" bg-yellow-50/40 px-1 text-rose-600 font-semibold"}>{r.uFin[c]||0}</td>)}
                                   <td className={TD+" text-left"}>
-                                    <input type="text" defaultValue={lotFtfrNotes[`uccnote|${r.date}`] || ''} key={'un-'+r.date+'-'+(lotFtfrNotes[`uccnote|${r.date}`]||'')} onBlur={(e) => updateLotFtfrNote(`uccnote|${r.date}`, e.target.value)} placeholder="변경사항" className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
+                                    <input type="text" defaultValue={lotFtfrNotes[`uccnote|${r.date}`] || ''} key={'un-'+r.date+'-'+(lotFtfrNotes[`uccnote|${r.date}`]||'')} onBlur={(e) => updateLotFtfrNote(`uccnote|${r.date}`, e.target.value)} disabled={isGuest} placeholder={isGuest?'-':'변경사항'} className="w-28 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
                                   </td>
                                   {M_COLS.map(c => <td key={'rmf'+c} className={TD+" px-1"}>{pct(r.mFirst[c]||0, r.modInput)}</td>)}
                                   {M_COLS.map(c => <td key={'rmn'+c} className={TD+" px-1 font-semibold"}>{pct(r.mFin[c]||0, r.modInput)}</td>)}
@@ -11235,7 +11278,7 @@
                                       <td className={TD+" bg-indigo-50/20 text-[11px] text-slate-400"}>{r.lots.length ? `${r.lots.length}건` : '—'}</td>
                                     )}
                                     <td className={TD+" text-left"}>
-                                      <input type="text" defaultValue={lotFtfrNotes[lid] || ''} key={'note-'+lid+'-'+(lotFtfrNotes[lid]||'')} onBlur={(e) => updateLotFtfrNote(lid, e.target.value)} placeholder="비고 입력" className="w-32 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
+                                      <input type="text" defaultValue={lotFtfrNotes[lid] || ''} key={'note-'+lid+'-'+(lotFtfrNotes[lid]||'')} onBlur={(e) => updateLotFtfrNote(lid, e.target.value)} disabled={isGuest} placeholder={isGuest?'-':'비고 입력'} className="w-32 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
                                     </td>
                                     <td className={TD+" font-semibold"}>{r.good.toLocaleString()}</td>
                                     <td className={TD+" bg-sky-50/40"}>{r.eol1Good.toLocaleString()}</td>
