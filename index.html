@@ -1599,6 +1599,35 @@
           return next;
         });
       };
+      // ── UCC 모듈수량 통합: 생산실적 탭과 Lot&FTFR 탭이 같은 값을 공유 ──
+      // 날짜 기준으로 moduleQuantities 와 lotFtfrNotes['uccmod|date'] 양쪽에 동시 기록/조회
+      const getUccModule = (date) => {
+        const a = parseFloat(moduleQuantities[date]);
+        if (!isNaN(a) && a > 0) return a;
+        const b = parseFloat(lotFtfrNotes[`uccmod|${date}`]);
+        if (!isNaN(b) && b > 0) return b;
+        return 0;
+      };
+      const setUccModule = (date, value) => {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1') return;
+        const n = parseFloat(value);
+        const valid = !isNaN(n) && n > 0;
+        // 1) moduleQuantities (날짜 키)
+        setModuleQuantities(prev => {
+          const next = { ...prev };
+          if (valid) next[date] = n; else delete next[date];
+          try { localStorage.setItem('mfg_module_quantities', JSON.stringify(next)); } catch {}
+          return next;
+        });
+        // 2) lotFtfrNotes['uccmod|date']
+        setLotFtfrNotes(prev => {
+          const next = { ...prev };
+          const key = `uccmod|${date}`;
+          if (valid) next[key] = String(n); else delete next[key];
+          try { localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
       // UCC 접기/펴기
       const [uccCollapsed, setUccCollapsed] = useState(false);
       
@@ -9041,7 +9070,7 @@
                     html += `<tr><td><b>${label}</b></td>`;
                     dateRange.forEach(d => {
                       const v = ucc[d];
-                      const moduleQ = moduleQuantities[d] || 0;
+                      const moduleQ = getUccModule(d) || 0;
                       let cellVal = '';
                       if (label === '생산수량(개)') cellVal = v.good > 0 ? Math.round(v.good).toLocaleString() : '';
                       else if (label === 'Module 수량(개)') cellVal = moduleQ > 0 ? Math.round(moduleQ).toLocaleString() : '';
@@ -9217,8 +9246,8 @@
                       
                       data.forEach(g => {
                         g.rows.forEach((r, ri) => {
-                          const mqKey = `${g.date}|${g.shift}|${r.item}`;
-                          const mqRow = isUcc ? (moduleQuantities[mqKey] || 0) : 0;
+                          const mqKey = g.date;
+                          const mqRow = isUcc ? getUccModule(g.date) : 0;
                           const isFirstRow = ri === 0;
                           const row = [];
                           if (isFirstRow) {
@@ -9343,7 +9372,7 @@
                       const row = { '구분': label };
                       dateRange.forEach(dt => {
                         const v = d[dt];
-                        const moduleQ = moduleQuantities[dt] || 0;
+                        const moduleQ = getUccModule(dt) || 0;
                         let val = '';
                         if (label === '생산수량(개)') val = v.good > 0 ? Math.round(v.good) : '';
                         else if (label === 'Module 수량(개)') val = moduleQ > 0 ? Math.round(moduleQ) : '';
@@ -10069,10 +10098,8 @@
                           return acc;
                         }, { good:0, opr1st:0, ovr1st:0, flvv1st:0, eol1st:0, swapCount:0, swapMins:0, normalMins:0 });
                         let totalModuleQ = 0;
-                        data.forEach(g => g.rows.forEach(r => {
-                          const k = `${g.date}|${g.shift}|${r.item}`;
-                          totalModuleQ += moduleQuantities[k] || 0;
-                        }));
+                        const seenMqDates = new Set();
+                        data.forEach(g => { if (!seenMqDates.has(g.date)) { seenMqDates.add(g.date); totalModuleQ += getUccModule(g.date) || 0; } });
                         
                         const colSpanNoTotal = isUcc ? (isCollapsed ? 9 : 12) : 11;
                         const noteColSpan = isUcc ? (isCollapsed ? 7 : 10) : 9;
@@ -10148,8 +10175,8 @@
                                       if (isFirstRow && isDayChange) trClass = 'border-t-2 border-t-slate-500';
                                       else if (isFirstRow && isShiftChange) trClass = 'border-t border-t-slate-300 border-dashed';
                                       const note = prodReportNotes[r.noteKey] || '';
-                                      const mqKey = `${g.date}|${g.shift}|${r.item}`;
-                                      const mqRow = isUcc ? (moduleQuantities[mqKey] || 0) : 0;
+                                      const mqKey = g.date;
+                                      const mqRow = isUcc ? getUccModule(g.date) : 0;
                                       
                                       out.push(
                                         <tr key={`${gi}-${ri}`} className={trClass}>
@@ -10175,7 +10202,7 @@
                                                 value={mqRow > 0 ? mqRow.toLocaleString() : ''}
                                                 onChange={(e) => {
                                                   const raw = e.target.value.replace(/,/g, '');
-                                                  if (raw === '' || /^\d+$/.test(raw)) updateModuleQty(mqKey, raw === '' ? 0 : parseInt(raw, 10));
+                                                  if (raw === '' || /^\d+$/.test(raw)) setUccModule(g.date, raw === '' ? 0 : parseInt(raw, 10));
                                                 }}
                                                 className="w-full px-1 py-0.5 text-xs text-center border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-purple-400 rounded font-bold"
                                                 placeholder="-" />
@@ -11096,7 +11123,7 @@
                                   <td className={TD+" font-medium sticky bg-white z-10"} style={{left: 0, minWidth: 64}}>{fmtD(r.date)}</td>
                                   <td className={TD+" font-semibold"}>{r.modInput.toLocaleString()}</td>
                                   <td className={TD+" bg-yellow-50/50"}>
-                                    <input type="number" defaultValue={lotFtfrNotes[`uccmod|${r.date}`] || ''} key={'um-'+r.date+'-'+(lotFtfrNotes[`uccmod|${r.date}`]||'')} onBlur={(e) => updateLotFtfrNote(`uccmod|${r.date}`, e.target.value)} disabled={isGuest} placeholder={isGuest?'-':'입력'} className="w-20 px-1.5 py-1 border border-amber-200 rounded text-xs text-right focus:border-amber-400 focus:outline-none" />
+                                    <input type="number" defaultValue={getUccModule(r.date) || ''} key={'um-'+r.date+'-'+(getUccModule(r.date)||'')} onBlur={(e) => setUccModule(r.date, e.target.value)} disabled={isGuest} placeholder={isGuest?'-':'입력'} className="w-20 px-1.5 py-1 border border-amber-200 rounded text-xs text-right focus:border-amber-400 focus:outline-none" />
                                   </td>
                                   {M_COLS.map(c => <td key={'mf'+c} className={TD+" bg-green-50/30 px-1"}>{r.mFirst[c]||0}</td>)}
                                   {M_COLS.map(c => <td key={'mn'+c} className={TD+" bg-green-50/30 px-1 text-rose-600 font-semibold"}>{r.mFin[c]||0}</td>)}
