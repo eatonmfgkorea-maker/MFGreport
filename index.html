@@ -7595,6 +7595,8 @@
                     if (cmpSection === 'TCP' && !(l.section === 'TCP' && ['1PC','2PC','Nospin'].includes(l.lineName))) return;
                     if (cmpSection === 'FE' && l.section !== 'FE') return;
                     if (cmpSection === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return;
+                    const exItems = (l.section === 'TCP' ? tcpData : feData)?.settings?.[l.section]?.items;
+                    if (Array.isArray(exItems) && exItems.find(i => i.item === l.item)?.excludeFromOEE === true) return;
                     const dl = resolveLineName(cmpSection, l.lineName);
                     if (!effLines.includes(dl)) return;
                     if (l.item) s.add(l.item);
@@ -7605,6 +7607,14 @@
                 return Array.from(s).sort();
               })();
 
+              const cmpIsItemExcluded = (section, itemName) => {
+                if (!itemName) return false;
+                const data = section === 'TCP' ? tcpData : feData;
+                const items = data?.settings?.[section]?.items;
+                if (!Array.isArray(items)) return false;
+                const itemDef = items.find(i => i.item === itemName);
+                return itemDef?.excludeFromOEE === true;
+              };
               const getLogsFor = (year, month) => {
                 return (targetData?.productionLogs || []).filter(l => {
                   const d = new Date(l.productionDate);
@@ -7612,6 +7622,7 @@
                   if (cmpSection === 'TCP' && !(l.section === 'TCP' && ['1PC','2PC','Nospin'].includes(l.lineName))) return false;
                   if (cmpSection === 'FE' && l.section !== 'FE') return false;
                   if (cmpSection === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return false;
+                  if (cmpIsItemExcluded(l.section, l.item)) return false;
                   const dl = resolveLineName(cmpSection, l.lineName);
                   if (!cmpSelectedLines.includes('ALL') && !cmpSelectedLines.includes(dl)) return false;
                   if (!cmpSelectedItems.includes('ALL') && !cmpSelectedItems.includes(l.item)) return false;
@@ -7643,7 +7654,7 @@
               };
 
               const aggLogs = (logArr) => {
-                let lt=0, ot=0, gq=0, df=0, rw=0, exp=0;
+                let lt=0, ot=0, gq=0, df=0, rw=0, exp=0, pt=0, pdt=0, updt=0, bq=0;
                 logArr.forEach(l => {
                   const c = computeLogContribution(l);
                   if (!c) return;
@@ -7653,12 +7664,15 @@
                   df += c.defects || 0;
                   rw += c.rework || 0;
                   exp += c.expectedOutput || 0;
+                  pt += c.productionTime || 0;
+                  pdt += c.plannedDt || 0;
+                  updt += c.unplannedDt || 0;
+                  bq += c.baseQty || 0;
                 });
+                // OEE(상세)와 동일한 공식 엔진 사용 (사용자 정의 산식 반영)
+                const m = computeMetricsFromTotals({ goodQty: gq, defects: df, rework: rw, loadTime: lt, operatingTime: ot, expectedOutput: exp, productionTime: pt, plannedDt: pdt, unplannedDt: updt, baseQty: bq });
                 const totalQ = gq + df;
-                const A = lt > 0 ? Math.min(100, ot/lt*100) : 0;
-                const P = exp > 0 ? gq/exp*100 : 0;
-                const Q = totalQ > 0 ? Math.min(100, (gq-rw)/totalQ*100) : 100;
-                return { lt, ot, gq, df, rw, exp, totalQ, A, P, Q, OEE: A*P*Q/10000 };
+                return { lt, ot, gq, df, rw, exp, totalQ, A: m.A, P: m.P, Q: m.Q, OEE: m.OEE };
               };
 
               const logsA = getLogsFor(cmpAYear, cmpAMonth);
