@@ -1360,84 +1360,38 @@
       
       // ★ FE 생산계획 원본 보존 (라인=중분류 G열 / 품명 / 품번 / 주야 / 일자별 수량)
       //   현장 점검표 앱이 이 원본(fePlanRaw)을 백업에서 읽어 사용합니다. 매핑과 무관하게 전 라인 저장.
-      // ICV 2x2 수량 연립: NEW/Old 합계 + 주간/야간 합계 + 인원배정(runs)로 New/Old×주야 수량 산출
-      const solveIcv = (newT, oldT, dayT, nightT, runs) => {
-        const total = newT + oldT;
-        let nd = runs.newDay ? null : 0, nn = runs.newNight ? null : 0, od = runs.oldDay ? null : 0, on = runs.oldNight ? null : 0;
-        for (let i = 0; i < 5; i++) {
-          if (nd === null && nn !== null) nd = newT - nn; if (nn === null && nd !== null) nn = newT - nd;
-          if (od === null && on !== null) od = oldT - on; if (on === null && od !== null) on = oldT - od;
-          if (nd === null && od !== null) nd = dayT - od; if (od === null && nd !== null) od = dayT - nd;
-          if (nn === null && on !== null) nn = nightT - on; if (on === null && nn !== null) on = nightT - nn;
-        }
-        if (nd === null || nn === null || od === null || on === null) { nd = total > 0 ? newT * dayT / total : 0; nn = newT - nd; od = dayT - nd; on = oldT - nn; }
-        const R = x => Math.max(0, Math.round(x));
-        return { newDay: R(nd), newNight: R(nn), oldDay: R(od), oldNight: R(on) };
-      };
+      // ICV 2x2 수량 연립: 계획검토 합계(NEW/Old/주간/야간)를 '하드 제약'으로, 인원배정(runs)은 힌트로.
+      // 인원이 누락돼도 합계로 역산하여 정확히 분배.
       const parseFePlanRaw = (wb) => {
-        const ws = wb.Sheets['계획검토'];
+        // 생산순서 시트: 주간/야간 섹션별로 라인(B열=대분류)·날짜별 품번/수량이 이미 분리됨 (New ICV / Old ICV 포함)
+        const ws = wb.Sheets['생산순서'];
         if (!ws || !ws['!ref']) return [];
         const range = XLSX.utils.decode_range(ws['!ref']);
-        const dateCols = {};
-        for (let c = 9; c <= range.e.c; c++) {
-          const v = getCell(ws, 4, c);
-          if (typeof v === 'number' && v > 40000) { const ds = excelSerialToDate(v); if (ds) dateCols[c] = ds; }
+        let hdrRow = -1;
+        for (let r = 0; r <= 12 && hdrRow < 0; r++) { for (let c = 0; c <= range.e.c; c++) { const v = getCell(ws, r, c); if (typeof v === 'number' && v > 40000) { hdrRow = r; break; } } }
+        if (hdrRow < 0) return [];
+        const dateAt = {};
+        for (let c = 0; c <= range.e.c; c++) { const v = getCell(ws, hdrRow, c); if (typeof v === 'number' && v > 40000) { const ds = excelSerialToDate(v); if (ds) dateAt[c] = ds; } }
+        const rows = []; let shift = null, lastLine = '';
+        for (let r = 0; r <= range.e.r; r++) {
+          const fcell = String(getCell(ws, r, 5) || '');
+          if (/주간\s*계획/.test(fcell)) { shift = '주간'; lastLine = ''; continue; }
+          if (/야간\s*계획/.test(fcell)) { shift = '야간'; lastLine = ''; continue; }
+          if (!shift) continue;
+          const bRaw = String(getCell(ws, r, 1) || '').trim();
+          if (bRaw && bRaw !== '소계' && bRaw !== 'ES & GP') lastLine = bRaw;
+          const line = lastLine; if (!line) continue;
+          Object.entries(dateAt).forEach(([cStr, date]) => {
+            const c = parseInt(cStr);
+            const pno = String(getCell(ws, r, c + 1) || '').trim();
+            const qty = getCell(ws, r, c + 3);
+            const name = String(getCell(ws, r, c) || '').trim();
+            if (pno && typeof qty === 'number' && qty > 0) rows.push({ date, shift, line, name, pno, qty: Math.round(qty) });
+          });
         }
-        const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-_./]/g, '');
-        const icvKeys = new Set(parseIcvAssign(wb));
-        const runsOf = (pno, date) => ({
-          newDay: icvKeys.has(`${norm(pno)}|${date}|New ICV|주간`),
-          newNight: icvKeys.has(`${norm(pno)}|${date}|New ICV|야간`),
-          oldDay: icvKeys.has(`${norm(pno)}|${date}|Old ICV|주간`),
-          oldNight: icvKeys.has(`${norm(pno)}|${date}|Old ICV|야간`),
-        });
-        const splitShift = (total, rN, rO) => { if (total <= 0) return [0, 0]; if (rN && rO) { const a = Math.round(total / 2); return [a, total - a]; } if (rN) return [total, 0]; if (rO) return [0, total]; return [total, 0]; };
-        const rows = []; let cur = null, lastPno = '';
-        const flush = () => {
-          if (!cur) return;
-          if (cur.combined) {
-            const hasBd = Object.keys(cur.newT).length > 0 || Object.keys(cur.oldT).length > 0;
-            const dates = new Set([...Object.keys(cur.day), ...Object.keys(cur.night)]);
-            dates.forEach(date => {
-              const dayT = cur.day[date] || 0, nightT = cur.night[date] || 0; if (dayT <= 0 && nightT <= 0) return;
-              const rn = runsOf(cur.pno, date);
-              let s;
-              if (hasBd) { s = solveIcv(cur.newT[date] || 0, cur.oldT[date] || 0, dayT, nightT, rn); }
-              else { const [nd, od] = splitShift(dayT, rn.newDay, rn.oldDay); const [nn, on] = splitShift(nightT, rn.newNight, rn.oldNight); s = { newDay: nd, oldDay: od, newNight: nn, oldNight: on }; }
-              if (s.newDay > 0) rows.push({ date, shift: '주간', line: 'New ICV', name: cur.name, pno: cur.pno, qty: s.newDay });
-              if (s.oldDay > 0) rows.push({ date, shift: '주간', line: 'Old ICV', name: cur.name, pno: cur.pno, qty: s.oldDay });
-              if (s.newNight > 0) rows.push({ date, shift: '야간', line: 'New ICV', name: cur.name, pno: cur.pno, qty: s.newNight });
-              if (s.oldNight > 0) rows.push({ date, shift: '야간', line: 'Old ICV', name: cur.name, pno: cur.pno, qty: s.oldNight });
-            });
-          } else {
-            Object.entries(cur.day).forEach(([date, q]) => { if (q > 0) rows.push({ date, shift: '주간', line: cur.line, name: cur.name, pno: cur.pno, qty: Math.round(q) }); });
-            Object.entries(cur.night).forEach(([date, q]) => { if (q > 0) rows.push({ date, shift: '야간', line: cur.line, name: cur.name, pno: cur.pno, qty: Math.round(q) }); });
-          }
-          cur = null;
-        };
-        for (let r = 5; r <= range.e.r; r++) {
-          const g2 = String(getCell(ws, r, 11) || '').trim();
-          const pnoRaw = String(getCell(ws, r, 8) || '').trim();
-          let line = String(getCell(ws, r, 6) || '').trim(); if (line === '-') line = '';
-          const pname = String(getCell(ws, r, 7) || '').trim();
-          if (pnoRaw) lastPno = pnoRaw;
-          const blockPno = pnoRaw || lastPno;
-          const isComb = /NEWICV/.test(norm(line)) && /OLDICV/.test(norm(line));
-          if (g2 === '계획합계') { flush(); cur = { pno: blockPno, line, name: pname, combined: isComb, day: {}, night: {}, newT: {}, oldT: {} }; continue; }
-          if (!cur) {
-            if (g2 === '주간계획' || g2 === '야간계획') {
-              if (blockPno) { const sh = g2 === '주간계획' ? '주간' : '야간'; Object.entries(dateCols).forEach(([c, date]) => { const q = getCell(ws, r, parseInt(c)); if (typeof q === 'number' && q > 0) rows.push({ date, shift: sh, line, name: pname, pno: blockPno, qty: Math.round(q) }); }); }
-            }
-            continue;
-          }
-          if (g2 === 'NEW') { Object.entries(dateCols).forEach(([c, date]) => { const q = getCell(ws, r, parseInt(c)); if (typeof q === 'number') cur.newT[date] = q; }); }
-          else if (g2 === 'Old') { Object.entries(dateCols).forEach(([c, date]) => { const q = getCell(ws, r, parseInt(c)); if (typeof q === 'number') cur.oldT[date] = q; }); }
-          else if (g2 === '주간계획') { if (isComb) cur.combined = true; if (line) cur.line = line; if (pname) cur.name = pname; Object.entries(dateCols).forEach(([c, date]) => { const q = getCell(ws, r, parseInt(c)); if (typeof q === 'number' && q > 0) cur.day[date] = q; }); }
-          else if (g2 === '야간계획') { Object.entries(dateCols).forEach(([c, date]) => { const q = getCell(ws, r, parseInt(c)); if (typeof q === 'number' && q > 0) cur.night[date] = q; }); }
-        }
-        flush();
         return rows;
       };
+
       // ★ LOT 자동계산용 맵: 모품목(품번→REV코드) + 오라클바코드출력용(라인명→라인코드)
       const extractLotMaps = (wb) => {
         const norm = (s) => String(s || '').toUpperCase().replace(/[\s\-_./]/g, '');
