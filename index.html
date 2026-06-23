@@ -18,7 +18,7 @@
   <style>
     * { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
     body { background: #f8fafc; }
-    @media print { .no-print { display: none !important; } }
+    @media print { .no-print { display: none !important; } .print-scroll-reset, .print-scroll-reset * { height: auto !important; max-height: none !important; overflow: visible !important; } }
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -3463,9 +3463,9 @@
       }, [isGuest, activeTab]);
 
       return (
-        <div className="min-h-screen flex bg-slate-50">
+        <div className="h-screen overflow-hidden flex bg-slate-50 print-scroll-reset">
           {/* Sidebar */}
-          <aside className="w-64 flex-shrink-0 flex flex-col no-print" style={{background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)'}}>
+          <aside className="w-64 flex-shrink-0 flex flex-col no-print h-screen" style={{background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)'}}>
             <div className="px-6 py-6 border-b border-white/5">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg" style={{background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', boxShadow: '0 4px 14px rgba(99,102,241,0.4)'}}>M</div>
@@ -3544,7 +3544,7 @@
           </aside>
 
           {/* Main content */}
-          <main className="flex-1 min-w-0 overflow-x-auto">
+          <main className="flex-1 min-w-0 overflow-x-auto overflow-y-auto h-screen print-scroll-reset">
             <div className="px-6 py-5 mx-auto" style={{maxWidth: '1400px'}}>
               <div className="mb-5">
                 {isGuest && (
