@@ -1466,14 +1466,14 @@
             return { first, second };
           };
           const buildRow = (log) => {
-            const prodQty = parseFloat(log.goodQuantity)||0;
             const { first, second } = getSub(log);
             const sumCols = (map) => TCP_COLS.reduce((a,c) => a+(map[c]||0), 0);
             const firstBad = sumCols(first), secondBad = sumCols(second);
-            const good = prodQty + secondBad;
-            const eol1Good = prodQty + secondBad - firstBad;
-            const eolFinGood = firstBad - secondBad, eolFinBad = secondBad;
-            const input1 = eol1Good + firstBad;
+            const good = parseFloat(log.goodQuantity)||0;        // 최종 양품 = 입력값 그대로
+            const eolFinBad = secondBad;
+            const eol1Good = good + secondBad;                   // 1차 양품 = 최종 양품 + 2차 불량
+            const eolFinGood = firstBad - secondBad;
+            const input1 = eol1Good + firstBad;                  // 1차 투입 = 1차 양품 + 1차 불량
             const ftfrRate = input1 > 0 ? (firstBad/input1*100) : 0;
             const finRate = input1 > 0 ? (eolFinBad/input1*100) : 0;
             return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second };
@@ -10766,7 +10766,6 @@
                 return out;
               };
               const buildRow = (log) => {
-                const prodQty = parseFloat(log.goodQuantity) || 0;            // 생산수량 (시스템 입력 양품)
                 const { first, second } = getSubtypes(log);
                 // 1차/2차 불량 = 화면에 표시되는 유형 컬럼 값의 합 (TCP는 4종 고정 컬럼만)
                 const sumCols = (map) => section === 'TCP'
@@ -10774,11 +10773,11 @@
                   : Object.values(map).reduce((a, b) => a + b, 0);
                 const firstBad = sumCols(first);                              // ① 1차 불량 = 1차 유형 합
                 const secondBad = sumCols(second);                            // ② 2차 불량 = 2차 유형 합
-                const good = prodQty + secondBad;                             // ③ 최종 양품 = 생산수량 + 2차 불량
-                const eol1Good = prodQty + secondBad - firstBad;              // ④ 1차 양품 = 생산수량 + 2차 불량 - 1차 불량
-                const eolFinGood = firstBad - secondBad;                      // ⑤ 2차(EOL 최종) 양품 = 1차 불량 - 2차 불량
+                const good = parseFloat(log.goodQuantity) || 0;               // ③ 최종 양품 = 생산일지 입력 양품수량 (그대로)
                 const eolFinBad = secondBad;
-                const input1 = eol1Good + firstBad;                           // ⑥ 1차 투입 = 1차 양품 + 1차 불량 (마지막)
+                const eol1Good = good + secondBad;                            // ④ 1차 양품 = 최종 양품 + 2차 불량
+                const eolFinGood = firstBad - secondBad;                      // ⑤ 2차(EOL 최종 재작업) 양품 = 1차 불량 - 2차 불량
+                const input1 = eol1Good + firstBad;                           // ⑥ 1차 투입 = 1차 양품 + 1차 불량
                 const ftfrRate = input1 > 0 ? (firstBad / input1 * 100) : 0;
                 const finRate = input1 > 0 ? (eolFinBad / input1 * 100) : 0;
                 const lots = getLots(log);
