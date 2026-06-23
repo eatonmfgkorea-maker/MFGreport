@@ -1469,13 +1469,13 @@
             const { first, second } = getSub(log);
             const sumCols = (map) => TCP_COLS.reduce((a,c) => a+(map[c]||0), 0);
             const firstBad = sumCols(first), secondBad = sumCols(second);
-            const good = parseFloat(log.goodQuantity)||0;        // 최종 양품 = 입력값 그대로
-            const eolFinBad = secondBad;
-            const eol1Good = good + secondBad;                   // 1차 양품 = 최종 양품 + 2차 불량
-            const eolFinGood = firstBad - secondBad;
-            const input1 = eol1Good + firstBad;                  // 1차 투입 = 1차 양품 + 1차 불량
-            const ftfrRate = input1 > 0 ? (firstBad/input1*100) : 0;
-            const finRate = input1 > 0 ? (eolFinBad/input1*100) : 0;
+            const good = parseFloat(log.goodQuantity)||0;        // N 최종양품 = 입력값 그대로
+            const eolFinBad = secondBad;                          // T
+            const input1 = good + secondBad;                     // O = N + T (1차 투입)
+            const eol1Good = input1 - firstBad;                  // P = O − Q (1차 양품)
+            const eolFinGood = firstBad - secondBad;             // S = Q − T
+            const ftfrRate = input1 > 0 ? (firstBad/input1*100) : 0;  // R = Q/O
+            const finRate = input1 > 0 ? (secondBad/input1*100) : 0;  // U = T/O
             return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second };
           };
           const logs = (td.productionLogs||[]).filter(l => (l.section||'TCP')==='TCP' && (l.lineName==='1PC'||l.lineName==='2PC') && inR(l));
@@ -10777,15 +10777,17 @@
                 const sumCols = (map) => section === 'TCP'
                   ? TCP_COLS.reduce((a, c) => a + (map[c] || 0), 0)
                   : Object.values(map).reduce((a, b) => a + b, 0);
-                const firstBad = sumCols(first);                              // ① 1차 불량 = 1차 유형 합
-                const secondBad = sumCols(second);                            // ② 2차 불량 = 2차 유형 합
-                const good = parseFloat(log.goodQuantity) || 0;               // ③ 최종 양품 = 생산일지 입력 양품수량 (그대로)
-                const eolFinBad = secondBad;
-                const eol1Good = good + secondBad;                            // ④ 1차 양품 = 최종 양품 + 2차 불량
-                const eolFinGood = firstBad - secondBad;                      // ⑤ 2차(EOL 최종 재작업) 양품 = 1차 불량 - 2차 불량
-                const input1 = eol1Good + firstBad;                           // ⑥ 1차 투입 = 1차 양품 + 1차 불량
-                const ftfrRate = input1 > 0 ? (firstBad / input1 * 100) : 0;
-                const finRate = input1 > 0 ? (eolFinBad / input1 * 100) : 0;
+                // ── 원본 엑셀(Ramp Plate Test) 수식 기준 ──
+                //  입력: 최종양품(N)=goodQuantity, 1차불량(Q)=firstBad, 최종불량(T)=secondBad
+                const firstBad = sumCols(first);                              // Q : 1차 불량 (EOL 1차 불량 수량)
+                const secondBad = sumCols(second);                            // T : 최종 불량 (EOL 최종 불량 수량)
+                const good = parseFloat(log.goodQuantity) || 0;               // N : 최종 양품 = 생산일지 입력값 그대로
+                const eolFinBad = secondBad;                                  // T
+                const input1 = good + secondBad;                             // O = N + T  : 1차 투입수량
+                const eol1Good = input1 - firstBad;                          // P = O − Q  : 1차 양품(EOL 1차 양품수량)
+                const eolFinGood = firstBad - secondBad;                     // S = Q − T  : EOL 최종 양품수량
+                const ftfrRate = input1 > 0 ? (firstBad / input1 * 100) : 0; // R = Q / O  : 1차 불량률
+                const finRate = input1 > 0 ? (secondBad / input1 * 100) : 0; // U = T / O  : 최종 불량률
                 const lots = getLots(log);
                 return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots };
               };
@@ -11292,13 +11294,13 @@
                                 )}
                                 <th rowSpan={2} className={TH+" min-w-[140px]"}>비고</th>
                                 <th rowSpan={2} className={TH}>최종 양품<br/>수량</th>
+                                <th rowSpan={2} className={TH}>1차 투입<br/>수량</th>
                                 <th rowSpan={2} className={TH+" bg-sky-50 text-sky-700"}>1차 양품<br/>수량</th>
                                 <th rowSpan={2} className={TH+" bg-sky-50 text-sky-700"}>EOL 1차<br/>불량</th>
                                 <th rowSpan={2} className={TH+" bg-sky-50 text-sky-700"}>FTFR<br/>불량률</th>
                                 <th rowSpan={2} className={TH+" bg-blue-50 text-blue-700"}>EOL 최종<br/>양품</th>
                                 <th rowSpan={2} className={TH+" bg-blue-50 text-blue-700"}>EOL 최종<br/>불량</th>
                                 <th rowSpan={2} className={TH+" bg-blue-50 text-blue-700"}>최종<br/>불량률</th>
-                                <th rowSpan={2} className={TH}>1차 투입<br/>수량</th>
                                 <th colSpan={cols1.length} className={TH+" bg-amber-100 text-amber-800"}>1차 불량 유형</th>
                                 <th colSpan={cols2.length} className={TH+" bg-orange-100 text-orange-800"}>2차 불량 유형</th>
                               </tr>
@@ -11328,13 +11330,13 @@
                                       <input type="text" defaultValue={lotFtfrNotes[lid] || ''} key={'note-'+lid+'-'+(lotFtfrNotes[lid]||'')} onBlur={(e) => updateLotFtfrNote(lid, e.target.value)} disabled={isGuest} placeholder={isGuest?'-':'비고 입력'} className="w-32 px-1.5 py-1 border border-slate-200 rounded text-xs focus:border-indigo-400 focus:outline-none" />
                                     </td>
                                     <td className={TD+" font-semibold"}>{r.good.toLocaleString()}</td>
+                                    <td className={TD}>{r.input1.toLocaleString()}</td>
                                     <td className={TD+" bg-sky-50/40"}>{r.eol1Good.toLocaleString()}</td>
                                     <td className={TD+" bg-sky-50/40 text-rose-600 font-semibold"}>{r.eol1Bad.toLocaleString()}</td>
                                     <td className={TD+" bg-sky-50/40 font-semibold"}>{rate1(r.ftfrRate)}%</td>
                                     <td className={TD+" bg-blue-50/40"}>{r.eolFinGood.toLocaleString()}</td>
                                     <td className={TD+" bg-blue-50/40 text-rose-600 font-semibold"}>{r.eolFinBad.toLocaleString()}</td>
                                     <td className={TD+" bg-blue-50/40 font-semibold"}>{rate1(r.finRate)}%</td>
-                                    <td className={TD}>{r.input1.toLocaleString()}</td>
                                     {cols1.map(s => <td key={'b1'+s} className={TD+" bg-amber-50/30 px-1"}>{s==='-'?0:(r.first[s]||0)}</td>)}
                                     {cols2.map(s => <td key={'b2'+s} className={TD+" bg-orange-50/30 px-1"}>{s==='-'?0:(r.second[s]||0)}</td>)}
                                   </tr>
@@ -11345,13 +11347,13 @@
                               <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
                                 <td className={TD+" font-bold"} colSpan={4 + lotColCount}>합계</td>
                                 <td className={TD+" font-bold"}>{tot.good.toLocaleString()}</td>
+                                <td className={TD+" font-bold"}>{tot.input1.toLocaleString()}</td>
                                 <td className={TD+" font-bold"}>{tot.eol1Good.toLocaleString()}</td>
                                 <td className={TD+" font-bold text-rose-600"}>{tot.eol1Bad.toLocaleString()}</td>
                                 <td className={TD+" font-bold"}>{rate1(totFtfr)}%</td>
                                 <td className={TD+" font-bold"}>{tot.eolFinGood.toLocaleString()}</td>
                                 <td className={TD+" font-bold text-rose-600"}>{tot.eolFinBad.toLocaleString()}</td>
                                 <td className={TD+" font-bold"}>{rate1(totFin)}%</td>
-                                <td className={TD+" font-bold"}>{tot.input1.toLocaleString()}</td>
                                 {cols1.map(s => <td key={'t1'+s} className={TD+" font-bold"}>{s==='-'?0:(firstTot[s]||0)}</td>)}
                                 {cols2.map(s => <td key={'t2'+s} className={TD+" font-bold"}>{s==='-'?0:(secondTot[s]||0)}</td>)}
                               </tr>
