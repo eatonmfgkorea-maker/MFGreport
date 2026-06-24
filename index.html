@@ -9642,7 +9642,7 @@
                                 const cnt = Object.keys(plan).length;
                                 if (cnt === 0) { alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)'); return; }
                                 // ★ 원본 행 저장 (현장 점검표 앱 연동용) — 매핑 여부와 무관
-                                try { const rawRows = parseFePlanRaw(wb); if (rawRows.length) { const lotMaps = extractLotMaps(wb); localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({ rows: rawRows, file: file.name, uploadedAt: new Date().toISOString(), revMap: lotMaps.revMap, lineCodes: lotMaps.lineCodes })); } } catch (e) {}
+                                try { const rawRows = parseFePlanRaw(wb); if (rawRows.length) { const lotMaps = extractLotMaps(wb); let prev = {}; try { prev = JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || '{}') || {}; } catch {} const prevRows = Array.isArray(prev.rows) ? prev.rows : []; const newMonths = new Set(rawRows.map(r => String(r.date || '').slice(0, 7))); const kept = prevRows.filter(r => !newMonths.has(String(r.date || '').slice(0, 7))); const merged = kept.concat(rawRows); const revMap = Object.assign({}, prev.revMap || {}, lotMaps.revMap); const lineCodes = Object.assign({}, prev.lineCodes || {}, lotMaps.lineCodes); localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({ rows: merged, file: file.name, uploadedAt: new Date().toISOString(), revMap, lineCodes })); } } catch (e) {}
                                 const unmapped = items.filter(it => !planItemMapping[`FE|${it.pno}`]);
                                 if (unmapped.length === 0) {
                                   // 기존 매핑으로 전부 연결됨 → 즉시 저장 (월별 누적)
