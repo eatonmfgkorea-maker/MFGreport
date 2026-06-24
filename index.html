@@ -10791,6 +10791,34 @@
                 const lots = getLots(log);
                 return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots };
               };
+              // 같은 날짜+주야+아이템: 여러 로그를 하나의 행으로 합산
+              const buildMergedRow = (logList) => {
+                if (logList.length === 1) return buildRow(logList[0]);
+                const first = {}, second = {};
+                let good = 0;
+                const lots = [];
+                logList.forEach(log => {
+                  const sub = getSubtypes(log);
+                  Object.entries(sub.first).forEach(([k, v]) => { first[k] = (first[k] || 0) + v; });
+                  Object.entries(sub.second).forEach(([k, v]) => { second[k] = (second[k] || 0) + v; });
+                  good += parseFloat(log.goodQuantity) || 0;
+                  getLots(log).forEach(l => {
+                    const ex = lots.find(x => x.bom === l.bom);
+                    if (ex) ex.lots = ex.lots.concat(l.lots); else lots.push({ bom: l.bom, lots: l.lots.slice() });
+                  });
+                });
+                const sumCols = (map) => section === 'TCP'
+                  ? TCP_COLS.reduce((a, c) => a + (map[c] || 0), 0)
+                  : Object.values(map).reduce((a, b) => a + b, 0);
+                const firstBad = sumCols(first), secondBad = sumCols(second);
+                const eolFinBad = secondBad;
+                const input1 = good + secondBad;
+                const eol1Good = input1 - firstBad;
+                const eolFinGood = firstBad - secondBad;
+                const ftfrRate = input1 > 0 ? (firstBad / input1 * 100) : 0;
+                const finRate = input1 > 0 ? (secondBad / input1 * 100) : 0;
+                return { log: logList[0], good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots };
+              };
               // 아이템별 그룹 (TCP: 1PC/2PC 라인만) + 기간 필터
               const logs = (data.productionLogs || []).filter(l => {
                 if ((l.section || section) !== section) return false;
@@ -11230,9 +11258,18 @@
                   {itemNames.length === 0 && (<div className="bg-white rounded-lg border border-slate-200 p-8 text-center text-slate-400">{section} 생산 데이터가 없습니다.</div>)}
                   <div className="space-y-8">
                   {showItems.map(item => {
-                    const rows = groups[item].slice()
-                      .sort((a, b) => (a.productionDate < b.productionDate ? -1 : a.productionDate > b.productionDate ? 1 : (a.shift||'').localeCompare(b.shift||'')))
-                      .map(buildRow);
+                    // 같은 날짜+주야는 하나로 합산 → 날짜·주야별 1행
+                    const dsGroups = {};
+                    groups[item].forEach(l => {
+                      const dkey = (l.productionDate || '').slice(0, 10) + '|' + (l.shift || '');
+                      (dsGroups[dkey] = dsGroups[dkey] || []).push(l);
+                    });
+                    const rows = Object.keys(dsGroups)
+                      .sort((a, b) => {
+                        const [da, sa] = a.split('|'), [db, sb] = b.split('|');
+                        return da < db ? -1 : da > db ? 1 : sa.localeCompare(sb);
+                      })
+                      .map(k => buildMergedRow(dsGroups[k]));
                     let cols1, cols2;
                     if (section === 'TCP') {
                       cols1 = TCP_COLS; cols2 = TCP_COLS;
