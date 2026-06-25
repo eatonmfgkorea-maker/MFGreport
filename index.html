@@ -8235,7 +8235,7 @@
                           <div className="p-5 space-y-5">
                             {/* 워터폴 */}
                             <div>
-                              <div className="text-xs text-slate-500 mb-1">각 막대는 <b>실제 OEE %p</b> 기여입니다 (원시 분 차이가 아니라, 분모를 반영한 OEE 영향). 세 기여의 합 = 전체 변화.</div>
+                              <div className="text-xs text-slate-500 mb-1">각 막대는 <b>실제 OEE에 미친 영향(%p)</b>입니다. 단순 시간(분) 차이가 아니라, OEE를 실제로 얼마나 움직였는지를 보여줍니다. 세 막대의 합 = 전체 OEE 변화.</div>
                               <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{maxWidth: 760}}>
                                 {[0,0.25,0.5,0.75,1].map(f => { const y = padT + plotH*f; const v = yMax-(yMax-yMin)*f; return (
                                   <g key={f}><line x1={padL} y1={y} x2={W-padR} y2={y} stroke="#f1f5f9"/><text x={padL-6} y={y+4} textAnchor="end" fontSize="10" fill="#94a3b8">{Math.round(v)}</text></g>
