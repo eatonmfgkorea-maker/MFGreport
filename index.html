@@ -10724,6 +10724,7 @@
               const rate1 = (v) => (Math.round((v||0)*100)/100).toFixed(2);
               const norm = (v) => String(v||'').replace(/\s+/g,'').toLowerCase();
               const TCP_COLS = ['Lockup NG', 'Unlock NG', '10V Lockup NG', '10V Unlock NG'];
+              const RUNOUT_COLS = ['Hub O.D LH', 'Ring gear O.D', 'Flange', 'Ring gear', '치수', 'Hub O.D RH'];
               // 유형 헤더 라벨: 'NG' 제거 + 단어별 줄바꿈으로 칸 축소
               const subLabel = (s) => {
                 if (s === '-') return '-';
@@ -10745,9 +10746,23 @@
                   }
                   return cands.find(c => c) || '기타';
                 };
-                // 불량(폐기)은 1차에서도 한 번 떨어진 것이므로 1차 유형에도 포함 (1차 = 재작업+불량, 2차 = 불량)
-                const addD = (d) => { const q = parseFloat(d.quantity) || 0; if (!q) return; const k = classify([d.defectSubType, d.subType, d.defectType]); first[k] = (first[k]||0) + q; second[k] = (second[k]||0) + q; };
-                const addR = (r) => { const q = parseFloat(r.quantity) || 0; if (!q) return; const k = classify([r.reworkSubType, r.subType, r.reworkType]); first[k] = (first[k]||0) + q; };
+                // Runout 세부유형은 별도 카테고리(getRunout)에서 처리하므로 1차/2차 NG 집계에서 제외
+                const isRunout = (cands) => {
+                  for (const raw of cands) { if (!raw) continue; const t = norm(raw); for (const col of RUNOUT_COLS) { if (norm(col) === t) return true; } }
+                  return false;
+                };
+                const addD = (d) => {
+                  const q = parseFloat(d.quantity) || 0; if (!q) return;
+                  if (isRunout([d.defectSubType, d.subType, d.defectType])) return;  // Runout은 제외
+                  const k = classify([d.defectSubType, d.subType, d.defectType]);
+                  second[k] = (second[k]||0) + q;   // 불량 → 2차 유형
+                };
+                const addR = (r) => {
+                  const q = parseFloat(r.quantity) || 0; if (!q) return;
+                  if (isRunout([r.reworkSubType, r.subType, r.reworkType])) return;  // Runout은 제외
+                  const k = classify([r.reworkSubType, r.subType, r.reworkType]);
+                  first[k] = (first[k]||0) + q;      // 재작업 → 1차 유형
+                };
                 const lld = data?.lotData?.[log.id];
                 if (lld && Array.isArray(lld.defects)) {
                   lld.defects.forEach(addD); (lld.reworks || []).forEach(addR);
@@ -10756,6 +10771,24 @@
                   (data?.reworkLogs || []).forEach(r => { if (r.productionLogId === log.id) addR(r); });
                 }
                 return { first, second };
+              };
+              // Runout 전용 수집 — 계산에 무관, 재작업=1차 / 불량=2차로 그대로 불러오기만
+              const runoutMatch = (cands) => {
+                for (const raw of cands) {
+                  if (!raw) continue;
+                  const t = norm(raw);
+                  for (const col of RUNOUT_COLS) { if (norm(col) === t) return col; }
+                }
+                return null;
+              };
+              const getRunout = (log) => {
+                const r1 = {}, r2 = {}; // r1=재작업(1차), r2=불량(2차)
+                const addD = (d) => { const q = parseFloat(d.quantity)||0; if (!q) return; const c = runoutMatch([d.defectSubType, d.subType, d.defectType]); if (c) r2[c] = (r2[c]||0)+q; };
+                const addR = (r) => { const q = parseFloat(r.quantity)||0; if (!q) return; const c = runoutMatch([r.reworkSubType, r.subType, r.reworkType]); if (c) r1[c] = (r1[c]||0)+q; };
+                const lld = data?.lotData?.[log.id];
+                if (lld && Array.isArray(lld.defects)) { lld.defects.forEach(addD); (lld.reworks||[]).forEach(addR); }
+                else { (data?.defectLogs||[]).forEach(d => { if (d.productionLogId === log.id) addD(d); }); (data?.reworkLogs||[]).forEach(r => { if (r.productionLogId === log.id) addR(r); }); }
+                return { r1, r2 };
               };
               // 입력된 Lot만 (BOM별)
               const getLots = (log) => {
@@ -10789,18 +10822,23 @@
                 const ftfrRate = input1 > 0 ? (firstBad / input1 * 100) : 0; // R = Q / O  : 1차 불량률
                 const finRate = input1 > 0 ? (secondBad / input1 * 100) : 0; // U = T / O  : 최종 불량률
                 const lots = getLots(log);
-                return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots };
+                const { r1: runout1, r2: runout2 } = getRunout(log);
+                return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots, runout1, runout2 };
               };
               // 같은 날짜+주야+아이템: 여러 로그를 하나의 행으로 합산
               const buildMergedRow = (logList) => {
                 if (logList.length === 1) return buildRow(logList[0]);
                 const first = {}, second = {};
+                const runout1 = {}, runout2 = {};
                 let good = 0;
                 const lots = [];
                 logList.forEach(log => {
                   const sub = getSubtypes(log);
                   Object.entries(sub.first).forEach(([k, v]) => { first[k] = (first[k] || 0) + v; });
                   Object.entries(sub.second).forEach(([k, v]) => { second[k] = (second[k] || 0) + v; });
+                  const ro = getRunout(log);
+                  Object.entries(ro.r1).forEach(([k, v]) => { runout1[k] = (runout1[k] || 0) + v; });
+                  Object.entries(ro.r2).forEach(([k, v]) => { runout2[k] = (runout2[k] || 0) + v; });
                   good += parseFloat(log.goodQuantity) || 0;
                   getLots(log).forEach(l => {
                     const ex = lots.find(x => x.bom === l.bom);
@@ -10817,7 +10855,7 @@
                 const eolFinGood = firstBad - secondBad;
                 const ftfrRate = input1 > 0 ? (firstBad / input1 * 100) : 0;
                 const finRate = input1 > 0 ? (secondBad / input1 * 100) : 0;
-                return { log: logList[0], good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots };
+                return { log: logList[0], good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots, runout1, runout2 };
               };
               // 아이템별 그룹 (TCP: 1PC/2PC 라인만) + 기간 필터
               const logs = (data.productionLogs || []).filter(l => {
@@ -11270,14 +11308,15 @@
                         return da < db ? -1 : da > db ? 1 : sa.localeCompare(sb);
                       })
                       .map(k => buildMergedRow(dsGroups[k]));
-                    let cols1, cols2;
+                    let cols1, cols2, cols3;
                     if (section === 'TCP') {
-                      cols1 = TCP_COLS; cols2 = TCP_COLS;
+                      cols1 = TCP_COLS; cols2 = TCP_COLS; cols3 = RUNOUT_COLS;
                     } else {
                       const so1 = [], so2 = [];
                       rows.forEach(r => { Object.keys(r.first).forEach(s => { if (!so1.includes(s)) so1.push(s); }); Object.keys(r.second).forEach(s => { if (!so2.includes(s)) so2.push(s); }); });
                       cols1 = so1.length ? so1 : ['-'];
                       cols2 = so2.length ? so2 : ['-'];
+                      cols3 = null;
                     }
                     // Lot 컬럼 (BOM별) — 헤더의 ▶/▼ 버튼으로 접기/펴기
                     const bomCols = [];
@@ -11288,8 +11327,8 @@
                     const tot = rows.reduce((a, r) => ({ good:a.good+r.good, input1:a.input1+r.input1, eol1Good:a.eol1Good+r.eol1Good, eol1Bad:a.eol1Bad+r.eol1Bad, eolFinGood:a.eolFinGood+r.eolFinGood, eolFinBad:a.eolFinBad+r.eolFinBad }), {good:0,input1:0,eol1Good:0,eol1Bad:0,eolFinGood:0,eolFinBad:0});
                     const totFtfr = tot.input1 > 0 ? (tot.eol1Bad / tot.input1 * 100) : 0;
                     const totFin = tot.input1 > 0 ? (tot.eolFinBad / tot.input1 * 100) : 0;
-                    const firstTot = {}, secondTot = {};
-                    rows.forEach(r => { cols1.forEach(s => { firstTot[s] = (firstTot[s]||0)+(r.first[s]||0); }); cols2.forEach(s => { secondTot[s] = (secondTot[s]||0)+(r.second[s]||0); }); });
+                    const firstTot = {}, secondTot = {}, runout1Tot = {}, runout2Tot = {};
+                    rows.forEach(r => { cols1.forEach(s => { firstTot[s] = (firstTot[s]||0)+(r.first[s]||0); }); cols2.forEach(s => { secondTot[s] = (secondTot[s]||0)+(r.second[s]||0); }); if (cols3) cols3.forEach(s => { runout1Tot[s] = (runout1Tot[s]||0)+((r.runout1||{})[s]||0); runout2Tot[s] = (runout2Tot[s]||0)+((r.runout2||{})[s]||0); }); });
                     const exportTcpExcel = () => {
                       const fd = (ds) => { const d = new Date(ds); if (isNaN(d)) return ds || ''; return `${String(d.getMonth()+1).padStart(2,'0')}월 ${String(d.getDate()).padStart(2,'0')}일`; };
                       const dataRows = rows.map(r => [
@@ -11340,11 +11379,15 @@
                                 <th rowSpan={2} className={TH+" bg-blue-50 text-blue-700"}>최종<br/>불량률</th>
                                 <th colSpan={cols1.length} className={TH+" bg-amber-100 text-amber-800"}>1차 불량 유형</th>
                                 <th colSpan={cols2.length} className={TH+" bg-orange-100 text-orange-800"}>2차 불량 유형</th>
+                                {cols3 && <th colSpan={cols3.length} className={TH+" bg-rose-100 text-rose-800"}>1차 Runout (재작업)</th>}
+                                {cols3 && <th colSpan={cols3.length} className={TH+" bg-rose-100 text-rose-800"}>2차 Runout (불량)</th>}
                               </tr>
                               <tr>
                                 {lotOpen && bomCols.map(b => <th key={'lb'+b} className={TH+" bg-indigo-50/60 text-indigo-600 font-medium px-1"}>{b}{bomNameMap[b] && (<><br/><span className="text-[10px] font-normal text-indigo-400">({bomNameMap[b]})</span></>)}</th>)}
                                 {cols1.map(s => <th key={'h1'+s} className={TH+" bg-amber-50 text-amber-700 px-1"}>{subLabel(s)}</th>)}
                                 {cols2.map(s => <th key={'h2'+s} className={TH+" bg-orange-50 text-orange-700 px-1"}>{subLabel(s)}</th>)}
+                                {cols3 && cols3.map(s => <th key={'h3a'+s} className={TH+" bg-rose-50 text-rose-700 px-1"}>{s}</th>)}
+                                {cols3 && cols3.map(s => <th key={'h3b'+s} className={TH+" bg-rose-50 text-rose-700 px-1"}>{s}</th>)}
                               </tr>
                             </thead>
                             <tbody>
@@ -11376,6 +11419,8 @@
                                     <td className={TD+" bg-blue-50/40 font-semibold"}>{rate1(r.finRate)}%</td>
                                     {cols1.map(s => <td key={'b1'+s} className={TD+" bg-amber-50/30 px-1"}>{s==='-'?0:(r.first[s]||0)}</td>)}
                                     {cols2.map(s => <td key={'b2'+s} className={TD+" bg-orange-50/30 px-1"}>{s==='-'?0:(r.second[s]||0)}</td>)}
+                                    {cols3 && cols3.map(s => <td key={'b3a'+s} className={TD+" bg-rose-50/30 px-1"}>{(r.runout1||{})[s]||0}</td>)}
+                                    {cols3 && cols3.map(s => <td key={'b3b'+s} className={TD+" bg-rose-50/30 px-1"}>{(r.runout2||{})[s]||0}</td>)}
                                   </tr>
                                 );
                               })}
@@ -11393,6 +11438,8 @@
                                 <td className={TD+" font-bold"}>{rate1(totFin)}%</td>
                                 {cols1.map(s => <td key={'t1'+s} className={TD+" font-bold"}>{s==='-'?0:(firstTot[s]||0)}</td>)}
                                 {cols2.map(s => <td key={'t2'+s} className={TD+" font-bold"}>{s==='-'?0:(secondTot[s]||0)}</td>)}
+                                {cols3 && cols3.map(s => <td key={'t3a'+s} className={TD+" font-bold"}>{runout1Tot[s]||0}</td>)}
+                                {cols3 && cols3.map(s => <td key={'t3b'+s} className={TD+" font-bold"}>{runout2Tot[s]||0}</td>)}
                               </tr>
                             </tfoot>
                           </table>
