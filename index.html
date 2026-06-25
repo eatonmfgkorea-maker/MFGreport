@@ -4700,14 +4700,18 @@
                       title = `${m.item} · ${focusLabel}`;
                       subtitle = `${m.sec === '전체' ? '필터 적용된 모든 데이터' : m.sec} · ${m.logs.length}건의 작업 합산`;
                     } else {
-                      agg = computeFromLogs([m.singleLog]);
-                      title = `${m.singleLog.item || m.item} · ${m.singleLog.productionDate}`;
-                      subtitle = `${m.singleLog.section} · ${m.singleLog.lineName} · ${m.singleLog.shift || '-'}`;
+                      const gl = m.groupLogs || [m.singleLog];
+                      agg = computeFromLogs(gl);
+                      const rep = gl[0];
+                      title = `${rep.item || m.item} · ${rep.productionDate}`;
+                      subtitle = `${rep.section} · ${rep.lineName} · ${rep.shift || '-'}` + (gl.length > 1 ? ` · ${gl.length}건 합산` : '');
                     }
 
-                    // For stage 2: extract details from single log
-                    const log = !isStage1 ? m.singleLog : null;
-                    const dts = !isStage1 ? (data.downtimeLogs || []).filter(d => d.productionLogId === log.id) : [];
+                    // For stage 2: extract details from single (or representative) log
+                    const grpLogs = !isStage1 ? (m.groupLogs || [m.singleLog]) : null;
+                    const log = !isStage1 ? grpLogs[0] : null;
+                    const dtIds = !isStage1 ? grpLogs.map(g => g.id) : [];
+                    const dts = !isStage1 ? (data.downtimeLogs || []).filter(d => dtIds.includes(d.productionLogId)) : [];
                     const itemDef = !isStage1 ? items.find(i => i.item === log.item) : null;
                     const wcount = !isStage1 ? (parseFloat(log.workers) || (Array.isArray(log.selectedWorkers) ? log.selectedWorkers.length : 1)) : 0;
                     const ctEntry = !isStage1 && itemDef && Array.isArray(itemDef.ct) ? (itemDef.ct.find(c => c.workers === wcount) || itemDef.ct[0]) : null;
@@ -4984,20 +4988,35 @@
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {m.logs.slice().sort((a,b) => (a.productionDate||'').localeCompare(b.productionDate||'')).map((l, i) => {
-                                        const c = computeFromLogs([l]);
-                                        return (
-                                          <tr key={i} className="border-t border-slate-100 hover:bg-indigo-50 cursor-pointer" onClick={() => setOdDrillModal({ ...m, stage: 2, singleLog: l })}>
-                                            <td className="px-3 py-1.5 font-medium">{l.productionDate}</td>
-                                            {m.sec === '전체' && <td className="px-3 py-1.5 text-slate-600 truncate max-w-xs">{l.item || '-'}</td>}
-                                            <td className="px-3 py-1.5 text-slate-600">{l.lineName} · {l.shift || '-'}</td>
+                                      {(() => {
+                                        // 같은 날짜+라인+주야+인원이면 합치기 (잔업 등 동일 인원 분할 입력을 한 줄로)
+                                        const wcount = (l) => Array.isArray(l.selectedWorkers) ? l.selectedWorkers.length : (parseInt(l.workers) || 1);
+                                        const grp = {};
+                                        m.logs.forEach(l => {
+                                          const key = [(l.productionDate||''), (m.sec==='전체'?(l.item||''):''), (l.lineName||''), (l.shift||''), wcount(l)].join('|');
+                                          (grp[key] = grp[key] || []).push(l);
+                                        });
+                                        const merged = Object.values(grp).sort((a,b) => {
+                                          const da=a[0].productionDate||'', db=b[0].productionDate||'';
+                                          if (da!==db) return da.localeCompare(db);
+                                          return (a[0].shift||'').localeCompare(b[0].shift||'');
+                                        });
+                                        return merged.map((gl, i) => {
+                                          const l0 = gl[0];
+                                          const c = computeFromLogs(gl);
+                                          return (
+                                          <tr key={i} className="border-t border-slate-100 hover:bg-indigo-50 cursor-pointer" onClick={() => setOdDrillModal({ ...m, stage: 2, singleLog: gl.length === 1 ? l0 : null, groupLogs: gl.length > 1 ? gl : null })}>
+                                            <td className="px-3 py-1.5 font-medium">{l0.productionDate}{gl.length>1 && <span className="ml-1 text-[10px] text-slate-400">({gl.length}건 합산)</span>}</td>
+                                            {m.sec === '전체' && <td className="px-3 py-1.5 text-slate-600 truncate max-w-xs">{l0.item || '-'}</td>}
+                                            <td className="px-3 py-1.5 text-slate-600">{l0.lineName} · {l0.shift || '-'}</td>
                                             <td className="px-3 py-1.5 text-right text-blue-700">{c.A.toFixed(1)}%</td>
                                             <td className="px-3 py-1.5 text-right text-purple-700">{c.P.toFixed(1)}%</td>
                                             <td className="px-3 py-1.5 text-right text-emerald-700">{c.Q.toFixed(1)}%</td>
                                             <td className="px-3 py-1.5 text-right text-indigo-700 font-bold">{c.OEE.toFixed(1)}%</td>
                                           </tr>
-                                        );
-                                      })}
+                                          );
+                                        });
+                                      })()}
                                     </tbody>
                                   </table>
                                 </div>
