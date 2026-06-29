@@ -12738,9 +12738,10 @@
                       const l = logMap[d.productionLogId];
                       return {
                         '일자': l.productionDate, '섹션': l.section, '라인': l.lineName, '아이템': l.item, '주야': l.shift,
+                        '생산 시작': l.startTime || '', '생산 종료': l.endTime || '', '생산 총분': minDiffExp(l.startTime, l.endTime),
                         '비가동 유형': d.downtimeType || '', '분류': d.downtimeCategory || '',
-                        '시작': d.startTime || '', '종료': d.endTime || '',
-                        '분': minDiffExp(d.startTime, d.endTime) || (parseFloat(d.duration) || 0),
+                        '비가동 시작': d.startTime || '', '비가동 종료': d.endTime || '',
+                        '비가동 분': minDiffExp(d.startTime, d.endTime) || (parseFloat(d.duration) || 0),
                         '사유': d.content || ''
                       };
                     });
