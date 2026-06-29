@@ -3456,7 +3456,7 @@
       // ===== 게스트 모드: 허용된 탭만 노출 =====
       const isGuest = (typeof localStorage !== 'undefined') && localStorage.getItem('mfg_guest') === '1';
       // 게스트가 볼 수 있는 탭 id 목록 (여기서 조정)
-      const GUEST_TABS = ['dashboard', 'oee', 'oeedetail', 'quantity', 'defect', 'rework', 'tool', 'lotftfr'];
+      const GUEST_TABS = ['dashboard', 'oee', 'oeedetail', 'quantity', 'defect', 'rework', 'downtime', 'tool', 'lotftfr'];
       const visibleTabs = isGuest ? TABS.filter(t => GUEST_TABS.includes(t.id)) : TABS;
       // 게스트가 허용 안 된 탭에 있으면 첫 허용 탭으로 이동
       React.useEffect(() => {
