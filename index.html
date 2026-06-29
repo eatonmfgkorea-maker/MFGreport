@@ -1871,6 +1871,9 @@
       const [exportYear, setExportYear] = useState(new Date().getFullYear());
       const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
       const [exportSection, setExportSection] = useState('ALL');
+      const [exportRangeMode, setExportRangeMode] = useState('month'); // 'month' | 'range'
+      const [exportFrom, setExportFrom] = useState('');
+      const [exportTo, setExportTo] = useState('');
       const [exportSheets, setExportSheets] = useState({
         production: true,
         downtime: true,
@@ -12694,9 +12697,15 @@
               };
 
               const inRange = (l) => {
-                const d = new Date(l.productionDate);
-                if (d.getFullYear() !== exportYear) return false;
-                if (d.getMonth()+1 !== exportMonth) return false;
+                const ds = (l.productionDate || '').slice(0, 10);
+                if (exportRangeMode === 'range') {
+                  if (exportFrom && ds < exportFrom) return false;
+                  if (exportTo && ds > exportTo) return false;
+                } else {
+                  const d = new Date(l.productionDate);
+                  if (d.getFullYear() !== exportYear) return false;
+                  if (d.getMonth()+1 !== exportMonth) return false;
+                }
                 if (exportSection !== 'ALL' && l.section !== exportSection) return false;
                 return true;
               };
@@ -12960,7 +12969,10 @@
                   alert('출력할 데이터가 없습니다. 시트를 1개 이상 선택하고 데이터 범위를 확인해주세요.');
                   return;
                 }
-                const filename = `MFG_Data_${exportSection}_${exportYear}-${String(exportMonth).padStart(2,'0')}.xlsx`;
+                const periodLabel = exportRangeMode === 'range'
+                  ? `${(exportFrom||'시작').replace(/-/g,'')}_${(exportTo||'종료').replace(/-/g,'')}`
+                  : `${exportYear}-${String(exportMonth).padStart(2,'0')}`;
+                const filename = `MFG_Data_${exportSection}_${periodLabel}.xlsx`;
                 XLSX.writeFile(wb, filename);
               };
 
@@ -13192,7 +13204,13 @@
                     <div className="space-y-4">
                       <div>
                         <h3 className="text-sm font-semibold text-slate-700 mb-2">📅 기간 선택</h3>
+                        <div className="flex bg-slate-100 rounded p-1 mb-3 w-fit">
+                          <button onClick={() => setExportRangeMode('month')} className={`px-3 py-1 rounded text-sm font-bold ${exportRangeMode === 'month' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>월 단위</button>
+                          <button onClick={() => setExportRangeMode('range')} className={`px-3 py-1 rounded text-sm font-bold ${exportRangeMode === 'range' ? 'bg-slate-800 text-white' : 'text-slate-600'}`}>기간 지정</button>
+                        </div>
                         <div className="flex flex-wrap items-center gap-3">
+                          {exportRangeMode === 'month' ? (
+                          <>
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-slate-600">Year</span>
                             <select value={exportYear} onChange={(e) => setExportYear(Number(e.target.value))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm">
@@ -13205,6 +13223,14 @@
                               {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                           </div>
+                          </>
+                          ) : (
+                          <div className="flex items-center gap-2">
+                            <input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                            <span className="text-sm text-slate-500">~</span>
+                            <input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+                          </div>
+                          )}
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-slate-600">섹션</span>
                             <div className="flex bg-slate-100 rounded p-1">
@@ -13263,7 +13289,7 @@
                           <span>엑셀 다운로드</span>
                         </button>
                         <p className="text-xs text-slate-400 mt-2">
-                          파일명: MFG_Data_{exportSection}_{exportYear}-{String(exportMonth).padStart(2,'0')}.xlsx
+                          파일명: MFG_Data_{exportSection}_{exportRangeMode === 'range' ? `${(exportFrom||'시작').replace(/-/g,'')}_${(exportTo||'종료').replace(/-/g,'')}` : `${exportYear}-${String(exportMonth).padStart(2,'0')}`}.xlsx
                         </p>
                       </div>
                     </div>
