@@ -1480,7 +1480,7 @@
             const finRate = input1 > 0 ? (secondBad/input1*100) : 0;  // U = T/O
             return { log, good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second };
           };
-          const logs = (td.productionLogs||[]).filter(l => (l.section||'TCP')==='TCP' && (l.lineName==='1PC'||l.lineName==='2PC') && inR(l));
+          const logs = (td.productionLogs||[]).filter(l => (l.section||'TCP')==='TCP' && l.lineName==='2PC' && inR(l));
           const groups = {};
           logs.forEach(l => { const it = l.item || '(미지정)'; (groups[it]=groups[it]||[]).push(l); });
           const items = Object.keys(groups).sort((a,b) => a.localeCompare(b,'ko'));
@@ -10868,10 +10868,10 @@
                 const finRate = input1 > 0 ? (secondBad / input1 * 100) : 0;
                 return { log: logList[0], good, input1, eol1Good, eol1Bad: firstBad, ftfrRate, eolFinGood, eolFinBad, finRate, first, second, lots, runout1, runout2 };
               };
-              // 아이템별 그룹 (TCP: 1PC/2PC 라인만) + 기간 필터
+              // 아이템별 그룹 (TCP: 2PC 라인만) + 기간 필터
               const logs = (data.productionLogs || []).filter(l => {
                 if ((l.section || section) !== section) return false;
-                if (section === 'TCP' && !(l.lineName === '1PC' || l.lineName === '2PC')) return false;
+                if (section === 'TCP' && l.lineName !== '2PC') return false;
                 const d = (l.productionDate || '').slice(0, 10);
                 if (lotFtfrFrom && d < lotFtfrFrom) return false;
                 if (lotFtfrTo && d > lotFtfrTo) return false;
