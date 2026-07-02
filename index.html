@@ -358,7 +358,25 @@
 
           // baseQty 체크
           const workers = Array.isArray(l.selectedWorkers) ? l.selectedWorkers.length : (parseInt(l.workers) || 1);
-          const ce = itemDef.ct.find(c => c.workers === workers) || itemDef.ct[0];
+          // 실제 OEE 계산과 동일한 매칭: 인원수 + 날짜 구간 (fallback 없음)
+          const td = new Date(l.productionDate);
+          const ce = itemDef.ct.find(c => {
+            if (c.workers !== workers) return false;
+            const sd = new Date(c.startDate);
+            const ed = c.endDate ? new Date(c.endDate) : new Date('9999-12-31');
+            return td >= sd && td <= ed;
+          });
+          if (!ce) {
+            const wlist = [...new Set(itemDef.ct.map(c => c.workers))].join('/');
+            issues.push({
+              category: 'oee', severity: 'high',
+              date: l.productionDate, shift: l.shift,
+              section: l.section, line: l.lineName, item: l.item,
+              issueText: `CT 매칭 실패 (인원 ${workers}명 — 등록된 CT 인원: ${wlist}명). P(성능) 계산에서 제외됨`,
+              logs: [l.id],
+            });
+            return;
+          }
           const baseQty = parseFloat(ce?.baseQty) || 0;
           if (baseQty <= 0) {
             issues.push({
@@ -1994,8 +2012,8 @@
           numerator: [{type:'field', id:'operatingTime'}],
           denominator: [{type:'field', id:'loadTime'}]
         },
-        P: { // Performance = goodQty / expectedOutput
-          numerator: [{type:'field', id:'goodQty'}],
+        P: { // Performance = goodQtyForP / expectedOutput (CT 미설정 작업 제외)
+          numerator: [{type:'field', id:'goodQtyForP'}],
           denominator: [{type:'field', id:'expectedOutput'}]
         },
         Q: { // Quality = (goodQty + defects - rework) / (goodQty + defects)
@@ -2007,10 +2025,19 @@
           denominator: [{type:'field', id:'goodQty'}, {type:'op', op:'+'}, {type:'field', id:'defects'}]
         },
       };
+      // 저장된 P 수식이 옛 goodQty 단독이면 goodQtyForP로 업그레이드 (CT 미설정 왜곡 방지)
+      const migrateFormula = (cfg) => {
+        if (!cfg || !cfg.P || !Array.isArray(cfg.P.numerator)) return cfg;
+        const num = cfg.P.numerator;
+        if (num.length === 1 && num[0] && num[0].type === 'field' && num[0].id === 'goodQty') {
+          return { ...cfg, P: { ...cfg.P, numerator: [{type:'field', id:'goodQtyForP'}] } };
+        }
+        return cfg;
+      };
       const [formulaConfig, setFormulaConfig] = useState(() => {
         try { 
           const saved = JSON.parse(localStorage.getItem('mfg_formula_config') || 'null');
-          return saved || DEFAULT_FORMULAS;
+          return migrateFormula(saved || DEFAULT_FORMULAS);
         } catch { return DEFAULT_FORMULAS; }
       });
       const saveFormulaConfig = (next) => {
@@ -2157,7 +2184,7 @@
               try { localStorage.setItem('mfg_ftfr_config', JSON.stringify(d.ftfrConfig || {})); } catch {}
             }
             if (d.formulaConfig !== undefined) {
-              setFormulaConfig(d.formulaConfig || DEFAULT_FORMULAS);
+              setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
               try { localStorage.setItem('mfg_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS)); } catch {}
             }
             if (d.achPlanData !== undefined) {
@@ -2270,7 +2297,7 @@
                     try { localStorage.setItem('mfg_ftfr_config', JSON.stringify(d.ftfrConfig || {})); } catch {}
                   }
                   if (d.formulaConfig !== undefined) {
-                    setFormulaConfig(d.formulaConfig || DEFAULT_FORMULAS);
+                    setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
                     try { localStorage.setItem('mfg_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS)); } catch {}
                   }
                   if (d.achPlanData !== undefined) {
@@ -2664,9 +2691,12 @@
         const operatingTime = Math.max(0, loadTime - unplannedDt);
         const goodQty = parseFloat(log.goodQuantity) || 0;
         const baseQtyNum = parseFloat(baseQty) || 0;
-        const expectedOutput = (baseQtyNum && ctBaseMinutes > 0) ? (operatingTime / ctBaseMinutes) * baseQtyNum : 0;
-        const idealCT = (baseQtyNum > 0 && ctBaseMinutes > 0) ? (ctBaseMinutes * 60 / baseQtyNum) : 0;
-        return { goodQty, defects, rework, loadTime, operatingTime, expectedOutput,
+        const hasCT = (baseQtyNum > 0 && ctBaseMinutes > 0);
+        const expectedOutput = hasCT ? (operatingTime / ctBaseMinutes) * baseQtyNum : 0;
+        // P(성능) 분자/분모 짝맞춤: CT 미설정 작업은 분자(goodQtyForP)에서도 제외해 P 왜곡 방지
+        const goodQtyForP = hasCT ? goodQty : 0;
+        const idealCT = hasCT ? (ctBaseMinutes * 60 / baseQtyNum) : 0;
+        return { goodQty, goodQtyForP, defects, rework, loadTime, operatingTime, expectedOutput,
                  productionTime, plannedDt, unplannedDt, baseQty: baseQtyNum, idealCT };
       };
 
@@ -2699,6 +2729,8 @@
         const values = {
           ...t,
           totalQty: (t.goodQty || 0) + (t.defects || 0),
+          // goodQtyForP 미제공(수기입력 등) 시 goodQty로 대체
+          goodQtyForP: (t.goodQtyForP !== undefined ? t.goodQtyForP : (t.goodQty || 0)),
         };
         
         // Formula-driven calculation (fall back to default if formula missing)
@@ -2713,7 +2745,7 @@
         };
         
         const A_raw = calc('A', () => t.loadTime > 0 ? (t.operatingTime/t.loadTime)*100 : 0);
-        const P_raw = calc('P', () => t.expectedOutput > 0 ? (t.goodQty/t.expectedOutput)*100 : 0);
+        const P_raw = calc('P', () => t.expectedOutput > 0 ? (values.goodQtyForP/t.expectedOutput)*100 : 0);
         const Q_raw = calc('Q', () => {
           const totalOut = t.goodQty + t.defects;
           return totalOut > 0 ? ((t.goodQty - t.rework)/totalOut)*100 : 100;
@@ -2727,12 +2759,12 @@
       };
 
       const aggregateContribs = (logs) => {
-        const t = { goodQty:0, defects:0, rework:0, loadTime:0, operatingTime:0, expectedOutput:0,
+        const t = { goodQty:0, goodQtyForP:0, defects:0, rework:0, loadTime:0, operatingTime:0, expectedOutput:0,
                     productionTime:0, plannedDt:0, unplannedDt:0, baseQty:0 };
         logs.forEach(l => {
           const c = computeLogContribution(l);
           if (!c) return;
-          t.goodQty += c.goodQty; t.defects += c.defects; t.rework += c.rework;
+          t.goodQty += c.goodQty; t.goodQtyForP += (c.goodQtyForP || 0); t.defects += c.defects; t.rework += c.rework;
           t.loadTime += c.loadTime; t.operatingTime += c.operatingTime; t.expectedOutput += c.expectedOutput;
           t.productionTime += (c.productionTime || 0);
           t.plannedDt += (c.plannedDt || 0);
@@ -4294,6 +4326,9 @@
                           <th className="px-3 py-3 text-right font-bold">양품수량</th>
                           <th className="px-3 py-3 text-right font-bold">재작업</th>
                           <th className="px-3 py-3 text-right font-bold">불량</th>
+                          <th className="px-3 py-3 text-right font-bold">총작업시간</th>
+                          <th className="px-3 py-3 text-right font-bold">비가동<br/>(계획)</th>
+                          <th className="px-3 py-3 text-right font-bold">비가동<br/>(비계획)</th>
                           <th className="px-3 py-3 text-right bg-blue-100 font-bold"><Info term="A" label="A" /></th>
                           <th className="px-3 py-3 text-right bg-yellow-100 font-bold"><Info term="P" label="P" /></th>
                           <th className="px-3 py-3 text-right bg-green-100 font-bold"><Info term="Q" label="Q" /></th>
@@ -4302,7 +4337,7 @@
                       </thead>
                       <tbody>
                         {Object.keys(oeeLineBreakdown.lines).length === 0 && (
-                          <tr><td colSpan="10" className="text-center py-6 text-slate-400">선택한 월에 데이터가 없습니다</td></tr>
+                          <tr><td colSpan="13" className="text-center py-6 text-slate-400">선택한 월에 데이터가 없습니다</td></tr>
                         )}
                         {Object.entries(oeeLineBreakdown.lines).map(([line, d]) => (
                           <React.Fragment key={line}>
@@ -4315,6 +4350,9 @@
                               <td className="px-3 py-2 text-right">{Math.round(d.goodQty).toLocaleString()}</td>
                               <td className="px-3 py-2 text-right">{Math.round(d.rework).toLocaleString()}</td>
                               <td className="px-3 py-2 text-right">{Math.round(d.defects).toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right">{Math.round(d.operatingTime||0).toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right">{Math.round(d.plannedDt||0).toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right">{Math.round(d.unplannedDt||0).toLocaleString()}</td>
                               <td className="px-3 py-2 text-right bg-blue-50 font-medium">{d.A.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right bg-yellow-50 font-medium">{d.P.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right bg-green-50 font-medium">{d.Q.toFixed(1)}%</td>
@@ -4328,6 +4366,9 @@
                                 <td className="px-3 py-1.5 text-right text-slate-600">{Math.round(id.goodQty).toLocaleString()}</td>
                                 <td className="px-3 py-1.5 text-right text-slate-600">{Math.round(id.rework).toLocaleString()}</td>
                                 <td className="px-3 py-1.5 text-right text-slate-600">{Math.round(id.defects).toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right text-slate-600">{Math.round(id.operatingTime||0).toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right text-slate-600">{Math.round(id.plannedDt||0).toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right text-slate-600">{Math.round(id.unplannedDt||0).toLocaleString()}</td>
                                 <td className="px-3 py-1.5 text-right text-slate-600">{id.A.toFixed(1)}%</td>
                                 <td className="px-3 py-1.5 text-right text-slate-600">{id.P.toFixed(1)}%</td>
                                 <td className="px-3 py-1.5 text-right text-slate-600">{id.Q.toFixed(1)}%</td>
@@ -4344,6 +4385,9 @@
                             <td className="px-3 py-2 text-right">{Math.round(oeeLineBreakdown.total.goodQty).toLocaleString()}</td>
                             <td className="px-3 py-2 text-right">{Math.round(oeeLineBreakdown.total.rework).toLocaleString()}</td>
                             <td className="px-3 py-2 text-right">{Math.round(oeeLineBreakdown.total.defects).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right">{Math.round(oeeLineBreakdown.total.operatingTime||0).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right">{Math.round(oeeLineBreakdown.total.plannedDt||0).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right">{Math.round(oeeLineBreakdown.total.unplannedDt||0).toLocaleString()}</td>
                             <td className="px-3 py-2 text-right bg-blue-100">{oeeLineBreakdown.total.A.toFixed(1)}%</td>
                             <td className="px-3 py-2 text-right bg-yellow-100">{oeeLineBreakdown.total.P.toFixed(1)}%</td>
                             <td className="px-3 py-2 text-right bg-green-100">{oeeLineBreakdown.total.Q.toFixed(1)}%</td>
@@ -4561,28 +4605,30 @@
                     </div>
 
                     {/* Table */}
-                    <div className="bg-white rounded-lg shadow-sm border border-slate-200 border border-slate-200 overflow-hidden">
+                    <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead className="bg-slate-100">
                           <tr>
                             <th className="px-2 py-2 w-8"></th>
-                            <th className="px-3 py-2 text-left">구분</th>
-                            <th className="px-3 py-2 text-right">총수량</th>
-                            <th className="px-3 py-2 text-right">계획수량</th>
-                            <th className="px-3 py-2 text-right">양품수량</th>
-                            <th className="px-3 py-2 text-right">재작업</th>
-                            <th className="px-3 py-2 text-right">불량</th>
-                            <th className="px-3 py-2 text-right">작업시간</th>
-                            <th className="px-3 py-2 text-right">계획시간</th>
-                            <th className="px-3 py-2 text-right bg-blue-100"><Info term="A" label="A" /></th>
-                            <th className="px-3 py-2 text-right bg-yellow-100"><Info term="P" label="P" /></th>
-                            <th className="px-3 py-2 text-right bg-green-100"><Info term="Q" label="Q" /></th>
-                            <th className="px-3 py-2 text-right bg-indigo-100"><Info term="OEE" label="OEE" /></th>
+                            <th className="px-2 py-2 text-left whitespace-nowrap">구분</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">총수량</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">계획수량</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">양품수량</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">재작업</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">불량</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">작업시간</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">계획시간</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">비가동(계획)</th>
+                            <th className="px-2 py-2 text-right whitespace-nowrap">비가동(비계획)</th>
+                            <th className="px-2 py-2 text-right bg-blue-100 whitespace-nowrap"><Info term="A" label="A" /></th>
+                            <th className="px-2 py-2 text-right bg-yellow-100 whitespace-nowrap"><Info term="P" label="P" /></th>
+                            <th className="px-2 py-2 text-right bg-green-100 whitespace-nowrap"><Info term="Q" label="Q" /></th>
+                            <th className="px-2 py-2 text-right bg-indigo-100 whitespace-nowrap"><Info term="OEE" label="OEE" /></th>
                           </tr>
                         </thead>
                         <tbody>
                           {Object.keys(sectionData).length === 0 && (
-                            <tr><td colSpan="13" className="text-center py-6 text-slate-400">선택한 조건에 데이터가 없습니다</td></tr>
+                            <tr><td colSpan="15" className="text-center py-6 text-slate-400">선택한 조건에 데이터가 없습니다</td></tr>
                           )}
                           {Object.entries(sectionData).map(([sec, d]) => {
                             const expanded = odExpanded[sec] !== false;
@@ -4600,6 +4646,8 @@
                                   <td className="px-3 py-2 text-right">{Math.round(d.agg.defects).toLocaleString()}</td>
                                   <td className="px-3 py-2 text-right">{Math.round(d.agg.operatingTime).toLocaleString()}</td>
                                   <td className="px-3 py-2 text-right">{Math.round(d.agg.loadTime).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right">{Math.round(d.agg.plannedDt||0).toLocaleString()}</td>
+                                  <td className="px-3 py-2 text-right">{Math.round(d.agg.unplannedDt||0).toLocaleString()}</td>
                                   <td className="px-3 py-2 text-right bg-blue-50">{d.agg.A.toFixed(1)}%</td>
                                   <td className="px-3 py-2 text-right bg-yellow-50">{d.agg.P.toFixed(1)}%</td>
                                   <td className="px-3 py-2 text-right bg-green-50">{d.agg.Q.toFixed(1)}%</td>
@@ -4616,6 +4664,8 @@
                                     <td className="px-3 py-1.5 text-right">{Math.round(iAgg.defects).toLocaleString()}</td>
                                     <td className="px-3 py-1.5 text-right">{Math.round(iAgg.operatingTime).toLocaleString()}</td>
                                     <td className="px-3 py-1.5 text-right">{Math.round(iAgg.loadTime).toLocaleString()}</td>
+                                    <td className="px-3 py-1.5 text-right">{Math.round(iAgg.plannedDt||0).toLocaleString()}</td>
+                                    <td className="px-3 py-1.5 text-right">{Math.round(iAgg.unplannedDt||0).toLocaleString()}</td>
                                     <td className="px-3 py-1.5 text-right">{iAgg.A.toFixed(1)}%</td>
                                     <td className="px-3 py-1.5 text-right">{iAgg.P.toFixed(1)}%</td>
                                     <td className="px-3 py-1.5 text-right">{iAgg.Q.toFixed(1)}%</td>
@@ -4639,6 +4689,8 @@
                               <td className="px-3 py-2 text-right">{Math.round(grandTotal.defects).toLocaleString()}</td>
                               <td className="px-3 py-2 text-right">{Math.round(grandTotal.operatingTime).toLocaleString()}</td>
                               <td className="px-3 py-2 text-right">{Math.round(grandTotal.loadTime).toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right">{Math.round(grandTotal.plannedDt||0).toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right">{Math.round(grandTotal.unplannedDt||0).toLocaleString()}</td>
                               <td className="px-3 py-2 text-right bg-blue-100">{grandTotal.A.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right bg-yellow-100">{grandTotal.P.toFixed(1)}%</td>
                               <td className="px-3 py-2 text-right bg-green-100">{grandTotal.Q.toFixed(1)}%</td>
