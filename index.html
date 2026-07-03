@@ -142,6 +142,32 @@
     const { useState, useMemo } = React;
 
     // ===== 공유저장소 캐시 (재방문 시 즉시 표시, 변경 없으면 네트워크 생략) =====
+    // ===== 백업 압축 해제 (전송량 대폭 감소: 압축본이면 풀어서 사용) =====
+    // 압축 백업은 data 필드가 base64(gzip) 문자열, 일반 백업은 객체 → 타입으로 구분
+    async function __gunzipToObj(b64) {
+      try {
+        // base64 → 바이트
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        // gzip 해제 (브라우저 내장)
+        const ds = new DecompressionStream('gzip');
+        const stream = new Blob([bytes]).stream().pipeThrough(ds);
+        const buf = await new Response(stream).arrayBuffer();
+        const json = new TextDecoder().decode(buf);
+        return JSON.parse(json);
+      } catch (e) {
+        console.warn('압축 해제 실패:', e);
+        return null;
+      }
+    }
+    // 백업 data를 표준 객체로 정규화 (압축이면 풀고, 아니면 그대로)
+    async function __normalizeBackup(data) {
+      if (data == null) return null;
+      if (typeof data === 'string') return await __gunzipToObj(data); // 압축본
+      return data; // 일반 객체 (하위호환)
+    }
+
     const __idb = {
       _db: null,
       async open() {
@@ -2231,8 +2257,9 @@
         try {
           const res = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(id));
           const result = await res.json();
-          if (result.ok && result.data) {
-            const d = result.data;
+          if (result.ok && result.data != null) {
+            const d = await __normalizeBackup(result.data);
+            if (!d) { alert('불러오기 실패: 데이터를 읽을 수 없습니다'); return; }
             // Only restore mfg-report settings (NOT tcpData/feData — those come from auto-load)
             if (d.oeeManual !== undefined) {
               setOeeManual(d.oeeManual || {});
@@ -2327,17 +2354,19 @@
             const latestFe = pickLatest('fe-backup-');
 
             // ── 병렬 로딩 + 캐시: 같은 백업(id)이 캐시에 있으면 네트워크 생략 ──
+            // 캐시엔 항상 "정규화된 객체"를 저장 (압축본은 받은 즉시 해제)
             const loadOne = async (file, prefix) => {
               if (!file) return null;
               const cacheKey = prefix + ':' + file.id;
               // 1) 캐시에 같은 id가 있으면 즉시 반환 (네트워크 생략)
               const cached = await __idb.get(cacheKey);
               if (cached) { __idb.prune(prefix, cacheKey); return cached; }
-              // 2) 없으면 네트워크에서 받고 캐시에 저장 + 옛 캐시 정리
+              // 2) 없으면 네트워크에서 받고 → 압축이면 해제 → 캐시에 객체로 저장
               try {
                 const r = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(file.id));
                 const j = await r.json();
-                const data = (j.ok && j.data) ? j.data : null;
+                const raw = (j.ok && j.data != null) ? j.data : null;
+                const data = await __normalizeBackup(raw);
                 if (data) { await __idb.set(cacheKey, data); __idb.prune(prefix, cacheKey); }
                 return data;
               } catch { return null; }
