@@ -3139,13 +3139,16 @@ function App() {
         const pickLatest = prefix => {
           const matches = files.filter(f => (f.name || '').toLowerCase().startsWith(prefix));
           if (matches.length === 0) return null;
-          // modified(수정시각) 우선 정렬 — 파일명 형식(하이픈 유무)이 섞여도 정확히 최신 선택
-          return matches.sort((a, b) => {
+          const byModified = (a, b) => {
             const ta = a.modified ? new Date(a.modified).getTime() : 0;
             const tb = b.modified ? new Date(b.modified).getTime() : 0;
             if (tb !== ta) return tb - ta;
             return (b.name || '').localeCompare(a.name || '');
-          })[0];
+          };
+          // 압축본(.json.gz) 우선 — 있으면 그 중 최신. 없을 때만 비압축(.json) 최신으로 폴백
+          const gz = matches.filter(f => (f.name || '').toLowerCase().endsWith('.json.gz'));
+          if (gz.length > 0) return gz.sort(byModified)[0];
+          return matches.sort(byModified)[0];
         };
         const latestTcp = pickLatest('tcp-backup-');
         const latestFe = pickLatest('fe-backup-');
@@ -4812,7 +4815,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V021")))), React.createElement("nav", {
+  }, "V023")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -5145,7 +5148,7 @@ function App() {
     checked: qSelectedLines.includes('ALL') || qSelectedLines.includes(line),
     onChange: e => {
       if (qSelectedLines.includes('ALL')) {
-        setQSelectedLines(availableLines.filter(l => l !== line));
+        setQSelectedLines([line]);
       } else if (e.target.checked) {
         const next = [...qSelectedLines, line];
         setQSelectedLines(next.length === availableLines.length ? ['ALL'] : next);
@@ -6097,14 +6100,15 @@ function App() {
       }, displayValue.toFixed(1), "%"))));
     };
     const toggleArr = (arr, val, all) => {
+      // 'ALL'(전체) 상태에서 개별 클릭 → 그 1개만 선택
       if (arr.includes('ALL')) {
-        const next = all.filter(v => v !== val);
-        return next.length === 0 ? ['ALL'] : next;
+        return [val];
       }
+      // 이미 선택된 것 클릭 → 해제 (0개가 되어도 'ALL'로 돌아가지 않음)
       if (arr.includes(val)) {
-        const next = arr.filter(v => v !== val);
-        return next.length === 0 ? ['ALL'] : next;
+        return arr.filter(v => v !== val);
       }
+      // 미선택 클릭 → 추가. 단 전부 선택되면 'ALL'로 통일
       const next = [...arr, val];
       return next.length === all.length ? ['ALL'] : next;
     };
@@ -7072,10 +7076,9 @@ function App() {
     })).sort((a, b) => b.manHours - a.manHours);
     const togglePmLine = line => {
       if (pmSelectedLines.includes('ALL')) {
-        setPmSelectedLines(pmLines.filter(l => l !== line));
+        setPmSelectedLines([line]);
       } else if (pmSelectedLines.includes(line)) {
-        const next = pmSelectedLines.filter(l => l !== line);
-        setPmSelectedLines(next.length === 0 ? ['ALL'] : next);
+        setPmSelectedLines(pmSelectedLines.filter(l => l !== line));
       } else {
         const next = [...pmSelectedLines, line];
         setPmSelectedLines(next.length === pmLines.length ? ['ALL'] : next);
@@ -7084,10 +7087,9 @@ function App() {
     };
     const togglePmItem = item => {
       if (pmSelectedItems.includes('ALL')) {
-        setPmSelectedItems(pmItems.filter(i => i !== item));
+        setPmSelectedItems([item]);
       } else if (pmSelectedItems.includes(item)) {
-        const next = pmSelectedItems.filter(i => i !== item);
-        setPmSelectedItems(next.length === 0 ? ['ALL'] : next);
+        setPmSelectedItems(pmSelectedItems.filter(i => i !== item));
       } else {
         const next = [...pmSelectedItems, item];
         setPmSelectedItems(next.length === pmItems.length ? ['ALL'] : next);
@@ -7454,10 +7456,9 @@ function App() {
     }
     const toggleLine = line => {
       if (drSelectedLines.includes('ALL')) {
-        setDrSelectedLines(drLines.filter(l => l !== line));
+        setDrSelectedLines([line]);
       } else if (drSelectedLines.includes(line)) {
-        const next = drSelectedLines.filter(l => l !== line);
-        setDrSelectedLines(next.length === 0 ? ['ALL'] : next);
+        setDrSelectedLines(drSelectedLines.filter(l => l !== line));
       } else {
         const next = [...drSelectedLines, line];
         setDrSelectedLines(next.length === drLines.length ? ['ALL'] : next);
@@ -8068,9 +8069,8 @@ function App() {
       return n;
     });
     const toggleLine = line => {
-      if (dtSelectedLines.includes('ALL')) setDtSelectedLines(dtLines.filter(l => l !== line));else if (dtSelectedLines.includes(line)) {
-        const next = dtSelectedLines.filter(l => l !== line);
-        setDtSelectedLines(next.length === 0 ? ['ALL'] : next);
+      if (dtSelectedLines.includes('ALL')) setDtSelectedLines([line]);else if (dtSelectedLines.includes(line)) {
+        setDtSelectedLines(dtSelectedLines.filter(l => l !== line));
       } else {
         const next = [...dtSelectedLines, line];
         setDtSelectedLines(next.length === dtLines.length ? ['ALL'] : next);
@@ -9494,10 +9494,9 @@ function App() {
     }
     const toggleLine = line => {
       if (toolSelectedLines.includes('ALL')) {
-        setToolSelectedLines(toolLines.filter(l => l !== line));
+        setToolSelectedLines([line]);
       } else if (toolSelectedLines.includes(line)) {
-        const next = toolSelectedLines.filter(l => l !== line);
-        setToolSelectedLines(next.length === 0 ? ['ALL'] : next);
+        setToolSelectedLines(toolSelectedLines.filter(l => l !== line));
       } else {
         const next = [...toolSelectedLines, line];
         setToolSelectedLines(next.length === toolLines.length ? ['ALL'] : next);
@@ -9907,9 +9906,8 @@ function App() {
     }
     const monthDetailTotal = Object.values(detailByLine).reduce((s, b) => s + b.manHours, 0);
     const toggleLine = line => {
-      if (whSelectedLines.includes('ALL')) setWhSelectedLines(whLines.filter(l => l !== line));else if (whSelectedLines.includes(line)) {
-        const next = whSelectedLines.filter(l => l !== line);
-        setWhSelectedLines(next.length === 0 ? ['ALL'] : next);
+      if (whSelectedLines.includes('ALL')) setWhSelectedLines([line]);else if (whSelectedLines.includes(line)) {
+        setWhSelectedLines(whSelectedLines.filter(l => l !== line));
       } else {
         const next = [...whSelectedLines, line];
         setWhSelectedLines(next.length === whLines.length ? ['ALL'] : next);
@@ -10230,11 +10228,10 @@ function App() {
     };
     const toggleCmpLine = line => {
       if (cmpSelectedLines.includes('ALL')) {
-        setCmpSelectedLines(cmpLinesAvail.filter(l => l !== line));
+        setCmpSelectedLines([line]);
         setCmpSelectedItems(['ALL']);
       } else if (cmpSelectedLines.includes(line)) {
-        const next = cmpSelectedLines.filter(l => l !== line);
-        setCmpSelectedLines(next.length === 0 ? ['ALL'] : next);
+        setCmpSelectedLines(cmpSelectedLines.filter(l => l !== line));
         setCmpSelectedItems(['ALL']);
       } else {
         const next = [...cmpSelectedLines, line];
@@ -10243,9 +10240,8 @@ function App() {
       }
     };
     const toggleCmpItem = it => {
-      if (cmpSelectedItems.includes('ALL')) setCmpSelectedItems(cmpItemsAvail.filter(i => i !== it));else if (cmpSelectedItems.includes(it)) {
-        const next = cmpSelectedItems.filter(i => i !== it);
-        setCmpSelectedItems(next.length === 0 ? ['ALL'] : next);
+      if (cmpSelectedItems.includes('ALL')) setCmpSelectedItems([it]);else if (cmpSelectedItems.includes(it)) {
+        setCmpSelectedItems(cmpSelectedItems.filter(i => i !== it));
       } else {
         const next = [...cmpSelectedItems, it];
         setCmpSelectedItems(next.length === cmpItemsAvail.length ? ['ALL'] : next);
@@ -16969,11 +16965,10 @@ function App() {
     };
     const toggleFdLine = lineKey => {
       if (fdSelectedLines.includes('ALL')) {
-        setFdSelectedLines(fdLinesAvail.filter(l => l !== lineKey));
+        setFdSelectedLines([lineKey]);
         setFdSelectedItems(['ALL']);
       } else if (fdSelectedLines.includes(lineKey)) {
-        const next = fdSelectedLines.filter(l => l !== lineKey);
-        setFdSelectedLines(next.length === 0 ? ['ALL'] : next);
+        setFdSelectedLines(fdSelectedLines.filter(l => l !== lineKey));
         setFdSelectedItems(['ALL']);
       } else {
         const next = [...fdSelectedLines, lineKey];
@@ -16982,9 +16977,8 @@ function App() {
       }
     };
     const toggleFdItem = it => {
-      if (fdSelectedItems.includes('ALL')) setFdSelectedItems(fdItemsAvail.filter(i => i !== it));else if (fdSelectedItems.includes(it)) {
-        const next = fdSelectedItems.filter(i => i !== it);
-        setFdSelectedItems(next.length === 0 ? ['ALL'] : next);
+      if (fdSelectedItems.includes('ALL')) setFdSelectedItems([it]);else if (fdSelectedItems.includes(it)) {
+        setFdSelectedItems(fdSelectedItems.filter(i => i !== it));
       } else {
         const next = [...fdSelectedItems, it];
         setFdSelectedItems(next.length === fdItemsAvail.length ? ['ALL'] : next);
