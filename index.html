@@ -4839,7 +4839,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V025")))), React.createElement("nav", {
+  }, "V026")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -11486,7 +11486,13 @@ function App() {
       allDowntimeLogs.filter(dt=>dt.productionLogId===l.id).forEach(dt=>{
         const type = dt.downtimeType || '(미분류)';
         const cat = (dt.downtimeCategory||dt.category)==='계획' ? '계획' : '비계획';
+        // duration이 없으면 startTime/endTime으로 계산 (실제 데이터엔 duration이 없음)
         let dur = parseFloat(dt.duration)||0;
+        if (!dur && dt.startTime && dt.endTime) {
+          const pm = hm => { if(!hm||typeof hm!=='string'||!hm.includes(':'))return null; const [h,m]=hm.split(':').map(Number); if(isNaN(h)||isNaN(m))return null; return h*60+m; };
+          const s = pm(dt.startTime), e = pm(dt.endTime);
+          if (s!=null && e!=null) { let end=e; if(end<s)end+=24*60; dur=end-s; }
+        }
         if (!dtByType[type]) dtByType[type]={cat, dur:0};
         dtByType[type].dur += dur;
       });
