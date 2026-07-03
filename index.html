@@ -2683,8 +2683,12 @@ function App() {
   const [simSelItems, setSimSelItems] = useState(['ALL']);
   const [simMoved, setSimMoved] = useState({});
   const [simExclDt, setSimExclDt] = useState(new Set());
-  const [simExclDef, setSimExclDef] = useState(new Set());
-  const [simExclRw, setSimExclRw] = useState(new Set());
+  const [simExclDefSt, setSimExclDefSt] = useState(new Set());   // 불량 스테이션 제외
+  const [simExclDefTy, setSimExclDefTy] = useState(new Set());   // 불량 대분류 제외
+  const [simExclDefSub, setSimExclDefSub] = useState(new Set()); // 불량 세부 제외
+  const [simExclRwSt, setSimExclRwSt] = useState(new Set());     // 재작업 스테이션 제외
+  const [simExclRwTy, setSimExclRwTy] = useState(new Set());     // 재작업 대분류 제외
+  const [simExclRwSub, setSimExclRwSub] = useState(new Set());   // 재작업 세부 제외
   const [simFormula, setSimFormula] = useState({
     A:{num:['operatingTime'],den:['loadTime']},
     P:{num:['goodQty'],den:['expectedOutput']},
@@ -4839,7 +4843,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V026")))), React.createElement("nav", {
+  }, "V028")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -11481,7 +11485,10 @@ function App() {
     const simItems = ['ALL', ...Array.from(new Set(lineFilteredLogs.map(l=>l.item).filter(Boolean)))];
     const filtered = lineFilteredLogs.filter(l => simSelItems.includes('ALL') || simSelItems.includes(l.item));
     // 비가동/불량/재작업 종류 목록 + 종류별 합계 (실제 로그에서)
-    const dtByType = {}; const defByType = {}; const rwByType = {};
+    const dtByType = {};
+    // 불량/재작업: 스테이션/대분류/세부 각각 독립 집계 + 원시 로그 보관(계산용)
+    const defSt={}, defTy={}, defSub={}, defLogs=[];
+    const rwSt={}, rwTy={}, rwSub={}, rwLogs=[];
     filtered.forEach(l => {
       allDowntimeLogs.filter(dt=>dt.productionLogId===l.id).forEach(dt=>{
         const type = dt.downtimeType || '(미분류)';
@@ -11497,18 +11504,16 @@ function App() {
         dtByType[type].dur += dur;
       });
       allDefectLogs.filter(d=>d.productionLogId===l.id).forEach(d=>{
-        const st = d.station || '';
-        const ty = d.defectType || d.type || '';
-        const sub = d.defectSubType || d.subType || '';
-        const t = [st, ty, sub].filter(Boolean).join(' · ') || '(미분류)';
-        defByType[t]=(defByType[t]||0)+(parseFloat(d.quantity)||0);
+        const st=d.station||'(미지정)', ty=d.defectType||d.type||'(미지정)', sub=d.defectSubType||d.subType||'(미지정)';
+        const q=parseFloat(d.quantity)||0;
+        defSt[st]=(defSt[st]||0)+q; defTy[ty]=(defTy[ty]||0)+q; defSub[sub]=(defSub[sub]||0)+q;
+        defLogs.push({st,ty,sub,q});
       });
       allReworkLogs.filter(r=>r.productionLogId===l.id).forEach(r=>{
-        const st = r.station || '';
-        const ty = r.reworkType || r.type || '';
-        const sub = r.reworkSubType || r.subType || '';
-        const t = [st, ty, sub].filter(Boolean).join(' · ') || '(미분류)';
-        rwByType[t]=(rwByType[t]||0)+(parseFloat(r.quantity)||0);
+        const st=r.station||'(미지정)', ty=r.reworkType||r.type||'(미지정)', sub=r.reworkSubType||r.subType||'(미지정)';
+        const q=parseFloat(r.quantity)||0;
+        rwSt[st]=(rwSt[st]||0)+q; rwTy[ty]=(rwTy[ty]||0)+q; rwSub[sub]=(rwSub[sub]||0)+q;
+        rwLogs.push({st,ty,sub,q});
       });
     });
     // 계산 (조정 반영). base=조정없음, sim=조정있음
@@ -11527,8 +11532,9 @@ function App() {
         const cat = adj.moved[type] || info.cat;
         if (cat==='계획') plannedDt += info.dur; else unplannedDt += info.dur;
       });
-      Object.entries(defByType).forEach(([type,qty])=>{ if(!adj.exclDef.has(type)) defects += qty; });
-      Object.entries(rwByType).forEach(([type,qty])=>{ if(!adj.exclRw.has(type)) rework += qty; });
+      // 불량: 스테이션/대분류/세부 중 하나라도 제외되면 그 불량 제외
+      defLogs.forEach(d=>{ if(adj.exDefSt.has(d.st)||adj.exDefTy.has(d.ty)||adj.exDefSub.has(d.sub))return; defects+=d.q; });
+      rwLogs.forEach(r=>{ if(adj.exRwSt.has(r.st)||adj.exRwTy.has(r.ty)||adj.exRwSub.has(r.sub))return; rework+=r.q; });
       const loadTime = productionTime - plannedDt;
       const operatingTime = loadTime - unplannedDt;
       const v = {operatingTime,loadTime,productionTime,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,totalQty:goodQty+defects};
@@ -11538,17 +11544,28 @@ function App() {
       const OEE=A/100*P/100*Q/100*100;
       return {A,P,Q,OEE,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,loadTime,operatingTime};
     };
-    const base = compute({moved:{},exclDt:new Set(),exclDef:new Set(),exclRw:new Set(),formula:SIM_DEFAULT});
-    const sim = compute({moved:simMoved,exclDt:simExclDt,exclDef:simExclDef,exclRw:simExclRw,formula:simFormula});
+    const EMPTY = new Set();
+    const base = compute({moved:{},exclDt:EMPTY,exDefSt:EMPTY,exDefTy:EMPTY,exDefSub:EMPTY,exRwSt:EMPTY,exRwTy:EMPTY,exRwSub:EMPTY,formula:SIM_DEFAULT});
+    const sim = compute({moved:simMoved,exclDt:simExclDt,exDefSt:simExclDefSt,exDefTy:simExclDefTy,exDefSub:simExclDefSub,exRwSt:simExclRwSt,exRwTy:simExclRwTy,exRwSub:simExclRwSub,formula:simFormula});
     // 토글 헬퍼
     const tArr=(arr,v,all)=>{ if(arr.includes('ALL'))return[v]; if(arr.includes(v)){const n=arr.filter(x=>x!==v);return n;} const n=[...arr,v]; return n.length===all.length-1?['ALL']:n; };
     const tSet=(set,v)=>{ const n=new Set(set); n.has(v)?n.delete(v):n.add(v); return n; };
     const cycMv=(type,orig)=>setSimMoved(p=>{const cur=p[type]||orig;const nx=cur==='계획'?'비계획':'계획';const np={...p};if(nx===orig)delete np[type];else np[type]=nx;return np;});
     const dlt=(a,b)=>{const d=b-a;const c=d>0.05?'text-emerald-600':d<-0.05?'text-rose-600':'text-slate-400';return React.createElement("span",{className:c+" text-xs font-bold ml-1"},(d>0?'▲':d<0?'▼':'=')+Math.abs(d).toFixed(1));};
-    const gauge=(label,b,s,color)=>React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-4 text-center"},
-      React.createElement("div",{className:"text-xs text-slate-500 font-semibold mb-1"},label),
-      React.createElement("div",{className:"text-3xl font-black "+color},s.toFixed(1),React.createElement("span",{className:"text-lg"},"%")),
-      React.createElement("div",{className:"text-xs text-slate-400 mt-1"},"기준 "+b.toFixed(1)+"% ",dlt(b,s)));
+    const gauge=(label,b,s,color)=>React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3 text-center"},
+      React.createElement("div",{className:"text-xs text-slate-500 font-semibold mb-1.5"},label),
+      React.createElement("div",{className:"flex items-center justify-center gap-2"},
+        // 현재(기준)
+        React.createElement("div",{className:"text-center"},
+          React.createElement("div",{className:"text-[10px] text-slate-400 font-semibold"},"현재"),
+          React.createElement("div",{className:"text-xl font-bold text-slate-500"},b.toFixed(1),React.createElement("span",{className:"text-xs"},"%"))),
+        // 화살표
+        React.createElement("div",{className:"text-slate-300 text-lg"},"→"),
+        // 시뮬
+        React.createElement("div",{className:"text-center"},
+          React.createElement("div",{className:"text-[10px] font-semibold "+color},"시뮬"),
+          React.createElement("div",{className:"text-2xl font-black "+color},s.toFixed(1),React.createElement("span",{className:"text-sm"},"%")))),
+      React.createElement("div",{className:"text-xs mt-1"},dlt(b,s)));
     const tokLabel=t=>['+','-','*','/'].includes(t)?t:(SIM_FIELDS.find(x=>x.id===t)?.label||t);
     const addTok=(part,tok)=>setSimFormula(p=>({...p,[simEditMetric]:{...p[simEditMetric],[part]:[...p[simEditMetric][part],tok]}}));
     const clearPart=(part)=>setSimFormula(p=>({...p,[simEditMetric]:{...p[simEditMetric],[part]:[]}}));
@@ -11563,7 +11580,7 @@ function App() {
           SIM_FIELDS.map(fl=>React.createElement("button",{key:fl.id,onClick:()=>addTok(part,fl.id),className:"px-1.5 py-0.5 bg-white border border-slate-200 rounded text-xs hover:bg-blue-50"},fl.label)),
           ['+','-','*','/'].map(o=>React.createElement("button",{key:o,onClick:()=>addTok(part,o),className:"px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs font-bold"},o))));
     };
-    const resetSim=()=>{setSimMoved({});setSimExclDt(new Set());setSimExclDef(new Set());setSimExclRw(new Set());setSimFormula(JSON.parse(JSON.stringify(SIM_DEFAULT)));};
+    const resetSim=()=>{setSimMoved({});setSimExclDt(new Set());setSimExclDefSt(new Set());setSimExclDefTy(new Set());setSimExclDefSub(new Set());setSimExclRwSt(new Set());setSimExclRwTy(new Set());setSimExclRwSub(new Set());setSimFormula(JSON.parse(JSON.stringify(SIM_DEFAULT)));};
 
     return React.createElement("div",{className:"space-y-3"},
       // 헤더
@@ -11585,6 +11602,18 @@ function App() {
           React.createElement("div",{className:"flex flex-wrap gap-1"},simLines.map(l=>React.createElement("button",{key:l,onClick:()=>setSimSelLines(tArr(simSelLines,l,simLines)),className:"px-2 py-1 rounded text-xs "+((l==='ALL'?simSelLines.includes('ALL'):simSelLines.includes('ALL')||simSelLines.includes(l))?'bg-blue-500 text-white':'bg-slate-100 text-slate-600')},l==='ALL'?'전체':l)))),
         React.createElement("div",null,React.createElement("div",{className:"text-xs font-bold text-slate-600 mb-1"},"아이템"),
           React.createElement("div",{className:"flex flex-wrap gap-1"},simItems.map(it=>React.createElement("button",{key:it,onClick:()=>setSimSelItems(tArr(simSelItems,it,simItems)),className:"px-2 py-1 rounded text-xs "+((it==='ALL'?simSelItems.includes('ALL'):simSelItems.includes('ALL')||simSelItems.includes(it))?'bg-blue-500 text-white':'bg-slate-100 text-slate-600')},it==='ALL'?'전체':it))))),
+      // 현재 OEE 요약 배너 (크게 — 시뮬과 바로 비교)
+      React.createElement("div",{className:"bg-gradient-to-r from-slate-50 to-violet-50 rounded-lg border border-violet-200 p-4 flex items-center justify-center gap-6"},
+        React.createElement("div",{className:"text-center"},
+          React.createElement("div",{className:"text-xs text-slate-500 font-semibold mb-0.5"},"현재 OEE"),
+          React.createElement("div",{className:"text-4xl font-black text-slate-600"},base.OEE.toFixed(1),React.createElement("span",{className:"text-xl"},"%"))),
+        React.createElement("div",{className:"text-3xl text-slate-300"},"→"),
+        React.createElement("div",{className:"text-center"},
+          React.createElement("div",{className:"text-xs text-violet-500 font-semibold mb-0.5"},"시뮬 OEE"),
+          React.createElement("div",{className:"text-4xl font-black text-violet-700"},sim.OEE.toFixed(1),React.createElement("span",{className:"text-xl"},"%"))),
+        React.createElement("div",{className:"text-center pl-2"},
+          React.createElement("div",{className:"text-xs text-slate-400 font-semibold mb-0.5"},"변화"),
+          React.createElement("div",{className:"text-2xl font-black "+((sim.OEE-base.OEE)>0.05?'text-emerald-600':(sim.OEE-base.OEE)<-0.05?'text-rose-600':'text-slate-400')},((sim.OEE-base.OEE)>0?'▲':(sim.OEE-base.OEE)<0?'▼':'=')+Math.abs(sim.OEE-base.OEE).toFixed(1)))),
       // 게이지
       React.createElement("div",{className:"grid grid-cols-4 gap-3"},
         gauge("OEE",base.OEE,sim.OEE,"text-violet-700"),
@@ -11613,27 +11642,25 @@ function App() {
                 React.createElement("td",{className:"text-center"},React.createElement("input",{type:"checkbox",checked:ex,onChange:()=>setSimExclDt(tSet(simExclDt,type))})));
             })))),
         React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
-          React.createElement("div",{className:"font-bold text-slate-700 mb-1 text-sm"},"⚠️ 불량"),
-          React.createElement("p",{className:"text-xs text-slate-400 mb-2"},"제외(Q영향)"),
-          React.createElement("table",{className:"w-full text-xs"},React.createElement("tbody",null,
-            Object.keys(defByType).length===0 ? React.createElement("tr",null,React.createElement("td",{className:"text-slate-300 py-2"},"불량 없음")) :
-            Object.entries(defByType).map(([type,qty])=>{const ex=simExclDef.has(type);
-              return React.createElement("tr",{key:type,className:"border-b border-slate-100 "+(ex?'opacity-40':'')},
-                React.createElement("td",{className:"py-1.5"},type),
-                React.createElement("td",{className:"text-center text-slate-500"},Math.round(qty)),
-                React.createElement("td",{className:"text-center"},React.createElement("input",{type:"checkbox",checked:ex,onChange:()=>setSimExclDef(tSet(simExclDef,type))})));
-            })))),
+          React.createElement("div",{className:"font-bold text-slate-700 mb-1 text-sm"},"⚠️ 불량 ",React.createElement("span",{className:"text-xs font-normal text-slate-400"},"제외(Q영향)")),
+          [{title:'스테이션',data:defSt,set:simExclDefSt,setter:setSimExclDefSt},{title:'대분류',data:defTy,set:simExclDefTy,setter:setSimExclDefTy},{title:'세부종류',data:defSub,set:simExclDefSub,setter:setSimExclDefSub}].map(grp=>
+            React.createElement("div",{key:grp.title,className:"mb-2"},
+              React.createElement("div",{className:"text-xs font-bold text-slate-500 mb-0.5"},grp.title),
+              Object.keys(grp.data).length===0 ? React.createElement("div",{className:"text-xs text-slate-300 py-1"},"없음") :
+              React.createElement("div",{className:"flex flex-wrap gap-1"},
+                Object.entries(grp.data).map(([k,qty])=>{const ex=grp.set.has(k);
+                  return React.createElement("button",{key:k,onClick:()=>grp.setter(tSet(grp.set,k)),className:"px-1.5 py-0.5 rounded text-xs border "+(ex?'bg-slate-100 text-slate-400 line-through border-slate-200':'bg-rose-50 text-rose-700 border-rose-200')},k+" ("+Math.round(qty)+")");
+                }))))),
         React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
-          React.createElement("div",{className:"font-bold text-slate-700 mb-1 text-sm"},"🔧 재작업"),
-          React.createElement("p",{className:"text-xs text-slate-400 mb-2"},"제외(Q영향)"),
-          React.createElement("table",{className:"w-full text-xs"},React.createElement("tbody",null,
-            Object.keys(rwByType).length===0 ? React.createElement("tr",null,React.createElement("td",{className:"text-slate-300 py-2"},"재작업 없음")) :
-            Object.entries(rwByType).map(([type,qty])=>{const ex=simExclRw.has(type);
-              return React.createElement("tr",{key:type,className:"border-b border-slate-100 "+(ex?'opacity-40':'')},
-                React.createElement("td",{className:"py-1.5"},type),
-                React.createElement("td",{className:"text-center text-slate-500"},Math.round(qty)),
-                React.createElement("td",{className:"text-center"},React.createElement("input",{type:"checkbox",checked:ex,onChange:()=>setSimExclRw(tSet(simExclRw,type))})));
-            }))))),
+          React.createElement("div",{className:"font-bold text-slate-700 mb-1 text-sm"},"🔧 재작업 ",React.createElement("span",{className:"text-xs font-normal text-slate-400"},"제외(Q영향)")),
+          [{title:'스테이션',data:rwSt,set:simExclRwSt,setter:setSimExclRwSt},{title:'대분류',data:rwTy,set:simExclRwTy,setter:setSimExclRwTy},{title:'세부종류',data:rwSub,set:simExclRwSub,setter:setSimExclRwSub}].map(grp=>
+            React.createElement("div",{key:grp.title,className:"mb-2"},
+              React.createElement("div",{className:"text-xs font-bold text-slate-500 mb-0.5"},grp.title),
+              Object.keys(grp.data).length===0 ? React.createElement("div",{className:"text-xs text-slate-300 py-1"},"없음") :
+              React.createElement("div",{className:"flex flex-wrap gap-1"},
+                Object.entries(grp.data).map(([k,qty])=>{const ex=grp.set.has(k);
+                  return React.createElement("button",{key:k,onClick:()=>grp.setter(tSet(grp.set,k)),className:"px-1.5 py-0.5 rounded text-xs border "+(ex?'bg-slate-100 text-slate-400 line-through border-slate-200':'bg-cyan-50 text-cyan-700 border-cyan-200')},k+" ("+Math.round(qty)+")");
+                })))))),
       // 계산 내역
       React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
         React.createElement("div",{className:"font-bold text-slate-700 mb-2 text-sm"},"📊 계산 내역 (기준 → 시뮬)"),
