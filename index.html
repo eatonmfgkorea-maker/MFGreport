@@ -3139,7 +3139,13 @@ function App() {
         const pickLatest = prefix => {
           const matches = files.filter(f => (f.name || '').toLowerCase().startsWith(prefix));
           if (matches.length === 0) return null;
-          return matches.sort((a, b) => (b.name || '').localeCompare(a.name || ''))[0];
+          // modified(수정시각) 우선 정렬 — 파일명 형식(하이픈 유무)이 섞여도 정확히 최신 선택
+          return matches.sort((a, b) => {
+            const ta = a.modified ? new Date(a.modified).getTime() : 0;
+            const tb = b.modified ? new Date(b.modified).getTime() : 0;
+            if (tb !== ta) return tb - ta;
+            return (b.name || '').localeCompare(a.name || '');
+          })[0];
         };
         const latestTcp = pickLatest('tcp-backup-');
         const latestFe = pickLatest('fe-backup-');
@@ -4804,7 +4810,9 @@ function App() {
     }
   }, "M"), React.createElement("div", {
     className: "text-lg font-bold text-white tracking-tight leading-none"
-  }, "MFG Report"))), React.createElement("nav", {
+  }, "MFG Report", React.createElement("span", {
+    className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
+  }, "V021")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
