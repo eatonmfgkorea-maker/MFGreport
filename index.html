@@ -2527,6 +2527,26 @@ function App() {
       lineCodes
     };
   };
+  const parseIcvAssign = wb => {
+    const ws = wb.Sheets['인원편성'];
+    if (!ws || !ws['!ref']) return [];
+    const rg = XLSX.utils.decode_range(ws['!ref']);
+    let hdrRow = 4, best = -1;
+    for (let r = 0; r <= 10; r++) { let cnt = 0; for (let c = 0; c <= rg.e.c; c++) { const v = getCell(ws, r, c); if (typeof v === 'number' && v > 40000) cnt++; } if (cnt > best) { best = cnt; hdrRow = r; } }
+    const dateCols = {};
+    for (let c = 0; c <= rg.e.c; c++) { const ds = excelSerialToDate(getCell(ws, hdrRow, c)); if (ds) dateCols[c] = ds; }
+    const npno = s => String(s || '').trim().toUpperCase().replace(/[\s\-]/g, '');   // 점검표 normPno와 동일 규칙
+    const keys = new Set();
+    for (let r = 0; r <= rg.e.r; r++) {
+      const g = String(getCell(ws, r, 6) || '').trim();
+      if (g !== 'New ICV' && g !== 'Old ICV') continue;
+      const m = String(getCell(ws, r, 12) || '').trim();
+      let shift = null; if (m === '주간인원') shift = '주간'; else if (m === '야간인원') shift = '야간'; else continue;
+      const pno = npno(getCell(ws, r, 8)); if (!pno) continue;
+      for (const c in dateCols) { const v = getCell(ws, r, parseInt(c)); if (typeof v === 'number' && v > 0) keys.add(`${pno}|${dateCols[c]}|${g}|${shift}`); }
+    }
+    return Array.from(keys);
+  };
   const readFePlanRaw = () => {
     try {
       return JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || 'null');
@@ -4846,7 +4866,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V029")))), React.createElement("nav", {
+  }, "V030")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -13370,12 +13390,17 @@ function App() {
                 const merged = kept.concat(rawRows);
                 const revMap = Object.assign({}, prev.revMap || {}, lotMaps.revMap);
                 const lineCodes = Object.assign({}, prev.lineCodes || {}, lotMaps.lineCodes);
+                const assignNew = parseIcvAssign(wb);
+                const prevAssign = Array.isArray(prev.icvAssign) ? prev.icvAssign : [];
+                const keptAssign = prevAssign.filter(k => !newMonths.has(String(k).split('|')[1].slice(0, 7)));
+                const icvAssign = Array.from(new Set(keptAssign.concat(assignNew)));
                 localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({
                   rows: merged,
                   file: file.name,
                   uploadedAt: new Date().toISOString(),
                   revMap,
-                  lineCodes
+                  lineCodes,
+                  icvAssign
                 }));
               }
             } catch (e) {}
