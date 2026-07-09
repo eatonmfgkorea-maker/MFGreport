@@ -3098,6 +3098,36 @@ function App() {
     return tax;
   }, [tcpData, feData]);
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbxLFrxbAaBt1bBa3SUdDY9wY48tvt85mEDaj3tiKhyw_R7oJCC9GbOWLfWbdSohnQtB/exec';
+  const loadPlanFromDrive = async (type) => {
+    try {
+      const prefix = type === 'tcp' ? 'plan-xlsx-01.TCP' : 'plan-xlsx-02.FE';
+      const inputId = type === 'tcp' ? 'tcpPlanFileInput' : 'fePlanFileInput';
+      const listRes = await fetch(GAS_URL + '?action=list&_=' + Date.now());
+      const list = await listRes.json();
+      let files = (list.files || []).filter(f => (f.name || '').indexOf(prefix) === 0)
+        .sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+      if (files.length === 0) { alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return; }
+      const target = files[0];
+      const loadRes = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now());
+      const j = await loadRes.json();
+      const d = j.data || {};
+      const b64 = d.xlsxB64 || (d.data && d.data.xlsxB64);
+      const origName = d.origName || (d.data && d.data.origName) || target.name.replace(/^plan-xlsx-/, '').replace(/\.json$/, '');
+      if (!b64) { alert('백업 파일에서 엑셀 데이터를 찾지 못했습니다.'); return; }
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const file = new File([bytes], origName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const inp = document.getElementById(inputId);
+      if (!inp) { alert('파일 입력란을 찾지 못했습니다.'); return; }
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      inp.files = dt.files;
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (e) {
+      alert('드라이브 불러오기 오류: ' + e.message);
+    }
+  };
   const saveOeeManual = next => {
     setOeeManual(next);
     try {
@@ -4960,7 +4990,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V034")))), React.createElement("nav", {
+  }, "V035")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -13290,7 +13320,11 @@ function App() {
       className: "font-bold text-blue-800 mb-2"
     }, "TCP 생산계획 (한 파일에 월별 전부)"), React.createElement("div", {
       className: "text-xs text-slate-600 mb-2"
-    }, "Part(품명)가 시스템과 자동 매칭됩니다. 파일 1개 업로드 시 모든 월 반영."), React.createElement("input", {
+    }, "Part(품명)가 시스템과 자동 매칭됩니다. 파일 1개 업로드 시 모든 월 반영."), React.createElement("button", {
+      onClick: () => loadPlanFromDrive('tcp'),
+      className: "mb-2 mr-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
+    }, "☁️ 드라이브에서 최신 불러오기"), React.createElement("input", {
+      id: "tcpPlanFileInput",
       type: "file",
       accept: ".xlsx,.xls",
       onChange: e => {
@@ -13449,7 +13483,11 @@ function App() {
       className: "font-bold text-purple-800 mb-2"
     }, "FE 생산계획 (월별 파일)"), React.createElement("div", {
       className: "text-xs text-slate-600 mb-2"
-    }, "업로드 후 품번을 시스템 item(FTIV/UCC)과 연결합니다. 월마다 업로드."), React.createElement("input", {
+    }, "업로드 후 품번을 시스템 item(FTIV/UCC)과 연결합니다. 월마다 업로드."), React.createElement("button", {
+      onClick: () => loadPlanFromDrive('fe'),
+      className: "mb-2 mr-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
+    }, "☁️ 드라이브에서 최신 불러오기"), React.createElement("input", {
+      id: "fePlanFileInput",
       type: "file",
       accept: ".xlsx,.xls",
       onChange: e => {
