@@ -2738,6 +2738,84 @@ function App() {
     const v = ftfrTargets[`${section}_${year}`];
     return v != null && v !== '' ? Number(v) : null;
   };
+    // ===== 차트를 "보이는 그대로" PPT로 내보내기 =====
+    // container 안의 SVG(들)를 PNG로 변환해 PptxGenJS 슬라이드에 삽입
+    const __svgToPng = (svgEl, scale) => new Promise((resolve, reject) => {
+      try {
+        const clone = svgEl.cloneNode(true);
+        // viewBox 기준 크기 확보
+        let w = svgEl.clientWidth || svgEl.getBoundingClientRect().width;
+        let h = svgEl.clientHeight || svgEl.getBoundingClientRect().height;
+        const vb = svgEl.getAttribute('viewBox');
+        if ((!w || !h) && vb) { const p = vb.split(/\s+/).map(Number); w = p[2]; h = p[3]; }
+        w = Math.max(w, 100); h = Math.max(h, 100);
+        clone.setAttribute('width', w);
+        clone.setAttribute('height', h);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        const xml = new XMLSerializer().serializeToString(clone);
+        const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+        const img = new Image();
+        img.onload = () => {
+          const s = scale || 2;
+          const canvas = document.createElement('canvas');
+          canvas.width = w * s; canvas.height = h * s;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(s, s);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve({ dataUrl: canvas.toDataURL('image/png'), w, h });
+        };
+        img.onerror = reject;
+        img.src = svg64;
+      } catch (e) { reject(e); }
+    });
+    // HTML 표(table)를 PPT 표로 그대로 옮기기
+    const __htmlTableToPptRows = (tableEl) => {
+      const rows = [];
+      tableEl.querySelectorAll('tr').forEach(tr => {
+        const cells = [];
+        tr.querySelectorAll('th,td').forEach(td => {
+          const isHead = td.tagName === 'TH';
+          cells.push({ text: td.innerText.trim(), options: { bold: isHead, fontSize: 9, align: 'center', fill: isHead ? 'F1F5F9' : 'FFFFFF', color: '1E293B' } });
+        });
+        if (cells.length) rows.push(cells);
+      });
+      return rows;
+    };
+    // 차트 컨테이너(카드) 하나를 슬라이드 1장으로
+    const exportChartToPpt = async (containerEl, title) => {
+      try {
+        if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드 실패. 새로고침 후 다시 시도해주세요.'); return; }
+        const pres = new PptxGenJS();
+        pres.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inch
+        const slide = pres.addSlide();
+        slide.addText(title, { x: 0.4, y: 0.25, w: 12.5, h: 0.6, fontSize: 20, bold: true, color: '1E293B' });
+        const svgs = Array.from(containerEl.querySelectorAll('svg'));
+        const tables = Array.from(containerEl.querySelectorAll('table'));
+        let placed = false;
+        if (svgs.length > 0) {
+          // 가장 큰 SVG 하나를 대표로 (여러개면 세로 배치)
+          let y = 1.05;
+          for (const svg of svgs) {
+            const { dataUrl, w, h } = await __svgToPng(svg, 2);
+            const maxW = 12.5, maxH = svgs.length > 1 ? (6.2 / svgs.length) : 6.0;
+            let dw = maxW, dh = dw * (h / w);
+            if (dh > maxH) { dh = maxH; dw = dh * (w / h); }
+            slide.addImage({ data: dataUrl, x: (13.33 - dw) / 2, y, w: dw, h: dh });
+            y += dh + 0.2;
+            placed = true;
+          }
+        }
+        if (!placed && tables.length > 0) {
+          const rows = __htmlTableToPptRows(tables[0]);
+          if (rows.length) { slide.addTable(rows, { x: 0.4, y: 1.05, w: 12.5, border: { type: 'solid', color: 'E2E8F0', pt: 0.5 } }); placed = true; }
+        }
+        if (!placed) { alert('내보낼 차트를 찾지 못했습니다.'); return; }
+        const safe = title.replace(/[^0-9A-Za-z\uAC00-\uD7A3]+/g, '_').slice(0, 40);
+        await pres.writeFile({ fileName: safe + '.pptx' });
+      } catch (e) { console.error('PPT 내보내기 실패:', e); alert('PPT 내보내기 실패: ' + e.message); }
+    };
+
   const [fdYear, setFdYear] = useState(now0.getFullYear());
   const [fdMonth, setFdMonth] = useState(now0.getMonth() + 1);
   const [fdSections, setFdSections] = useState(['TCP', 'FE']);
@@ -4882,7 +4960,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V033")))), React.createElement("nav", {
+  }, "V034")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -12288,83 +12366,6 @@ function App() {
       } else {
         navigator.clipboard.writeText(html).then(() => alert('HTML 텍스트로 복사되었습니다.'));
       }
-    };
-    // ===== 차트를 "보이는 그대로" PPT로 내보내기 =====
-    // container 안의 SVG(들)를 PNG로 변환해 PptxGenJS 슬라이드에 삽입
-    const __svgToPng = (svgEl, scale) => new Promise((resolve, reject) => {
-      try {
-        const clone = svgEl.cloneNode(true);
-        // viewBox 기준 크기 확보
-        let w = svgEl.clientWidth || svgEl.getBoundingClientRect().width;
-        let h = svgEl.clientHeight || svgEl.getBoundingClientRect().height;
-        const vb = svgEl.getAttribute('viewBox');
-        if ((!w || !h) && vb) { const p = vb.split(/\s+/).map(Number); w = p[2]; h = p[3]; }
-        w = Math.max(w, 100); h = Math.max(h, 100);
-        clone.setAttribute('width', w);
-        clone.setAttribute('height', h);
-        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        const xml = new XMLSerializer().serializeToString(clone);
-        const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
-        const img = new Image();
-        img.onload = () => {
-          const s = scale || 2;
-          const canvas = document.createElement('canvas');
-          canvas.width = w * s; canvas.height = h * s;
-          const ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.scale(s, s);
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve({ dataUrl: canvas.toDataURL('image/png'), w, h });
-        };
-        img.onerror = reject;
-        img.src = svg64;
-      } catch (e) { reject(e); }
-    });
-    // HTML 표(table)를 PPT 표로 그대로 옮기기
-    const __htmlTableToPptRows = (tableEl) => {
-      const rows = [];
-      tableEl.querySelectorAll('tr').forEach(tr => {
-        const cells = [];
-        tr.querySelectorAll('th,td').forEach(td => {
-          const isHead = td.tagName === 'TH';
-          cells.push({ text: td.innerText.trim(), options: { bold: isHead, fontSize: 9, align: 'center', fill: isHead ? 'F1F5F9' : 'FFFFFF', color: '1E293B' } });
-        });
-        if (cells.length) rows.push(cells);
-      });
-      return rows;
-    };
-    // 차트 컨테이너(카드) 하나를 슬라이드 1장으로
-    const exportChartToPpt = async (containerEl, title) => {
-      try {
-        if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드 실패. 새로고침 후 다시 시도해주세요.'); return; }
-        const pres = new PptxGenJS();
-        pres.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inch
-        const slide = pres.addSlide();
-        slide.addText(title, { x: 0.4, y: 0.25, w: 12.5, h: 0.6, fontSize: 20, bold: true, color: '1E293B' });
-        const svgs = Array.from(containerEl.querySelectorAll('svg'));
-        const tables = Array.from(containerEl.querySelectorAll('table'));
-        let placed = false;
-        if (svgs.length > 0) {
-          // 가장 큰 SVG 하나를 대표로 (여러개면 세로 배치)
-          let y = 1.05;
-          for (const svg of svgs) {
-            const { dataUrl, w, h } = await __svgToPng(svg, 2);
-            const maxW = 12.5, maxH = svgs.length > 1 ? (6.2 / svgs.length) : 6.0;
-            let dw = maxW, dh = dw * (h / w);
-            if (dh > maxH) { dh = maxH; dw = dh * (w / h); }
-            slide.addImage({ data: dataUrl, x: (13.33 - dw) / 2, y, w: dw, h: dh });
-            y += dh + 0.2;
-            placed = true;
-          }
-        }
-        if (!placed && tables.length > 0) {
-          const rows = __htmlTableToPptRows(tables[0]);
-          if (rows.length) { slide.addTable(rows, { x: 0.4, y: 1.05, w: 12.5, border: { type: 'solid', color: 'E2E8F0', pt: 0.5 } }); placed = true; }
-        }
-        if (!placed) { alert('내보낼 차트를 찾지 못했습니다.'); return; }
-        const safe = title.replace(/[^0-9A-Za-z\uAC00-\uD7A3]+/g, '_').slice(0, 40);
-        await pres.writeFile({ fileName: safe + '.pptx' });
-      } catch (e) { console.error('PPT 내보내기 실패:', e); alert('PPT 내보내기 실패: ' + e.message); }
     };
     const downloadPpt = () => {
       try {
