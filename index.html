@@ -2722,6 +2722,22 @@ function App() {
   const [ftfrYear, setFtfrYear] = useState(now0.getFullYear());
   const [ftfrMonth, setFtfrMonth] = useState(now0.getMonth() + 1);
   const [ftfrSection, setFtfrSection] = useState('TCP');
+  // FTFR 연도별 Target (TCP/FE 각각). localStorage 저장
+  const [ftfrTargets, setFtfrTargets] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mfg_ftfr_targets') || '{}'); } catch { return {}; }
+  });
+  const [ftfrShowTargetEdit, setFtfrShowTargetEdit] = useState(false);
+  const setFtfrTarget = (section, year, val) => {
+    setFtfrTargets(prev => {
+      const next = { ...prev, [`${section}_${year}`]: val };
+      try { localStorage.setItem('mfg_ftfr_targets', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const getFtfrTarget = (section, year) => {
+    const v = ftfrTargets[`${section}_${year}`];
+    return v != null && v !== '' ? Number(v) : null;
+  };
   const [fdYear, setFdYear] = useState(now0.getFullYear());
   const [fdMonth, setFdMonth] = useState(now0.getMonth() + 1);
   const [fdSections, setFdSections] = useState(['TCP', 'FE']);
@@ -4866,7 +4882,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V030")))), React.createElement("nav", {
+  }, "V033")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -12273,6 +12289,83 @@ function App() {
         navigator.clipboard.writeText(html).then(() => alert('HTML 텍스트로 복사되었습니다.'));
       }
     };
+    // ===== 차트를 "보이는 그대로" PPT로 내보내기 =====
+    // container 안의 SVG(들)를 PNG로 변환해 PptxGenJS 슬라이드에 삽입
+    const __svgToPng = (svgEl, scale) => new Promise((resolve, reject) => {
+      try {
+        const clone = svgEl.cloneNode(true);
+        // viewBox 기준 크기 확보
+        let w = svgEl.clientWidth || svgEl.getBoundingClientRect().width;
+        let h = svgEl.clientHeight || svgEl.getBoundingClientRect().height;
+        const vb = svgEl.getAttribute('viewBox');
+        if ((!w || !h) && vb) { const p = vb.split(/\s+/).map(Number); w = p[2]; h = p[3]; }
+        w = Math.max(w, 100); h = Math.max(h, 100);
+        clone.setAttribute('width', w);
+        clone.setAttribute('height', h);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        const xml = new XMLSerializer().serializeToString(clone);
+        const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)));
+        const img = new Image();
+        img.onload = () => {
+          const s = scale || 2;
+          const canvas = document.createElement('canvas');
+          canvas.width = w * s; canvas.height = h * s;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.scale(s, s);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve({ dataUrl: canvas.toDataURL('image/png'), w, h });
+        };
+        img.onerror = reject;
+        img.src = svg64;
+      } catch (e) { reject(e); }
+    });
+    // HTML 표(table)를 PPT 표로 그대로 옮기기
+    const __htmlTableToPptRows = (tableEl) => {
+      const rows = [];
+      tableEl.querySelectorAll('tr').forEach(tr => {
+        const cells = [];
+        tr.querySelectorAll('th,td').forEach(td => {
+          const isHead = td.tagName === 'TH';
+          cells.push({ text: td.innerText.trim(), options: { bold: isHead, fontSize: 9, align: 'center', fill: isHead ? 'F1F5F9' : 'FFFFFF', color: '1E293B' } });
+        });
+        if (cells.length) rows.push(cells);
+      });
+      return rows;
+    };
+    // 차트 컨테이너(카드) 하나를 슬라이드 1장으로
+    const exportChartToPpt = async (containerEl, title) => {
+      try {
+        if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드 실패. 새로고침 후 다시 시도해주세요.'); return; }
+        const pres = new PptxGenJS();
+        pres.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 inch
+        const slide = pres.addSlide();
+        slide.addText(title, { x: 0.4, y: 0.25, w: 12.5, h: 0.6, fontSize: 20, bold: true, color: '1E293B' });
+        const svgs = Array.from(containerEl.querySelectorAll('svg'));
+        const tables = Array.from(containerEl.querySelectorAll('table'));
+        let placed = false;
+        if (svgs.length > 0) {
+          // 가장 큰 SVG 하나를 대표로 (여러개면 세로 배치)
+          let y = 1.05;
+          for (const svg of svgs) {
+            const { dataUrl, w, h } = await __svgToPng(svg, 2);
+            const maxW = 12.5, maxH = svgs.length > 1 ? (6.2 / svgs.length) : 6.0;
+            let dw = maxW, dh = dw * (h / w);
+            if (dh > maxH) { dh = maxH; dw = dh * (w / h); }
+            slide.addImage({ data: dataUrl, x: (13.33 - dw) / 2, y, w: dw, h: dh });
+            y += dh + 0.2;
+            placed = true;
+          }
+        }
+        if (!placed && tables.length > 0) {
+          const rows = __htmlTableToPptRows(tables[0]);
+          if (rows.length) { slide.addTable(rows, { x: 0.4, y: 1.05, w: 12.5, border: { type: 'solid', color: 'E2E8F0', pt: 0.5 } }); placed = true; }
+        }
+        if (!placed) { alert('내보낼 차트를 찾지 못했습니다.'); return; }
+        const safe = title.replace(/[^0-9A-Za-z\uAC00-\uD7A3]+/g, '_').slice(0, 40);
+        await pres.writeFile({ fileName: safe + '.pptx' });
+      } catch (e) { console.error('PPT 내보내기 실패:', e); alert('PPT 내보내기 실패: ' + e.message); }
+    };
     const downloadPpt = () => {
       try {
         if (typeof PptxGenJS === 'undefined') {
@@ -16417,12 +16510,18 @@ function App() {
     const monthlyTrend = [];
     for (let m = 1; m <= 12; m++) {
       const a = aggFtfr(getFtfrLogs(ftfrYear, m));
+      // 클릭한 월(ftfrMonth) 이후는 표시 안 함
+      const withinRange = m <= ftfrMonth;
       monthlyTrend.push({
         month: m,
         ...a,
-        hasData: a.total > 0
+        hasData: withinRange && a.total > 0
       });
     }
+    // YTD 평균 (1월 ~ 클릭한 월까지, 데이터 있는 월만 평균)
+    const ytdMonths = monthlyTrend.filter(m => m.month <= ftfrMonth && m.hasData);
+    const ytdAvg = ytdMonths.length > 0 ? ytdMonths.reduce((s, m) => s + m.ftfr, 0) / ytdMonths.length : 0;
+    const ftfrTargetVal = getFtfrTarget(ftfrSection, ftfrYear);
     const lineMap = {};
     monthLogs.forEach(l => {
       const sec = ftfrSection === 'ALL' ? l.section : ftfrSection;
@@ -16775,18 +16874,47 @@ function App() {
     }, Math.round(monthAgg.defects).toLocaleString()))))), React.createElement("div", {
       className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
-      className: "bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200"
-    }, "📈 ", ftfrYear, "년 월별 FTFR 추이"), React.createElement("div", {
+      className: "bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200 flex items-center justify-between"
+    }, React.createElement("span", null, "📈 ", ftfrYear, "년 월별 FTFR 추이"), React.createElement("div", {
+      className: "flex items-center gap-2"
+    }, ftfrTargetVal != null && React.createElement("span", {
+      className: "text-sm font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded"
+    }, "Target : ", ftfrTargetVal.toLocaleString()), React.createElement("button", {
+      onClick: () => setFtfrShowTargetEdit(v => !v),
+      className: "text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded"
+    }, "🎯 Target 설정"), React.createElement("button", {
+      onClick: (e) => exportChartToPpt(e.currentTarget.closest('.rounded-xl'), ftfrYear + "년 월별 FTFR 추이"),
+      className: "text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-2.5 py-1 rounded"
+    }, "📥 PPT"))), ftfrShowTargetEdit && React.createElement("div", {
+      className: "px-4 py-3 bg-amber-50 border-b border-amber-200"
+    }, React.createElement("div", {
+      className: "text-xs font-bold text-slate-600 mb-2"
+    }, ftfrSection, " 연도별 Target 설정"), React.createElement("div", {
+      className: "flex flex-wrap gap-3"
+    }, [2026, 2027, 2028, 2029, 2030].map(yr => React.createElement("div", {
+      key: yr,
+      className: "flex items-center gap-1"
+    }, React.createElement("span", {
+      className: "text-xs font-semibold text-slate-500"
+    }, yr, ":"), React.createElement("input", {
+      type: "number",
+      value: ftfrTargets[`${ftfrSection}_${yr}`] || '',
+      onChange: e => setFtfrTarget(ftfrSection, yr, e.target.value),
+      placeholder: "타겟",
+      className: "w-24 border border-slate-300 rounded px-2 py-1 text-xs"
+    })))), React.createElement("p", {
+      className: "text-[11px] text-slate-400 mt-1.5"
+    }, "TCP/FE 각각 연도별 저장 · 그래프에 빨간 점선 표시")), React.createElement("div", {
       className: "p-4"
     }, (() => {
-      const W = 700,
+      const W = 760,
         H = 280,
         padL = 50,
         padR = 15,
         padT = 30,
         padB = 38;
-      const cw = (W - padL - padR) / 12;
-      const dataMax = Math.max(...monthlyTrend.filter(m => m.hasData).map(m => m.ftfr), 1);
+      const cw = (W - padL - padR) / 13;
+      const dataMax = Math.max(...monthlyTrend.filter(m => m.hasData).map(m => m.ftfr), ytdAvg, ftfrTargetVal || 0, 1);
       const niceMax = (() => {
         const target = Math.max(dataMax * 1.2, 10000);
         const exp = Math.pow(10, Math.floor(Math.log10(target)));
@@ -16863,14 +16991,40 @@ function App() {
         fontSize: "13",
         fontWeight: "600",
         fill: "#475569"
-      }, m.month, "월")));
+      }, m.month, "월")),
+      // YTD 평균 막대 (13번째 칸)
+      (() => {
+        if (ytdAvg <= 0) return null;
+        const i = 12;
+        const x = padL + cw * i + cw * 0.2;
+        const bw = cw * 0.6;
+        const bh = (H - padT - padB) * (ytdAvg / maxVal);
+        const y = H - padB - bh;
+        return React.createElement("g", { key: 'ytd' },
+          React.createElement("rect", { x, y, width: bw, height: bh, fill: "#8b5cf6", opacity: 0.85 }),
+          React.createElement("text", { x: x + bw / 2, y: y - 5, textAnchor: "middle", fontSize: "13", fontWeight: "bold", fill: "#6d28d9" }, Math.round(ytdAvg).toLocaleString()),
+          React.createElement("text", { x: x + bw / 2, y: H - padB + 18, textAnchor: "middle", fontSize: "12", fontWeight: "700", fill: "#6d28d9" }, "YTD"));
+      })(),
+      // Target 점선
+      (() => {
+        if (ftfrTargetVal == null) return null;
+        const y = padT + (H - padT - padB) * (1 - ftfrTargetVal / maxVal);
+        return React.createElement("g", { key: 'target' },
+          React.createElement("line", { x1: padL, y1: y, x2: W - padR, y2: y, stroke: "#dc2626", strokeWidth: "1.5", strokeDasharray: "6 4" }),
+          React.createElement("text", { x: W - padR - 2, y: y - 4, textAnchor: "end", fontSize: "11", fontWeight: "bold", fill: "#dc2626" }, "Target " + ftfrTargetVal.toLocaleString()));
+      })());
     })())), React.createElement("div", {
       className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
       className: "bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200 flex items-center justify-between"
-    }, React.createElement("span", null, "📊 ", ftfrYear, " FTFR Trend — 품번별 1차불량 (연간)"), React.createElement("span", {
+    }, React.createElement("span", null, "📊 ", ftfrYear, " FTFR Trend — 품번별 1차불량 (연간)"), React.createElement("div", {
+      className: "flex items-center gap-2"
+    }, React.createElement("span", {
       className: "text-[11px] font-normal text-slate-400"
-    }, "막대=1차불량(재작업) · 빨강선=누적% · 불량 발생 품번만")), React.createElement("div", {
+    }, "막대=1차불량(재작업) · 빨강선=누적% · 불량 발생 품번만"), React.createElement("button", {
+      onClick: (e) => exportChartToPpt(e.currentTarget.closest('.rounded-xl'), ftfrYear + " FTFR Trend 품번별 1차불량"),
+      className: "text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-2.5 py-1 rounded whitespace-nowrap"
+    }, "📥 PPT"))), React.createElement("div", {
       className: "p-4"
     }, paretoRows.length === 0 ? React.createElement("div", {
       className: "text-center py-10 text-slate-400 text-sm"
@@ -17399,22 +17553,23 @@ function App() {
     }, itemAggList.length)))), fdViewMode === 'month' && React.createElement("div", {
       className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
-      className: "bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200"
-    }, "📊 아이템별 FTFR (", fdYear, ".", String(fdMonth).padStart(2, '0'), ")"), React.createElement("div", {
-      className: "p-4 overflow-x-auto"
+      className: "bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200 flex items-center justify-between"
+    }, React.createElement("span", null, "📊 아이템별 FTFR (", fdYear, ".", String(fdMonth).padStart(2, '0'), ")"), React.createElement("button", {
+      onClick: (e) => exportChartToPpt(e.currentTarget.closest('.rounded-xl'), "아이템별 FTFR " + fdYear + "." + String(fdMonth).padStart(2, '0')),
+      className: "text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-2.5 py-1 rounded"
+    }, "📥 PPT")), React.createElement("div", {
+      className: "p-4"
     }, itemAggList.length === 0 ? React.createElement("div", {
       className: "text-center text-slate-400 py-12"
     }, "선택한 조건에 데이터가 없습니다") : (() => {
       const N = itemAggList.length;
-      const barW = 60;
-      const padL = 50,
-        padR = 20,
-        padT = 30,
-        padB = 120;
-      const contentW = padL + padR + N * barW;
-      const W = contentW;
-      const H = 420;
+      // 유동폭: 뷰박스를 고정하고 아이템 개수로 나눠서 항상 한 화면에 맞춤
+      const W = 1000;
+      const padL = 45, padR = 20, padT = 25, padB = 130;
+      const H = 460;
       const chartH = H - padT - padB;
+      const slot = (W - padL - padR) / N;         // 아이템당 폭 (유동)
+      const bw = Math.min(slot * 0.7, 70);         // 막대폭 (최대 제한)
       const dataMax = Math.max(...itemAggList.map(r => r.ftfr), 1);
       const niceMax = (() => {
         const target = Math.max(dataMax * 1.2, 10000);
@@ -17426,81 +17581,111 @@ function App() {
       })();
       const chartMax = niceMax;
       const steps = 5;
-      const ticks = Array.from({
-        length: steps + 1
-      }, (_, i) => chartMax * i / steps);
+      const ticks = Array.from({ length: steps + 1 }, (_, i) => chartMax * i / steps);
       const fmtTick = v => v >= 1000 ? `${Math.round(v / 1000).toLocaleString()}k` : `${Math.round(v).toLocaleString()}`;
+      // 폰트 크기: 아이템 많으면 라벨 축소
+      const labelFont = N > 30 ? 8 : N > 20 ? 9 : 10;
       return React.createElement("svg", {
         viewBox: `0 0 ${W} ${H}`,
-        width: W,
-        height: H,
-        style: {
-          display: 'block'
-        }
+        className: "w-full",
+        style: { display: 'block' }
       }, ticks.map(v => {
         const y = padT + chartH * (1 - v / chartMax);
-        return React.createElement("g", {
-          key: v
-        }, React.createElement("line", {
-          x1: padL,
-          y1: y,
-          x2: W - padR,
-          y2: y,
-          stroke: "#e5e7eb",
-          strokeWidth: "1"
-        }), React.createElement("text", {
-          x: padL - 6,
-          y: y + 4,
-          textAnchor: "end",
-          fontSize: "11",
-          fill: "#9ca3af"
-        }, fmtTick(v)));
+        return React.createElement("g", { key: v },
+          React.createElement("line", { x1: padL, y1: y, x2: W - padR, y2: y, stroke: "#e5e7eb", strokeWidth: "1" }),
+          React.createElement("text", { x: padL - 6, y: y + 4, textAnchor: "end", fontSize: "10", fill: "#9ca3af" }, fmtTick(v)));
       }), itemAggList.map((r, i) => {
-        const x = padL + i * barW + barW * 0.15;
-        const bw = barW * 0.7;
+        const x = padL + i * slot + (slot - bw) / 2;
         const bh = chartH * (r.ftfr / chartMax);
         const y = padT + chartH - bh;
-        const labelTrunc = r.item.length > 14 ? r.item.slice(0, 12) + '..' : r.item;
         const cx = x + bw / 2;
-        return React.createElement("g", {
-          key: i
-        }, React.createElement("rect", {
-          x: x,
-          y: padT,
-          width: bw,
-          height: chartH,
-          fill: "#f1f5f9",
-          rx: "3"
-        }), React.createElement("rect", {
-          x: x,
-          y: y,
-          width: bw,
-          height: bh,
-          fill: ftfrColor(r.ftfr),
-          rx: "3"
-        }), React.createElement("text", {
-          x: cx,
-          y: y - 6,
-          textAnchor: "middle",
-          fontSize: "11",
-          fontWeight: "bold",
-          fill: "#1f2937"
-        }, Math.round(r.ftfr).toLocaleString()), React.createElement("text", {
-          x: cx,
-          y: padT + chartH + 16,
-          textAnchor: "middle",
-          fontSize: "11",
-          fontWeight: "600",
-          fill: "#475569",
-          transform: `rotate(-35 ${cx} ${padT + chartH + 16})`
-        }, labelTrunc), React.createElement("text", {
-          x: cx,
-          y: padT + chartH + 90,
-          textAnchor: "middle",
-          fontSize: "9",
-          fill: "#94a3b8"
-        }, Math.round(r.total).toLocaleString()));
+        // 아이템명 세로 (90도 회전)
+        return React.createElement("g", { key: i },
+          React.createElement("rect", { x, y: padT, width: bw, height: chartH, fill: "#f1f5f9", rx: "2" }),
+          React.createElement("rect", { x, y, width: bw, height: bh, fill: ftfrColor(r.ftfr), rx: "2" }),
+          React.createElement("text", {
+            x: cx, y: padT + chartH + 8,
+            textAnchor: "end", fontSize: labelFont, fontWeight: "600", fill: "#475569",
+            transform: `rotate(-90 ${cx} ${padT + chartH + 8})`
+          }, r.item.length > 22 ? r.item.slice(0, 20) + '..' : r.item));
       }));
+    })())),
+    // 도넛차트 — 아이템별 FTFR 비중
+    fdViewMode === 'month' && itemAggList.length > 0 && React.createElement("div", {
+      className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
+    }, React.createElement("div", {
+      className: "bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 border-b border-slate-200 flex items-center justify-between"
+    }, React.createElement("span", null, "🍩 아이템별 FTFR 비중"), React.createElement("button", {
+      onClick: (e) => exportChartToPpt(e.currentTarget.closest('.rounded-xl'), "아이템별 FTFR 비중 " + fdYear + "." + String(fdMonth).padStart(2, '0')),
+      className: "text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 px-2.5 py-1 rounded"
+    }, "📥 PPT")), React.createElement("div", {
+      className: "p-4"
+    }, (() => {
+      const rows = itemAggList.filter(r => r.ftfr > 0).sort((a, b) => b.ftfr - a.ftfr);
+      if (rows.length === 0) return React.createElement("div", { className: "text-center text-slate-400 py-8" }, "FTFR 데이터가 없습니다");
+      const total = rows.reduce((s, r) => s + r.ftfr, 0);
+      const PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#ec4899', '#f43f5e', '#64748b'];
+      // 상위 12개 + 나머지 '기타'
+      const TOP = 12;
+      let segs = rows.slice(0, TOP).map((r, i) => ({ label: r.item, val: r.ftfr, color: PALETTE[i % PALETTE.length] }));
+      if (rows.length > TOP) {
+        const etc = rows.slice(TOP).reduce((s, r) => s + r.ftfr, 0);
+        segs.push({ label: '기타(' + (rows.length - TOP) + '개)', val: etc, color: '#cbd5e1' });
+      }
+      // 큰 도넛 + 조각 밖에 아이템명·% 직접 표기 (리더선)
+      const VB = 620, cx = VB / 2, cy = 250, rOut = 175, rIn = 100;
+      let ang = -Math.PI / 2;
+      const paths = [], labels = [];
+      segs.forEach((s, i) => {
+        const frac = s.val / total;
+        const a0 = ang, a1 = ang + frac * Math.PI * 2;
+        const mid = (a0 + a1) / 2;
+        ang = a1;
+        const x0 = cx + rOut * Math.cos(a0), y0 = cy + rOut * Math.sin(a0);
+        const x1 = cx + rOut * Math.cos(a1), y1 = cy + rOut * Math.sin(a1);
+        const xi0 = cx + rIn * Math.cos(a1), yi0 = cy + rIn * Math.sin(a1);
+        const xi1 = cx + rIn * Math.cos(a0), yi1 = cy + rIn * Math.sin(a0);
+        const large = (a1 - a0) > Math.PI ? 1 : 0;
+        const d = `M ${x0} ${y0} A ${rOut} ${rOut} 0 ${large} 1 ${x1} ${y1} L ${xi0} ${yi0} A ${rIn} ${rIn} 0 ${large} 0 ${xi1} ${yi1} Z`;
+        paths.push(React.createElement("path", { key: 'p' + i, d, fill: s.color, stroke: "#fff", strokeWidth: "2" }));
+        const pct = frac * 100;
+        // 조각이 충분히 크면(>=4%) 조각 안에 %, 밖에 리더선+아이템명. 작으면 밖에만 간단히
+        const cosM = Math.cos(mid), sinM = Math.sin(mid);
+        if (pct >= 3) {
+          // 조각 안 %
+          const rMid = (rOut + rIn) / 2;
+          labels.push(React.createElement("text", {
+            key: 'pin' + i, x: cx + rMid * cosM, y: cy + rMid * sinM + 4,
+            textAnchor: "middle", fontSize: "14", fontWeight: "bold", fill: "#fff"
+          }, pct.toFixed(1) + '%'));
+          // 리더선 + 아이템명 (조각 밖)
+          const r1 = rOut + 8, r2 = rOut + 24;
+          const lx1 = cx + r1 * cosM, ly1 = cy + r1 * sinM;
+          const lx2 = cx + r2 * cosM, ly2 = cy + r2 * sinM;
+          const right = cosM >= 0;
+          const tx = lx2 + (right ? 6 : -6);
+          labels.push(React.createElement("line", { key: 'ld' + i, x1: cx + rOut * cosM, y1: cy + rOut * sinM, x2: lx2, y2: ly2, stroke: s.color, strokeWidth: "1.5" }));
+          labels.push(React.createElement("text", {
+            key: 'lbl' + i, x: tx, y: ly2 + 4,
+            textAnchor: right ? "start" : "end", fontSize: "13", fontWeight: "600", fill: "#334155"
+          }, s.label.length > 16 ? s.label.slice(0, 15) + '…' : s.label));
+        }
+      });
+      return React.createElement("div", null,
+        React.createElement("svg", { viewBox: `0 0 ${VB} 500`, className: "w-full", style: { maxHeight: 520 } },
+          paths, labels,
+          React.createElement("text", { x: cx, y: cy - 12, textAnchor: "middle", fontSize: "16", fill: "#64748b" }, "총 FTFR"),
+          React.createElement("text", { x: cx, y: cy + 18, textAnchor: "middle", fontSize: "30", fontWeight: "bold", fill: "#1e293b" }, Math.round(total).toLocaleString())),
+        // 작은 조각(3% 미만) 범례
+        (() => {
+          const small = segs.filter(s => (s.val / total * 100) < 3);
+          if (small.length === 0) return null;
+          return React.createElement("div", { className: "flex flex-wrap gap-x-4 gap-y-1 justify-center mt-2 px-4" },
+            small.map((s, i) => React.createElement("div", { key: i, className: "flex items-center gap-1.5 text-xs" },
+              React.createElement("span", { style: { width: 10, height: 10, background: s.color, borderRadius: 2, display: 'inline-block' } }),
+              React.createElement("span", { className: "text-slate-600" }, s.label.length > 14 ? s.label.slice(0, 13) + '…' : s.label),
+              React.createElement("span", { className: "text-slate-400 font-mono" }, "(", (s.val / total * 100).toFixed(1), "%)"))));
+        })());
     })())), fdViewMode === 'table' && (() => {
       const feDisplayLine = lineName => {
         const resolved = resolveLineName('FE', lineName);
