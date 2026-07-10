@@ -3098,7 +3098,7 @@ function App() {
     return tax;
   }, [tcpData, feData]);
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbxLFrxbAaBt1bBa3SUdDY9wY48tvt85mEDaj3tiKhyw_R7oJCC9GbOWLfWbdSohnQtB/exec';
-  const loadPlanFromDrive = async (type) => {
+  const loadPlanFromDrive = async (type, silent) => {
     try {
       const prefix = type === 'tcp' ? 'plan-xlsx-01.TCP' : 'plan-xlsx-02.FE';
       const inputId = type === 'tcp' ? 'tcpPlanFileInput' : 'fePlanFileInput';
@@ -3106,28 +3106,71 @@ function App() {
       const list = await listRes.json();
       let files = (list.files || []).filter(f => (f.name || '').indexOf(prefix) === 0)
         .sort((a, b) => (b.name || '').localeCompare(a.name || ''));
-      if (files.length === 0) { alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return; }
+      if (files.length === 0) { if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return false; }
       const target = files[0];
       const loadRes = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now());
       const j = await loadRes.json();
       const d = j.data || {};
       const b64 = d.xlsxB64 || (d.data && d.data.xlsxB64);
       const origName = d.origName || (d.data && d.data.origName) || target.name.replace(/^plan-xlsx-/, '').replace(/\.json$/, '');
-      if (!b64) { alert('백업 파일에서 엑셀 데이터를 찾지 못했습니다.'); return; }
+      if (!b64) { if(!silent) alert('백업 파일에서 엑셀 데이터를 찾지 못했습니다.'); return false; }
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       const file = new File([bytes], origName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const inp = document.getElementById(inputId);
-      if (!inp) { alert('파일 입력란을 찾지 못했습니다.'); return; }
+      if (!inp) { if(!silent) alert('파일 입력란을 찾지 못했습니다.'); return false; }
       const dt = new DataTransfer();
       dt.items.add(file);
       inp.files = dt.files;
       inp.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
     } catch (e) {
-      alert('드라이브 불러오기 오류: ' + e.message);
+      if(!silent) alert('드라이브 불러오기 오류: ' + e.message);
+      return false;
     }
   };
+  // Production 보고 탭 진입 시 생산계획 자동 로드 (1회, 조용히)
+  const planAutoLoadedRef = React.useRef(false);
+  const [planLoadStatus, setPlanLoadStatus] = useState(''); // '', 'loading', 'done', 'fail'
+  const [planLoadMsg, setPlanLoadMsg] = useState('');
+  React.useEffect(() => {
+    if (activeTab !== 'prodreport') return;
+    if (planAutoLoadedRef.current) return;
+    planAutoLoadedRef.current = true;
+    setPlanLoadStatus('loading');
+    setPlanLoadMsg('생산계획을 불러오는 중...');
+    // input DOM이 렌더될 때까지 기다렸다가 실행
+    const waitInput = (id, tries) => new Promise(resolve => {
+      const check = (n) => {
+        if (document.getElementById(id)) return resolve(true);
+        if (n <= 0) return resolve(false);
+        setTimeout(() => check(n - 1), 200);
+      };
+      check(tries);
+    });
+    const t = setTimeout(async () => {
+      await waitInput('tcpPlanFileInput', 10); // 최대 2초 대기
+      const okTcp = await loadPlanFromDrive('tcp', true);
+      await new Promise(r => setTimeout(r, 1000));
+      await waitInput('fePlanFileInput', 10);
+      const okFe = await loadPlanFromDrive('fe', true);
+      // 이미 저장된 계획이 있으면(화면에 데이터 있음) 그것도 성공으로 간주
+      const hasPlan = Object.keys(productionPlan || {}).length > 0;
+      if (okTcp || okFe || hasPlan) {
+        setPlanLoadStatus('done');
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, '0'), mm = String(now.getMinutes()).padStart(2, '0');
+        const tcpMark = okTcp ? '✓' : (hasPlan ? '(저장됨)' : '−');
+        const feMark = okFe ? '✓' : (hasPlan ? '(저장됨)' : '−');
+        setPlanLoadMsg(`생산계획 준비됨 (${hh}:${mm}) · TCP ${tcpMark} / FE ${feMark}`);
+      } else {
+        setPlanLoadStatus('fail');
+        setPlanLoadMsg('생산계획을 불러오지 못했습니다. "🔗 매칭"에서 수동으로 시도하세요.');
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [activeTab]);
   const saveOeeManual = next => {
     setOeeManual(next);
     try {
@@ -4990,7 +5033,7 @@ function App() {
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V035")))), React.createElement("nav", {
+  }, "V039")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -13295,7 +13338,9 @@ function App() {
     }, "📊 PPT"), React.createElement("button", {
       onClick: () => setShowPlanUploadModal(true),
       className: "px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded text-sm font-medium"
-    }, "📋 생산계획")))), showPlanUploadModal && React.createElement("div", {
+    }, "🔗 매칭"))), planLoadStatus && React.createElement("div", {
+      className: "mt-2 px-3 py-1.5 rounded text-xs font-medium inline-flex items-center gap-1.5 " + (planLoadStatus === 'loading' ? 'bg-blue-50 text-blue-700 border border-blue-200' : planLoadStatus === 'done' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200')
+    }, planLoadStatus === 'loading' ? '⏳' : planLoadStatus === 'done' ? '✅' : '⚠️', planLoadMsg)), showPlanUploadModal && React.createElement("div", {
       className: "fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4",
       onClick: () => setShowPlanUploadModal(false)
     }, React.createElement("div", {
@@ -13305,7 +13350,7 @@ function App() {
       className: "flex items-center justify-between mb-4"
     }, React.createElement("h3", {
       className: "text-lg font-bold text-slate-800"
-    }, "📋 생산계획 업로드"), React.createElement("button", {
+    }, "🔗 매칭 설정 · 생산계획"), React.createElement("button", {
       onClick: () => setShowPlanUploadModal(false),
       className: "text-slate-400 hover:text-slate-600 text-xl"
     }, "✕")), React.createElement("div", {
@@ -13323,7 +13368,7 @@ function App() {
     }, "Part(품명)가 시스템과 자동 매칭됩니다. 파일 1개 업로드 시 모든 월 반영."), React.createElement("button", {
       onClick: () => loadPlanFromDrive('tcp'),
       className: "mb-2 mr-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
-    }, "☁️ 드라이브에서 최신 불러오기"), React.createElement("input", {
+    }, "🔄 지금 다시 불러오기"), React.createElement("input", {
       id: "tcpPlanFileInput",
       type: "file",
       accept: ".xlsx,.xls",
@@ -13401,7 +13446,11 @@ function App() {
         e.target.value = '';
       },
       className: "text-sm"
-    }), tcpPlanItemsForMapping.length > 0 && (() => {
+    }), (() => {
+      // 파일에서 온 목록 우선, 없으면 저장된 매칭에서 품명 목록 추출
+      const savedTcpParts = Object.keys(planItemMapping).filter(k => k.startsWith('TCP|')).map(k => k.slice(4));
+      const tcpMapParts = tcpPlanItemsForMapping.length > 0 ? tcpPlanItemsForMapping : savedTcpParts;
+      if (tcpMapParts.length === 0) return null;
       const sysItems = new Set();
       allLogs.forEach(l => {
         if (l.source === 'TCP' && l.item) sysItems.add(l.item);
@@ -13413,7 +13462,7 @@ function App() {
         className: "font-medium text-blue-800 mb-2 text-sm"
       }, "Part → 시스템 item 연결 (자동 연결된 건 그대로 두세요)"), React.createElement("div", {
         className: "space-y-1 max-h-60 overflow-y-auto"
-      }, tcpPlanItemsForMapping.map(part => React.createElement("div", {
+      }, tcpMapParts.map(part => React.createElement("div", {
         key: part,
         className: "flex items-center gap-2 text-xs"
       }, React.createElement("span", {
@@ -13486,7 +13535,7 @@ function App() {
     }, "업로드 후 품번을 시스템 item(FTIV/UCC)과 연결합니다. 월마다 업로드."), React.createElement("button", {
       onClick: () => loadPlanFromDrive('fe'),
       className: "mb-2 mr-2 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700"
-    }, "☁️ 드라이브에서 최신 불러오기"), React.createElement("input", {
+    }, "🔄 지금 다시 불러오기"), React.createElement("input", {
       id: "fePlanFileInput",
       type: "file",
       accept: ".xlsx,.xls",
@@ -13578,7 +13627,11 @@ function App() {
         e.target.value = '';
       },
       className: "text-sm"
-    }), fePlanItemsForMapping.length > 0 && (() => {
+    }), (() => {
+      // 파일 목록 우선, 없으면 저장된 매칭에서 품번 추출
+      const savedFeParts = Object.keys(planItemMapping).filter(k => k.startsWith('FE|')).map(k => ({ pno: k.slice(3), pname: k.slice(3) }));
+      const feMapParts = fePlanItemsForMapping.length > 0 ? fePlanItemsForMapping : savedFeParts;
+      if (feMapParts.length === 0) return null;
       const sysItems = new Set(['FTIV']);
       allLogs.forEach(l => {
         if (l.source === 'FE' && l.lineName === 'UCC' && l.item) sysItems.add(l.item);
@@ -13592,7 +13645,7 @@ function App() {
         className: "text-xs text-slate-500 mb-2"
       }, "계획 엑셀 품번을 FTIV/UCC item과 연결하세요. (필요한 것만)"), React.createElement("div", {
         className: "space-y-1 max-h-60 overflow-y-auto"
-      }, fePlanItemsForMapping.map(({
+      }, feMapParts.map(({
         pno,
         pname
       }) => React.createElement("div", {
