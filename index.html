@@ -3195,8 +3195,8 @@ function App() {
         return true;
       };
       let records = buildRecords(inScope);
-      // 너무 많으면 최근 것 위주로 자름 (토큰/비용 보호)
-      const MAX = 700;
+      // 무료 티어 안정성: 너무 크면 503 발생 → 건수 제한
+      const MAX = 350;
       let trimmed = false;
       if (records.length > MAX) { records = records.slice(-MAX); trimmed = true; }
 
@@ -3208,7 +3208,7 @@ function App() {
 아래는 실제 생산 기록 원본이다. 이 데이터만 근거로 한국어로 간결히 답하라.
 - 조회면 숫자를 정확히 집계해서 답하고, "왜/분석"이면 데이터 근거로 원인을 설명하라.
 - 데이터에 없으면 "데이터에 없음"이라고 하라. 추측 금지.
-${trimmed ? '- 참고: 데이터가 많아 일부만 포함됨.' : ''}
+${trimmed ? '- 참고: 데이터가 많아 최근 일부만 포함됨.' : ''}
 
 [형식] 날짜|구분|라인|품명|품번|주야|양품|인원|시간, 그 아래 들여쓰기로 불량/재작업/비가동
 [범위] ${scopeLabel || '전체'}
@@ -3218,14 +3218,29 @@ ${dataText || '(해당 범위 데이터 없음)'}
 [질문]
 ${question}`;
 
-      const gRes = await fetch(GEMINI_PROXY, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ prompt: prompt })
-      });
-      const gJson = await gRes.json();
-      const ans = gJson.ok ? (gJson.answer || '답변을 생성하지 못했어요.') : ('오류: ' + (gJson.error || '알수없음'));
-      setChatMsgs(m => [...m, { role: 'ai', text: ans.trim() }]);
+      // 503(과부하) 시 재시도
+      const callAI = async (p, tries) => {
+        for (let i = 0; i < tries; i++) {
+          const r = await fetch(GEMINI_PROXY, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ prompt: p })
+          });
+          const j = await r.json();
+          if (j.ok && j.answer) return j.answer;
+          // 과부하면 잠깐 쉬고 재시도
+          if (i < tries - 1) await new Promise(res => setTimeout(res, 2000 * (i + 1)));
+        }
+        return null;
+      };
+      let ans = await callAI(prompt, 3);
+      // 그래도 실패하면 데이터 줄여서 한 번 더
+      if (!ans && records.length > 150) {
+        const smaller = records.slice(-150);
+        const p2 = prompt.replace(dataText, smaller.join('\n')).replace(`(${records.length}건)`, `(${smaller.length}건, 축소)`);
+        ans = await callAI(p2, 2);
+      }
+      setChatMsgs(m => [...m, { role: 'ai', text: (ans || '답변 생성에 실패했어요. 질문 범위를 좁혀서(예: 특정 월·라인) 다시 시도해 주세요.').trim() }]);
     } catch (e) {
       setChatMsgs(m => [...m, { role: 'ai', text: '오류가 발생했어요: ' + e.message }]);
     } finally {
@@ -5172,7 +5187,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V045")))), React.createElement("nav", {
+  }, "V046")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
