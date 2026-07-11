@@ -3179,7 +3179,7 @@ ${question}`;
 
       const gRes = await fetch(GEMINI_PROXY, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ prompt: prompt })
       });
       const gJson = await gRes.json();
@@ -5127,7 +5127,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V042")))), React.createElement("nav", {
+  }, "V043")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
