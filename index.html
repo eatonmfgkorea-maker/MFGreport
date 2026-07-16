@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report</title>
+  <title>MFG Report V047</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3274,6 +3274,7 @@ ${question}`;
       const dt = new DataTransfer();
       dt.items.add(file);
       inp.files = dt.files;
+      inp.__planSilent = !!silent;
       inp.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     } catch (e) {
@@ -5187,7 +5188,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V046")))), React.createElement("nav", {
+  }, "V047")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -13529,6 +13530,8 @@ ${question}`;
       onChange: e => {
         const file = e.target.files[0];
         if (!file) return;
+        const __silent = !!e.target.__planSilent;
+        e.target.__planSilent = false;
         const reader = new FileReader();
         reader.onload = ev => {
           try {
@@ -13537,11 +13540,12 @@ ${question}`;
             });
             const {
               plan,
-              parts
+              parts: __rawParts
             } = parseTcpPlan(wb);
+            const parts = __rawParts.filter(p => p !== '주간' && p !== '야간');
             const cnt = Object.keys(plan).length;
             if (cnt === 0) {
-              alert('TCP 계획 데이터를 찾지 못했습니다. 월 시트(예:26_06월) 형식을 확인하세요.');
+              if (!__silent) alert('TCP 계획 데이터를 찾지 못했습니다. 월 시트(예:26_06월) 형식을 확인하세요.');
               return;
             }
             const sysItems = new Set();
@@ -13563,15 +13567,16 @@ ${question}`;
               localStorage.setItem('mfg_plan_mapping', JSON.stringify(autoMap));
             } catch {}
             const unmapped = parts.filter(p => !autoMap[`TCP|${p}`]);
-            if (unmapped.length === 0) {
-              const converted = {};
-              Object.entries(plan).forEach(([k, qty]) => {
-                const pp = k.split('|');
-                const sysItem = autoMap[`TCP|${pp[4]}`];
-                if (!sysItem) return;
-                const nk = `TCP|${pp[1]}|${pp[2]}|${pp[3]}|${sysItem}`;
-                converted[nk] = (converted[nk] || 0) + qty;
-              });
+            // 매칭된 Part는 미연결 여부와 무관하게 항상 저장 (FE와 동일 동작)
+            const converted = {};
+            Object.entries(plan).forEach(([k, qty]) => {
+              const pp = k.split('|');
+              const sysItem = autoMap[`TCP|${pp[4]}`];
+              if (!sysItem) return;
+              const nk = `TCP|${pp[1]}|${pp[2]}|${pp[3]}|${sysItem}`;
+              converted[nk] = (converted[nk] || 0) + qty;
+            });
+            if (Object.keys(converted).length > 0) {
               setProductionPlan(prev => {
                 const next = {};
                 Object.entries(prev).forEach(([k, v]) => {
@@ -13583,17 +13588,19 @@ ${question}`;
                 } catch {}
                 return next;
               });
+            }
+            if (unmapped.length === 0) {
               setTcpPlanItemsForMapping([]);
               setTcpPlanRawData(null);
-              alert(`✅ TCP 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (전체 Part 매칭)`);
+              if (!__silent) alert(`✅ TCP 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (전체 Part 매칭)`);
             } else {
               setTcpPlanRawData(plan);
               setTcpPlanItemsForMapping(parts);
               const autoCnt = parts.length - unmapped.length;
-              alert(`TCP 계획 ${cnt}건 파싱됨. Part ${parts.length}개 중 ${autoCnt}개 자동 연결. 미연결 ${unmapped.length}개를 아래에서 연결하세요.`);
+              if (!__silent) alert(`TCP 계획 ${Object.keys(converted).length}건 저장됨 (Part ${parts.length}개 중 ${autoCnt}개 자동연결). 미연결 ${unmapped.length}개는 "🔗 매칭"에서 연결하면 추가됩니다.`);
             }
           } catch (err) {
-            alert('TCP 파싱 오류: ' + err.message);
+            if (!__silent) alert('TCP 파싱 오류: ' + err.message);
           }
         };
         reader.readAsArrayBuffer(file);
@@ -13696,6 +13703,8 @@ ${question}`;
       onChange: e => {
         const file = e.target.files[0];
         if (!file) return;
+        const __silent = !!e.target.__planSilent;
+        e.target.__planSilent = false;
         const reader = new FileReader();
         reader.onload = ev => {
           try {
@@ -13708,7 +13717,7 @@ ${question}`;
             } = parseFePlan(wb);
             const cnt = Object.keys(plan).length;
             if (cnt === 0) {
-              alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)');
+              if (!__silent) alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)');
               return;
             }
             try {
@@ -13767,14 +13776,14 @@ ${question}`;
                 } catch {}
                 return next;
               });
-              alert(`✅ FE 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (${[...uploadedMonths].join(', ')} 월 갱신)`);
+              if (!__silent) alert(`✅ FE 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (${[...uploadedMonths].join(', ')} 월 갱신)`);
             } else {
               setFePlanRawData(plan);
               setFePlanItemsForMapping(items);
-              alert(`FE 계획 ${cnt}건 파싱됨. 미연결 품번 ${unmapped.length}개를 아래에서 연결하세요.`);
+              if (!__silent) alert(`FE 계획 ${cnt}건 파싱됨. 미연결 품번 ${unmapped.length}개를 아래에서 연결하세요.`);
             }
           } catch (err) {
-            alert('FE 파싱 오류: ' + err.message);
+            if (!__silent) alert('FE 파싱 오류: ' + err.message);
           }
         };
         reader.readAsArrayBuffer(file);
