@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V050</title>
+  <title>MFG Report V051</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3249,12 +3249,10 @@ ${question}`;
   };
 
 
-  const loadPlanFromDrive = async (type, silent) => {
+  const loadPlanFromDrive = async (type, silent, preList) => {
     try {
       const prefix = type === 'tcp' ? 'plan-xlsx-01.TCP' : 'plan-xlsx-02.FE';
-      const inputId = type === 'tcp' ? 'tcpPlanFileInput' : 'fePlanFileInput';
-      const listRes = await fetch(GAS_URL + '?action=list&_=' + Date.now());
-      const list = await listRes.json();
+      const list = preList || await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json();
       let files = (list.files || []).filter(f => (f.name || '').indexOf(prefix) === 0)
         .sort((a, b) => (b.name || '').localeCompare(a.name || ''));
       if (files.length === 0) { if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return false; }
@@ -3268,15 +3266,9 @@ ${question}`;
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const file = new File([bytes], origName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const inp = document.getElementById(inputId);
-      if (!inp) { if(!silent) alert('파일 입력란을 찾지 못했습니다.'); return false; }
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      inp.files = dt.files;
-      inp.__planSilent = !!silent;
-      inp.dispatchEvent(new Event('change', { bubbles: true }));
-      return target.modified || true;
+      const wb = XLSX.read(bytes, { cellDates: false });
+      const r = type === 'tcp' ? applyTcpPlanWb(wb, silent) : applyFePlanWb(wb, origName, silent);
+      return r && r.ok ? (target.modified || true) : false;
     } catch (e) {
       if(!silent) alert('드라이브 불러오기 오류: ' + e.message);
       return false;
@@ -3311,11 +3303,10 @@ ${question}`;
     });
     const t = setTimeout(async () => {
       await new Promise(r => setTimeout(r, 300)); // 데이터 반영 렌더 대기
-      await waitInput('tcpPlanFileInput', 10); // 최대 2초 대기
-      const okTcp = await loadPlanFromDrive('tcp', true);
-      await new Promise(r => setTimeout(r, 1000));
-      await waitInput('fePlanFileInput', 10);
-      const okFe = await loadPlanFromDrive('fe', true);
+      let sharedList = null;
+      try { sharedList = await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json(); } catch (e) {}
+      const okTcp = await loadPlanFromDrive('tcp', true, sharedList);
+      const okFe = await loadPlanFromDrive('fe', true, sharedList);
       // 이미 저장된 계획이 있으면(화면에 데이터 있음) 그것도 성공으로 간주
       const hasPlan = Object.keys(productionPlan || {}).length > 0;
       if (okTcp || okFe || hasPlan) {
@@ -3708,6 +3699,131 @@ ${question}`;
   feDataRef.current = feData;
   const planItemMappingRef = React.useRef(planItemMapping);
   planItemMappingRef.current = planItemMapping;
+  // ── 계획 워크북 처리(파싱·매칭·저장) 독립 함수: DOM input 없이 자동로드/수동 공용 ──
+  const applyTcpPlanWb = (wb, __silent) => {
+    try {
+      const { plan, parts: __rawParts } = parseTcpPlan(wb);
+      const parts = __rawParts.filter(p => p !== '주간' && p !== '야간');
+      const cnt = Object.keys(plan).length;
+      if (cnt === 0) {
+        if (!__silent) alert('TCP 계획 데이터를 찾지 못했습니다. 월 시트(예:26_06월) 형식을 확인하세요.');
+        return { ok: false, saved: 0 };
+      }
+      const __logs = allLogsRef.current || [];
+      const __tcpData = tcpDataRef.current;
+      const sysItems = new Set();
+      __logs.forEach(l => { if (l.source === 'TCP' && l.item) sysItems.add(l.item); });
+      (__tcpData?.settings?.TCP?.items || []).forEach(i => { if (i?.item) sysItems.add(i.item); });
+      const sysItemList = [...sysItems];
+      const autoMap = { ...planItemMappingRef.current };
+      parts.forEach(part => {
+        const key = `TCP|${part}`;
+        if (autoMap[key]) return;
+        const matched = sysItemList.find(si => normalizeItemName(si) === normalizeItemName(part));
+        if (matched) autoMap[key] = matched;
+      });
+      setPlanItemMapping(autoMap);
+      try { localStorage.setItem('mfg_plan_mapping', JSON.stringify(autoMap)); } catch {}
+      const unmapped = parts.filter(p => !autoMap[`TCP|${p}`]);
+      const converted = {};
+      Object.entries(plan).forEach(([k, qty]) => {
+        const pp = k.split('|');
+        const sysItem = autoMap[`TCP|${pp[4]}`];
+        if (!sysItem) return;
+        const nk = `TCP|${pp[1]}|${pp[2]}|${pp[3]}|${sysItem}`;
+        converted[nk] = (converted[nk] || 0) + qty;
+      });
+      try { console.log('[TCP plan]', { parsed: cnt, parts: parts.length, sysItems: sysItemList.length, unmapped: unmapped.length, saved: Object.keys(converted).length, dataRows: __logs.length, silent: __silent }); } catch (e) {}
+      if (Object.keys(converted).length > 0) {
+        setProductionPlan(prev => {
+          const next = {};
+          Object.entries(prev).forEach(([k, v]) => { if (!k.startsWith('TCP|')) next[k] = v; });
+          Object.assign(next, converted);
+          try { localStorage.setItem('mfg_production_plan', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      }
+      if (unmapped.length === 0) {
+        setTcpPlanItemsForMapping([]);
+        setTcpPlanRawData(null);
+        if (!__silent) alert(`✅ TCP 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (전체 Part 매칭)`);
+      } else {
+        setTcpPlanRawData(plan);
+        setTcpPlanItemsForMapping(parts);
+        const autoCnt = parts.length - unmapped.length;
+        if (!__silent) alert(`TCP 계획 ${Object.keys(converted).length}건 저장됨 (Part ${parts.length}개 중 ${autoCnt}개 자동연결). 미연결 ${unmapped.length}개는 "🔗 매칭"에서 연결하면 추가됩니다.`);
+      }
+      return { ok: true, saved: Object.keys(converted).length };
+    } catch (err) {
+      if (!__silent) alert('TCP 파싱 오류: ' + err.message);
+      return { ok: false, saved: 0 };
+    }
+  };
+  const applyFePlanWb = (wb, fileName, __silent) => {
+    try {
+      const { plan, items } = parseFePlan(wb);
+      const cnt = Object.keys(plan).length;
+      if (cnt === 0) {
+        if (!__silent) alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)');
+        return { ok: false, saved: 0 };
+      }
+      try {
+        const rawRows = parseFePlanRaw(wb);
+        if (rawRows.length) {
+          const lotMaps = extractLotMaps(wb);
+          let prev = {};
+          try { prev = JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || '{}') || {}; } catch {}
+          const prevRows = Array.isArray(prev.rows) ? prev.rows : [];
+          const newMonths = new Set(rawRows.map(r => String(r.date || '').slice(0, 7)));
+          const kept = prevRows.filter(r => !newMonths.has(String(r.date || '').slice(0, 7)));
+          const merged = kept.concat(rawRows);
+          const revMap = Object.assign({}, prev.revMap || {}, lotMaps.revMap);
+          const lineCodes = Object.assign({}, prev.lineCodes || {}, lotMaps.lineCodes);
+          const assignNew = parseIcvAssign(wb);
+          const prevAssign = Array.isArray(prev.icvAssign) ? prev.icvAssign : [];
+          const keptAssign = prevAssign.filter(k => !newMonths.has(String(k).split('|')[1].slice(0, 7)));
+          const icvAssign = Array.from(new Set(keptAssign.concat(assignNew)));
+          localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({ rows: merged, file: fileName, uploadedAt: new Date().toISOString(), revMap, lineCodes, icvAssign }));
+        }
+      } catch (e) {}
+      const __fpm = planItemMappingRef.current || {};
+      const unmapped = items.filter(it => !__fpm[`FE|${it.pno}`]);
+      try { console.log('[FE plan]', { parsed: cnt, items: items.length, unmapped: unmapped.length, mapKeys: Object.keys(__fpm).filter(k => k.startsWith('FE|')).length, dataRows: (allLogsRef.current || []).length, silent: __silent }); } catch (e) {}
+      if (unmapped.length === 0) {
+        const converted = {};
+        Object.entries(plan).forEach(([k, qty]) => {
+          const pp = k.split('|');
+          const sysItem = __fpm[`FE|${pp[3]}`];
+          if (!sysItem) return;
+          const nk = `FE|${pp[1]}|${pp[2]}|${sysItem}`;
+          converted[nk] = (converted[nk] || 0) + qty;
+        });
+        const uploadedMonths = new Set();
+        Object.keys(converted).forEach(k => uploadedMonths.add(k.split('|')[2].slice(0, 7)));
+        setProductionPlan(prev => {
+          const next = {};
+          Object.entries(prev).forEach(([k, v]) => {
+            if (!k.startsWith('FE|')) { next[k] = v; return; }
+            const m = k.split('|')[2].slice(0, 7);
+            if (!uploadedMonths.has(m)) next[k] = v;
+          });
+          Object.assign(next, converted);
+          try { localStorage.setItem('mfg_production_plan', JSON.stringify(next)); } catch {}
+          return next;
+        });
+        if (!__silent) alert(`✅ FE 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (${[...uploadedMonths].join(', ')} 월 갱신)`);
+        return { ok: true, saved: Object.keys(converted).length };
+      } else {
+        setFePlanRawData(plan);
+        setFePlanItemsForMapping(items);
+        if (!__silent) alert(`FE 계획 ${cnt}건 파싱됨. 미연결 품번 ${unmapped.length}개를 아래에서 연결하세요.`);
+        return { ok: true, saved: 0 };
+      }
+    } catch (err) {
+      if (!__silent) alert('FE 파싱 오류: ' + err.message);
+      return { ok: false, saved: 0 };
+    }
+  };
   const allDowntimeLogs = useMemo(() => {
     const arr = [];
     if (tcpData?.downtimeLogs) arr.push(...tcpData.downtimeLogs);
@@ -5225,7 +5341,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V050")))), React.createElement("nav", {
+  }, "V051")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -13571,81 +13687,8 @@ ${question}`;
         e.target.__planSilent = false;
         const reader = new FileReader();
         reader.onload = ev => {
-          try {
-            const wb = XLSX.read(new Uint8Array(ev.target.result), {
-              cellDates: false
-            });
-            const {
-              plan,
-              parts: __rawParts
-            } = parseTcpPlan(wb);
-            const parts = __rawParts.filter(p => p !== '주간' && p !== '야간');
-            const cnt = Object.keys(plan).length;
-            if (cnt === 0) {
-              if (!__silent) alert('TCP 계획 데이터를 찾지 못했습니다. 월 시트(예:26_06월) 형식을 확인하세요.');
-              return;
-            }
-            const __logs = allLogsRef.current || [];
-            const __tcpData = tcpDataRef.current;
-            const sysItems = new Set();
-            __logs.forEach(l => {
-              if (l.source === 'TCP' && l.item) sysItems.add(l.item);
-            });
-            // 아직 실적이 없는 품목도 매칭되도록 설정의 item 목록도 포함
-            (__tcpData?.settings?.TCP?.items || []).forEach(i => {
-              if (i?.item) sysItems.add(i.item);
-            });
-            const sysItemList = [...sysItems];
-            const autoMap = {
-              ...planItemMappingRef.current
-            };
-            parts.forEach(part => {
-              const key = `TCP|${part}`;
-              if (autoMap[key]) return;
-              const matched = sysItemList.find(si => normalizeItemName(si) === normalizeItemName(part));
-              if (matched) autoMap[key] = matched;
-            });
-            setPlanItemMapping(autoMap);
-            try {
-              localStorage.setItem('mfg_plan_mapping', JSON.stringify(autoMap));
-            } catch {}
-            const unmapped = parts.filter(p => !autoMap[`TCP|${p}`]);
-            // 매칭된 Part는 미연결 여부와 무관하게 항상 저장 (FE와 동일 동작)
-            const converted = {};
-            Object.entries(plan).forEach(([k, qty]) => {
-              const pp = k.split('|');
-              const sysItem = autoMap[`TCP|${pp[4]}`];
-              if (!sysItem) return;
-              const nk = `TCP|${pp[1]}|${pp[2]}|${pp[3]}|${sysItem}`;
-              converted[nk] = (converted[nk] || 0) + qty;
-            });
-            try { console.log('[TCP plan]', { parsed: cnt, parts: parts.length, sysItems: sysItemList.length, unmapped: unmapped.length, saved: Object.keys(converted).length, dataRows: __logs.length, silent: __silent }); } catch (e) {}
-            if (Object.keys(converted).length > 0) {
-              setProductionPlan(prev => {
-                const next = {};
-                Object.entries(prev).forEach(([k, v]) => {
-                  if (!k.startsWith('TCP|')) next[k] = v;
-                });
-                Object.assign(next, converted);
-                try {
-                  localStorage.setItem('mfg_production_plan', JSON.stringify(next));
-                } catch {}
-                return next;
-              });
-            }
-            if (unmapped.length === 0) {
-              setTcpPlanItemsForMapping([]);
-              setTcpPlanRawData(null);
-              if (!__silent) alert(`✅ TCP 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (전체 Part 매칭)`);
-            } else {
-              setTcpPlanRawData(plan);
-              setTcpPlanItemsForMapping(parts);
-              const autoCnt = parts.length - unmapped.length;
-              if (!__silent) alert(`TCP 계획 ${Object.keys(converted).length}건 저장됨 (Part ${parts.length}개 중 ${autoCnt}개 자동연결). 미연결 ${unmapped.length}개는 "🔗 매칭"에서 연결하면 추가됩니다.`);
-            }
-          } catch (err) {
-            if (!__silent) alert('TCP 파싱 오류: ' + err.message);
-          }
+          const wb = XLSX.read(new Uint8Array(ev.target.result), { cellDates: false });
+          applyTcpPlanWb(wb, __silent);
         };
         reader.readAsArrayBuffer(file);
         e.target.value = '';
@@ -13754,86 +13797,8 @@ ${question}`;
         e.target.__planSilent = false;
         const reader = new FileReader();
         reader.onload = ev => {
-          try {
-            const wb = XLSX.read(new Uint8Array(ev.target.result), {
-              cellDates: false
-            });
-            const {
-              plan,
-              items
-            } = parseFePlan(wb);
-            const cnt = Object.keys(plan).length;
-            if (cnt === 0) {
-              if (!__silent) alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)');
-              return;
-            }
-            try {
-              const rawRows = parseFePlanRaw(wb);
-              if (rawRows.length) {
-                const lotMaps = extractLotMaps(wb);
-                let prev = {};
-                try {
-                  prev = JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || '{}') || {};
-                } catch {}
-                const prevRows = Array.isArray(prev.rows) ? prev.rows : [];
-                const newMonths = new Set(rawRows.map(r => String(r.date || '').slice(0, 7)));
-                const kept = prevRows.filter(r => !newMonths.has(String(r.date || '').slice(0, 7)));
-                const merged = kept.concat(rawRows);
-                const revMap = Object.assign({}, prev.revMap || {}, lotMaps.revMap);
-                const lineCodes = Object.assign({}, prev.lineCodes || {}, lotMaps.lineCodes);
-                const assignNew = parseIcvAssign(wb);
-                const prevAssign = Array.isArray(prev.icvAssign) ? prev.icvAssign : [];
-                const keptAssign = prevAssign.filter(k => !newMonths.has(String(k).split('|')[1].slice(0, 7)));
-                const icvAssign = Array.from(new Set(keptAssign.concat(assignNew)));
-                localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({
-                  rows: merged,
-                  file: file.name,
-                  uploadedAt: new Date().toISOString(),
-                  revMap,
-                  lineCodes,
-                  icvAssign
-                }));
-              }
-            } catch (e) {}
-            const __fpm = planItemMappingRef.current || {};
-            const unmapped = items.filter(it => !__fpm[`FE|${it.pno}`]);
-            try { console.log('[FE plan]', { parsed: cnt, items: items.length, unmapped: unmapped.length, mapKeys: Object.keys(__fpm).filter(k => k.startsWith('FE|')).length, dataRows: (allLogsRef.current || []).length, silent: __silent }); } catch (e) {}
-            if (unmapped.length === 0) {
-              const converted = {};
-              Object.entries(plan).forEach(([k, qty]) => {
-                const pp = k.split('|');
-                const sysItem = __fpm[`FE|${pp[3]}`];
-                if (!sysItem) return;
-                const nk = `FE|${pp[1]}|${pp[2]}|${sysItem}`;
-                converted[nk] = (converted[nk] || 0) + qty;
-              });
-              const uploadedMonths = new Set();
-              Object.keys(converted).forEach(k => uploadedMonths.add(k.split('|')[2].slice(0, 7)));
-              setProductionPlan(prev => {
-                const next = {};
-                Object.entries(prev).forEach(([k, v]) => {
-                  if (!k.startsWith('FE|')) {
-                    next[k] = v;
-                    return;
-                  }
-                  const m = k.split('|')[2].slice(0, 7);
-                  if (!uploadedMonths.has(m)) next[k] = v;
-                });
-                Object.assign(next, converted);
-                try {
-                  localStorage.setItem('mfg_production_plan', JSON.stringify(next));
-                } catch {}
-                return next;
-              });
-              if (!__silent) alert(`✅ FE 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (${[...uploadedMonths].join(', ')} 월 갱신)`);
-            } else {
-              setFePlanRawData(plan);
-              setFePlanItemsForMapping(items);
-              if (!__silent) alert(`FE 계획 ${cnt}건 파싱됨. 미연결 품번 ${unmapped.length}개를 아래에서 연결하세요.`);
-            }
-          } catch (err) {
-            if (!__silent) alert('FE 파싱 오류: ' + err.message);
-          }
+          const wb = XLSX.read(new Uint8Array(ev.target.result), { cellDates: false });
+          applyFePlanWb(wb, file.name, __silent);
         };
         reader.readAsArrayBuffer(file);
         e.target.value = '';
