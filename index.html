@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V048</title>
+  <title>MFG Report V050</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3276,7 +3276,7 @@ ${question}`;
       inp.files = dt.files;
       inp.__planSilent = !!silent;
       inp.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
+      return target.modified || true;
     } catch (e) {
       if(!silent) alert('드라이브 불러오기 오류: ' + e.message);
       return false;
@@ -3284,12 +3284,19 @@ ${question}`;
   };
   // Production 보고 탭 진입 시 생산계획 자동 로드 (1회, 조용히)
   const planAutoLoadedRef = React.useRef(false);
-  const planDataReadyRef = React.useRef(false); // TCP/FE 데이터·설정 자동로드 완료 신호
+  const [planDataReady, setPlanDataReady] = useState(false); // TCP/FE 데이터·설정 자동로드 완료 신호
   const [planLoadStatus, setPlanLoadStatus] = useState(''); // '', 'loading', 'done', 'fail'
   const [planLoadMsg, setPlanLoadMsg] = useState('');
   React.useEffect(() => {
     if (activeTab !== 'prodreport') return;
     if (planAutoLoadedRef.current) return;
+    // 데이터·설정 자동로드가 끝나야 Part 자동매칭이 가능하다.
+    // 아직이면 중단하고, 로드 완료(planDataReady) 시 이 effect가 재실행된다.
+    if (!planDataReady) {
+      setPlanLoadStatus('loading');
+      setPlanLoadMsg('생산 데이터를 기다리는 중...');
+      return;
+    }
     planAutoLoadedRef.current = true;
     setPlanLoadStatus('loading');
     setPlanLoadMsg('생산계획을 불러오는 중...');
@@ -3303,16 +3310,7 @@ ${question}`;
       check(tries);
     });
     const t = setTimeout(async () => {
-      // TCP/FE 데이터·설정 자동로드가 끝나야 Part 자동매칭이 가능하고,
-      // 설정 로드가 나중에 끝나면 저장한 계획을 덮어쓰므로 먼저 기다린다 (최대 60초)
-      if (!planDataReadyRef.current) {
-        setPlanLoadMsg('생산 데이터를 기다리는 중...');
-        for (let i = 0; i < 300 && !planDataReadyRef.current; i++) {
-          await new Promise(r => setTimeout(r, 200));
-        }
-        await new Promise(r => setTimeout(r, 300)); // 설정 반영 렌더 대기
-        setPlanLoadMsg('생산계획을 불러오는 중...');
-      }
+      await new Promise(r => setTimeout(r, 300)); // 데이터 반영 렌더 대기
       await waitInput('tcpPlanFileInput', 10); // 최대 2초 대기
       const okTcp = await loadPlanFromDrive('tcp', true);
       await new Promise(r => setTimeout(r, 1000));
@@ -3322,18 +3320,25 @@ ${question}`;
       const hasPlan = Object.keys(productionPlan || {}).length > 0;
       if (okTcp || okFe || hasPlan) {
         setPlanLoadStatus('done');
-        const now = new Date();
-        const hh = String(now.getHours()).padStart(2, '0'), mm = String(now.getMinutes()).padStart(2, '0');
-        const tcpMark = okTcp ? '✓' : (hasPlan ? '(저장됨)' : '−');
-        const feMark = okFe ? '✓' : (hasPlan ? '(저장됨)' : '−');
-        setPlanLoadMsg(`생산계획 준비됨 (${hh}:${mm}) · TCP ${tcpMark} / FE ${feMark}`);
+        const fmtFileTime = v => {
+          if (typeof v !== 'string') return null;
+          const dd = new Date(v);
+          if (isNaN(dd.getTime())) return null;
+          const M = String(dd.getMonth() + 1).padStart(2, '0'), D = String(dd.getDate()).padStart(2, '0');
+          const h = String(dd.getHours()).padStart(2, '0'), m = String(dd.getMinutes()).padStart(2, '0');
+          return `${M}/${D} ${h}:${m}`;
+        };
+        const tcpT = fmtFileTime(okTcp), feT = fmtFileTime(okFe);
+        const tcpMark = tcpT ? `파일 ${tcpT}` : (hasPlan ? '(저장됨)' : '−');
+        const feMark = feT ? `파일 ${feT}` : (hasPlan ? '(저장됨)' : '−');
+        setPlanLoadMsg(`생산계획 준비됨 · TCP ${tcpMark} / FE ${feMark}`);
       } else {
         setPlanLoadStatus('fail');
         setPlanLoadMsg('생산계획을 불러오지 못했습니다. "🔗 매칭"에서 수동으로 시도하세요.');
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [activeTab]);
+  }, [activeTab, planDataReady]);
   const saveOeeManual = next => {
     setOeeManual(next);
     try {
@@ -3502,7 +3507,7 @@ ${question}`;
   const [autoLoadStatus, setAutoLoadStatus] = useState('idle');
   // 데이터·설정 자동로드 완료 여부를 계획 자동로드에 전달
   React.useEffect(() => {
-    planDataReadyRef.current = autoLoadStatus === 'done' || autoLoadStatus === 'failed';
+    if (autoLoadStatus === 'done' || autoLoadStatus === 'failed') setPlanDataReady(true);
   }, [autoLoadStatus]);
   React.useEffect(() => {
     let cancelled = false;
@@ -3694,6 +3699,15 @@ ${question}`;
     })));
     return logs;
   }, [tcpData, feData]);
+  // 자동 로드(DOM change 이벤트)는 렌더 시점 클로저를 잡으므로 stale 방지용 최신값 ref
+  const allLogsRef = React.useRef(allLogs);
+  allLogsRef.current = allLogs;
+  const tcpDataRef = React.useRef(tcpData);
+  tcpDataRef.current = tcpData;
+  const feDataRef = React.useRef(feData);
+  feDataRef.current = feData;
+  const planItemMappingRef = React.useRef(planItemMapping);
+  planItemMappingRef.current = planItemMapping;
   const allDowntimeLogs = useMemo(() => {
     const arr = [];
     if (tcpData?.downtimeLogs) arr.push(...tcpData.downtimeLogs);
@@ -5211,7 +5225,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V048")))), React.createElement("nav", {
+  }, "V050")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -13571,17 +13585,19 @@ ${question}`;
               if (!__silent) alert('TCP 계획 데이터를 찾지 못했습니다. 월 시트(예:26_06월) 형식을 확인하세요.');
               return;
             }
+            const __logs = allLogsRef.current || [];
+            const __tcpData = tcpDataRef.current;
             const sysItems = new Set();
-            allLogs.forEach(l => {
+            __logs.forEach(l => {
               if (l.source === 'TCP' && l.item) sysItems.add(l.item);
             });
             // 아직 실적이 없는 품목도 매칭되도록 설정의 item 목록도 포함
-            (tcpData?.settings?.TCP?.items || []).forEach(i => {
+            (__tcpData?.settings?.TCP?.items || []).forEach(i => {
               if (i?.item) sysItems.add(i.item);
             });
             const sysItemList = [...sysItems];
             const autoMap = {
-              ...planItemMapping
+              ...planItemMappingRef.current
             };
             parts.forEach(part => {
               const key = `TCP|${part}`;
@@ -13603,6 +13619,7 @@ ${question}`;
               const nk = `TCP|${pp[1]}|${pp[2]}|${pp[3]}|${sysItem}`;
               converted[nk] = (converted[nk] || 0) + qty;
             });
+            try { console.log('[TCP plan]', { parsed: cnt, parts: parts.length, sysItems: sysItemList.length, unmapped: unmapped.length, saved: Object.keys(converted).length, dataRows: __logs.length, silent: __silent }); } catch (e) {}
             if (Object.keys(converted).length > 0) {
               setProductionPlan(prev => {
                 const next = {};
@@ -13778,12 +13795,14 @@ ${question}`;
                 }));
               }
             } catch (e) {}
-            const unmapped = items.filter(it => !planItemMapping[`FE|${it.pno}`]);
+            const __fpm = planItemMappingRef.current || {};
+            const unmapped = items.filter(it => !__fpm[`FE|${it.pno}`]);
+            try { console.log('[FE plan]', { parsed: cnt, items: items.length, unmapped: unmapped.length, mapKeys: Object.keys(__fpm).filter(k => k.startsWith('FE|')).length, dataRows: (allLogsRef.current || []).length, silent: __silent }); } catch (e) {}
             if (unmapped.length === 0) {
               const converted = {};
               Object.entries(plan).forEach(([k, qty]) => {
                 const pp = k.split('|');
-                const sysItem = planItemMapping[`FE|${pp[3]}`];
+                const sysItem = __fpm[`FE|${pp[3]}`];
                 if (!sysItem) return;
                 const nk = `FE|${pp[1]}|${pp[2]}|${sysItem}`;
                 converted[nk] = (converted[nk] || 0) + qty;
