@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V056</title>
+  <title>MFG Report V057</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3297,7 +3297,6 @@ ${question}`;
   const [planLoadMsg, setPlanLoadMsg] = useState('');
   React.useEffect(() => {
     if (activeTab !== 'prodreport') return;
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1') return;
     if (planAutoLoadedRef.current) return;
     // 데이터·설정 자동로드가 끝나야 Part 자동매칭이 가능하다.
     // 아직이면 중단하고, 로드 완료(planDataReady) 시 이 effect가 재실행된다.
@@ -3521,24 +3520,12 @@ ${question}`;
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
-      const __isGuest = typeof localStorage !== 'undefined'
-        && localStorage.getItem('mfg_guest') === '1'
-        && !localStorage.getItem('mfg_auth_token');
-      if (__isGuest) { setAutoLoadStatus('failed'); return; }
       setAutoLoadStatus('loading');
       try {
-        let listResult = null, listErr = '';
-        for (let attempt = 0; attempt < 3 && !listResult; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
-          try {
-            const listRes = await fetch(GAS_URL + '?action=list&_=' + Date.now());
-            if (!listRes.ok) { listErr = 'HTTP' + listRes.status; continue; }
-            listResult = await listRes.json();
-          } catch (e) { listErr = String(e.message || e).slice(0, 25); }
-        }
+        const listRes = await fetch(GAS_URL + '?action=list');
+        const listResult = await listRes.json();
         if (cancelled) return;
-        if (!listResult || !listResult.ok || !listResult.files || listResult.files.length === 0) {
-          try { window.__mfgLoadErr = { list: listErr || '목록없음' }; } catch (e) {}
+        if (!listResult.ok || !listResult.files || listResult.files.length === 0) {
           setAutoLoadStatus('failed');
           return;
         }
@@ -3567,35 +3554,24 @@ ${question}`;
             __idb.prune(prefix, cacheKey);
             return cached;
           }
-          let lastErr = '';
-          for (let attempt = 0; attempt < 3; attempt++) {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 1500 * attempt));
-            try {
-              const r = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(file.id) + '&_=' + Date.now());
-              if (!r.ok) { lastErr = 'HTTP' + r.status; continue; }
-              const j = await r.json();
-              const raw = j.ok && j.data != null ? j.data : null;
-              if (raw == null) { lastErr = 'ok=false'; continue; }
-              const data = await __normalizeBackup(raw);
-              if (!data) { lastErr = '해제실패'; continue; }
-              try {
-                await __idb.set(cacheKey, data);
-                __idb.prune(prefix, cacheKey);
-              } catch (ce) {}
-              return data;
-            } catch (e) {
-              lastErr = String(e.message || e).slice(0, 30);
+          try {
+            const r = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(file.id));
+            const j = await r.json();
+            const raw = j.ok && j.data != null ? j.data : null;
+            const data = await __normalizeBackup(raw);
+            if (data) {
+              await __idb.set(cacheKey, data);
+              __idb.prune(prefix, cacheKey);
             }
+            return data;
+          } catch {
+            return null;
           }
-          try { window.__mfgLoadErr = (window.__mfgLoadErr || {}); window.__mfgLoadErr[prefix] = lastErr; } catch (e) {}
-          return null;
         };
         const latestSettingsP = pickLatest('mfg-settings-');
-        // GAS에 큰 요청 3개를 동시에 던지면 404가 나므로 시차를 둔다
-        const __wait = ms => new Promise(r => setTimeout(r, ms));
         const __tcpP = loadOne(latestTcp, 'tcp');
-        const __feP = __wait(500).then(() => loadOne(latestFe, 'fe'));
-        const __setP = __wait(1000).then(() => loadOne(latestSettingsP, 'set'));
+        const __feP = loadOne(latestFe, 'fe');
+        const __setP = loadOne(latestSettingsP, 'set');
         let tcpLoaded = false,
           feLoaded = false;
         __tcpP.then(d => {
@@ -5393,7 +5369,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V056")))), React.createElement("nav", {
+  }, "V057")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -5474,7 +5450,7 @@ ${question}`;
     className: "mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2"
   }, React.createElement("span", {
     className: "text-sm text-amber-800 font-medium"
-  }, "👤 게스트 모드 — 데이터는 로그인 후 조회할 수 있습니다"), React.createElement("button", {
+  }, "👤 게스트 모드 — 일부 화면만 조회할 수 있습니다"), React.createElement("button", {
     onClick: () => {
       localStorage.removeItem('mfg_guest');
       localStorage.removeItem('mfg_auth_user');
@@ -20181,14 +20157,14 @@ ${question}`;
     className: "bg-white border border-slate-200 rounded-xl p-16 text-center"
   }, React.createElement("div", {
     className: "text-5xl mb-4"
-  }, isGuest ? "🔒" : "📁"), React.createElement("h3", {
+  }, "📁"), React.createElement("h3", {
     className: "text-lg font-semibold text-slate-700 mb-2"
-  }, isGuest ? "게스트 모드입니다" : "데이터를 먼저 업로드해주세요"), React.createElement("p", {
+  }, "데이터를 먼저 업로드해주세요"), React.createElement("p", {
     className: "text-xs text-slate-500 mb-4"
-  }, isGuest ? "데이터 조회는 로그인 후 이용할 수 있습니다." : ("자동 복원이 실패했거나 백업 파일이 없습니다" + (() => { try { const e = window.__mfgLoadErr; return e ? ' · ' + Object.entries(e).map(([k, v]) => k + ':' + v).join(', ') : ''; } catch (x) { return ''; } })())), React.createElement("button", {
-    onClick: () => { if (isGuest) { localStorage.removeItem('mfg_guest'); localStorage.removeItem('mfg_auth_user'); location.reload(); } else { location.reload(); } },
+  }, "자동 복원이 실패했거나 백업 파일이 없습니다"), React.createElement("button", {
+    onClick: () => setActiveTab('upload'),
     className: "mt-2 px-5 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-  }, isGuest ? "로그인하기" : "다시 시도"))), showFtfrConfig && (() => {
+  }, "데이터 업로드"))), showFtfrConfig && (() => {
     const sections = [{
       sec: 'TCP',
       lines: getFtfrLinesFromSettings('TCP'),
