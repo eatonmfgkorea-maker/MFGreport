@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V051</title>
+  <title>MFG Report V054</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3250,26 +3250,32 @@ ${question}`;
 
 
   const loadPlanFromDrive = async (type, silent, preList) => {
+    planErrRef.current[type] = '';
     try {
       const prefix = type === 'tcp' ? 'plan-xlsx-01.TCP' : 'plan-xlsx-02.FE';
       const list = preList || await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json();
       let files = (list.files || []).filter(f => (f.name || '').indexOf(prefix) === 0)
         .sort((a, b) => (b.name || '').localeCompare(a.name || ''));
-      if (files.length === 0) { if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return false; }
+      if (files.length === 0) { planErrRef.current[type] = '파일없음'; if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return false; }
       const target = files[0];
-      const loadRes = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now());
-      const j = await loadRes.json();
+      let j;
+      try { j = await (await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now())).json(); }
+      catch (le) { planErrRef.current[type] = '로드실패'; if(!silent) alert('파일 로드 실패: ' + le.message); return false; }
       const d = j.data || {};
       const b64 = d.xlsxB64 || (d.data && d.data.xlsxB64);
       const origName = d.origName || (d.data && d.data.origName) || target.name.replace(/^plan-xlsx-/, '').replace(/\.json$/, '');
-      if (!b64) { if(!silent) alert('백업 파일에서 엑셀 데이터를 찾지 못했습니다.'); return false; }
+      if (!b64) { planErrRef.current[type] = 'B64없음'; if(!silent) alert('백업 파일에서 엑셀 데이터를 찾지 못했습니다.'); return false; }
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const wb = XLSX.read(bytes, { cellDates: false });
+      let wb;
+      try { wb = readPlanWb(bytes, type); }
+      catch (pe) { planErrRef.current[type] = '엑셀읽기:' + String(pe.message || '').slice(0, 25); if(!silent) alert('엑셀 읽기 오류: ' + pe.message); return false; }
       const r = type === 'tcp' ? applyTcpPlanWb(wb, silent) : applyFePlanWb(wb, origName, silent);
-      return r && r.ok ? (target.modified || true) : false;
+      if (!(r && r.ok)) { planErrRef.current[type] = (r && r.reason) || '적용실패'; return false; }
+      return target.modified || true;
     } catch (e) {
+      planErrRef.current[type] = '예외:' + String(e.message || '').slice(0, 25);
       if(!silent) alert('드라이브 불러오기 오류: ' + e.message);
       return false;
     }
@@ -3281,6 +3287,7 @@ ${question}`;
   const [planLoadMsg, setPlanLoadMsg] = useState('');
   React.useEffect(() => {
     if (activeTab !== 'prodreport') return;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1') return;
     if (planAutoLoadedRef.current) return;
     // 데이터·설정 자동로드가 끝나야 Part 자동매칭이 가능하다.
     // 아직이면 중단하고, 로드 완료(planDataReady) 시 이 effect가 재실행된다.
@@ -3306,6 +3313,7 @@ ${question}`;
       let sharedList = null;
       try { sharedList = await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json(); } catch (e) {}
       const okTcp = await loadPlanFromDrive('tcp', true, sharedList);
+      await new Promise(r => setTimeout(r, 800)); // TCP 워크북 메모리 회수 여유
       const okFe = await loadPlanFromDrive('fe', true, sharedList);
       // 이미 저장된 계획이 있으면(화면에 데이터 있음) 그것도 성공으로 간주
       const hasPlan = Object.keys(productionPlan || {}).length > 0;
@@ -3320,8 +3328,8 @@ ${question}`;
           return `${M}/${D} ${h}:${m}`;
         };
         const tcpT = fmtFileTime(okTcp), feT = fmtFileTime(okFe);
-        const tcpMark = tcpT ? `파일 ${tcpT}` : (hasPlan ? '(저장됨)' : '−');
-        const feMark = feT ? `파일 ${feT}` : (hasPlan ? '(저장됨)' : '−');
+        const tcpMark = tcpT ? `파일 ${tcpT}` : (planErrRef.current.tcp ? `실패(${planErrRef.current.tcp})` : (hasPlan ? '(저장됨)' : '−'));
+        const feMark = feT ? `파일 ${feT}` : (planErrRef.current.fe ? `실패(${planErrRef.current.fe})` : (hasPlan ? '(저장됨)' : '−'));
         setPlanLoadMsg(`생산계획 준비됨 · TCP ${tcpMark} / FE ${feMark}`);
       } else {
         setPlanLoadStatus('fail');
@@ -3503,6 +3511,8 @@ ${question}`;
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      const __isGuest = typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1';
+      if (__isGuest) { setAutoLoadStatus('failed'); return; }
       setAutoLoadStatus('loading');
       try {
         const listRes = await fetch(GAS_URL + '?action=list');
@@ -3699,6 +3709,12 @@ ${question}`;
   feDataRef.current = feData;
   const planItemMappingRef = React.useRef(planItemMapping);
   planItemMappingRef.current = planItemMapping;
+  const planErrRef = React.useRef({ tcp: '', fe: '' });
+  // FE 계획 xlsx는 수식 무거운 시트 18개라 필요한 5개만 파싱(+수식스킵)해야 브라우저에서 안 터짐
+  const FE_PLAN_SHEETS = ['계획검토', '생산순서', '모품목', '오라클 바코드출력용', '인원편성'];
+  const readPlanWb = (bytes, type) => type === 'tcp'
+    ? XLSX.read(bytes, { cellDates: false })
+    : XLSX.read(bytes, { cellDates: false, cellFormula: false, bookVBA: false, sheets: FE_PLAN_SHEETS });
   // ── 계획 워크북 처리(파싱·매칭·저장) 독립 함수: DOM input 없이 자동로드/수동 공용 ──
   const applyTcpPlanWb = (wb, __silent) => {
     try {
@@ -3707,7 +3723,7 @@ ${question}`;
       const cnt = Object.keys(plan).length;
       if (cnt === 0) {
         if (!__silent) alert('TCP 계획 데이터를 찾지 못했습니다. 월 시트(예:26_06월) 형식을 확인하세요.');
-        return { ok: false, saved: 0 };
+        return { ok: false, saved: 0, reason: '계획0건' };
       }
       const __logs = allLogsRef.current || [];
       const __tcpData = tcpDataRef.current;
@@ -3756,7 +3772,7 @@ ${question}`;
       return { ok: true, saved: Object.keys(converted).length };
     } catch (err) {
       if (!__silent) alert('TCP 파싱 오류: ' + err.message);
-      return { ok: false, saved: 0 };
+      return { ok: false, saved: 0, reason: '예외:' + String(err.message || '').slice(0, 30) };
     }
   };
   const applyFePlanWb = (wb, fileName, __silent) => {
@@ -3765,7 +3781,7 @@ ${question}`;
       const cnt = Object.keys(plan).length;
       if (cnt === 0) {
         if (!__silent) alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)');
-        return { ok: false, saved: 0 };
+        return { ok: false, saved: 0, reason: '계획0건' };
       }
       try {
         const rawRows = parseFePlanRaw(wb);
@@ -3821,7 +3837,7 @@ ${question}`;
       }
     } catch (err) {
       if (!__silent) alert('FE 파싱 오류: ' + err.message);
-      return { ok: false, saved: 0 };
+      return { ok: false, saved: 0, reason: '예외:' + String(err.message || '').slice(0, 30) };
     }
   };
   const allDowntimeLogs = useMemo(() => {
@@ -5341,7 +5357,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V051")))), React.createElement("nav", {
+  }, "V054")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
@@ -5422,7 +5438,7 @@ ${question}`;
     className: "mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2"
   }, React.createElement("span", {
     className: "text-sm text-amber-800 font-medium"
-  }, "👤 게스트 모드 — 일부 화면만 조회할 수 있습니다"), React.createElement("button", {
+  }, "👤 게스트 모드 — 데이터는 로그인 후 조회할 수 있습니다"), React.createElement("button", {
     onClick: () => {
       localStorage.removeItem('mfg_guest');
       localStorage.removeItem('mfg_auth_user');
@@ -13797,7 +13813,7 @@ ${question}`;
         e.target.__planSilent = false;
         const reader = new FileReader();
         reader.onload = ev => {
-          const wb = XLSX.read(new Uint8Array(ev.target.result), { cellDates: false });
+          const wb = readPlanWb(new Uint8Array(ev.target.result), 'fe');
           applyFePlanWb(wb, file.name, __silent);
         };
         reader.readAsArrayBuffer(file);
@@ -20129,14 +20145,14 @@ ${question}`;
     className: "bg-white border border-slate-200 rounded-xl p-16 text-center"
   }, React.createElement("div", {
     className: "text-5xl mb-4"
-  }, "📁"), React.createElement("h3", {
+  }, isGuest ? "🔒" : "📁"), React.createElement("h3", {
     className: "text-lg font-semibold text-slate-700 mb-2"
-  }, "데이터를 먼저 업로드해주세요"), React.createElement("p", {
+  }, isGuest ? "게스트 모드입니다" : "데이터를 먼저 업로드해주세요"), React.createElement("p", {
     className: "text-xs text-slate-500 mb-4"
-  }, "자동 복원이 실패했거나 백업 파일이 없습니다"), React.createElement("button", {
-    onClick: () => setActiveTab('upload'),
+  }, isGuest ? "데이터 조회는 로그인 후 이용할 수 있습니다." : "자동 복원이 실패했거나 백업 파일이 없습니다"), React.createElement("button", {
+    onClick: () => { if (isGuest) { localStorage.removeItem('mfg_guest'); localStorage.removeItem('mfg_auth_user'); location.reload(); } else { setActiveTab('upload'); } },
     className: "mt-2 px-5 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-  }, "데이터 업로드"))), showFtfrConfig && (() => {
+  }, isGuest ? "로그인하기" : "데이터 업로드"))), showFtfrConfig && (() => {
     const sections = [{
       sec: 'TCP',
       lines: getFtfrLinesFromSettings('TCP'),
