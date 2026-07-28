@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V054</title>
+  <title>MFG Report V055</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3258,9 +3258,13 @@ ${question}`;
         .sort((a, b) => (b.name || '').localeCompare(a.name || ''));
       if (files.length === 0) { planErrRef.current[type] = '파일없음'; if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return false; }
       const target = files[0];
-      let j;
-      try { j = await (await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now())).json(); }
-      catch (le) { planErrRef.current[type] = '로드실패'; if(!silent) alert('파일 로드 실패: ' + le.message); return false; }
+      let j = null, lastErr = '';
+      for (let attempt = 0; attempt < 3 && !j; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
+        try { j = await (await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now())).json(); }
+        catch (le) { lastErr = String(le.message || '').slice(0, 20); }
+      }
+      if (!j) { planErrRef.current[type] = '로드실패(' + lastErr + ')'; if(!silent) alert('파일 로드 실패: ' + lastErr); return false; }
       const d = j.data || {};
       const b64 = d.xlsxB64 || (d.data && d.data.xlsxB64);
       const origName = d.origName || (d.data && d.data.origName) || target.name.replace(/^plan-xlsx-/, '').replace(/\.json$/, '');
@@ -3272,6 +3276,7 @@ ${question}`;
       try { wb = readPlanWb(bytes, type); }
       catch (pe) { planErrRef.current[type] = '엑셀읽기:' + String(pe.message || '').slice(0, 25); if(!silent) alert('엑셀 읽기 오류: ' + pe.message); return false; }
       const r = type === 'tcp' ? applyTcpPlanWb(wb, silent) : applyFePlanWb(wb, origName, silent);
+      planSavedRef.current[type] = (r && r.saved) || 0;
       if (!(r && r.ok)) { planErrRef.current[type] = (r && r.reason) || '적용실패'; return false; }
       return target.modified || true;
     } catch (e) {
@@ -3328,8 +3333,8 @@ ${question}`;
           return `${M}/${D} ${h}:${m}`;
         };
         const tcpT = fmtFileTime(okTcp), feT = fmtFileTime(okFe);
-        const tcpMark = tcpT ? `파일 ${tcpT}` : (planErrRef.current.tcp ? `실패(${planErrRef.current.tcp})` : (hasPlan ? '(저장됨)' : '−'));
-        const feMark = feT ? `파일 ${feT}` : (planErrRef.current.fe ? `실패(${planErrRef.current.fe})` : (hasPlan ? '(저장됨)' : '−'));
+        const tcpMark = tcpT ? `파일 ${tcpT}(${planSavedRef.current.tcp}건)` : (planErrRef.current.tcp ? `실패(${planErrRef.current.tcp})` : (hasPlan ? '(저장됨)' : '−'));
+        const feMark = feT ? `파일 ${feT}(${planSavedRef.current.fe}건)` : (planErrRef.current.fe ? `실패(${planErrRef.current.fe})` : (hasPlan ? '(저장됨)' : '−'));
         setPlanLoadMsg(`생산계획 준비됨 · TCP ${tcpMark} / FE ${feMark}`);
       } else {
         setPlanLoadStatus('fail');
@@ -3710,6 +3715,7 @@ ${question}`;
   const planItemMappingRef = React.useRef(planItemMapping);
   planItemMappingRef.current = planItemMapping;
   const planErrRef = React.useRef({ tcp: '', fe: '' });
+  const planSavedRef = React.useRef({ tcp: 0, fe: 0 });
   // FE 계획 xlsx는 수식 무거운 시트 18개라 필요한 5개만 파싱(+수식스킵)해야 브라우저에서 안 터짐
   const FE_PLAN_SHEETS = ['계획검토', '생산순서', '모품목', '오라클 바코드출력용', '인원편성'];
   const readPlanWb = (bytes, type) => type === 'tcp'
@@ -3805,17 +3811,18 @@ ${question}`;
       const __fpm = planItemMappingRef.current || {};
       const unmapped = items.filter(it => !__fpm[`FE|${it.pno}`]);
       try { console.log('[FE plan]', { parsed: cnt, items: items.length, unmapped: unmapped.length, mapKeys: Object.keys(__fpm).filter(k => k.startsWith('FE|')).length, dataRows: (allLogsRef.current || []).length, silent: __silent }); } catch (e) {}
-      if (unmapped.length === 0) {
-        const converted = {};
-        Object.entries(plan).forEach(([k, qty]) => {
-          const pp = k.split('|');
-          const sysItem = __fpm[`FE|${pp[3]}`];
-          if (!sysItem) return;
-          const nk = `FE|${pp[1]}|${pp[2]}|${sysItem}`;
-          converted[nk] = (converted[nk] || 0) + qty;
-        });
-        const uploadedMonths = new Set();
-        Object.keys(converted).forEach(k => uploadedMonths.add(k.split('|')[2].slice(0, 7)));
+      // 매칭된 품번은 미연결 여부와 무관하게 항상 저장 (TCP와 동일 동작)
+      const converted = {};
+      Object.entries(plan).forEach(([k, qty]) => {
+        const pp = k.split('|');
+        const sysItem = __fpm[`FE|${pp[3]}`];
+        if (!sysItem) return;
+        const nk = `FE|${pp[1]}|${pp[2]}|${sysItem}`;
+        converted[nk] = (converted[nk] || 0) + qty;
+      });
+      const uploadedMonths = new Set();
+      Object.keys(converted).forEach(k => uploadedMonths.add(k.split('|')[2].slice(0, 7)));
+      if (Object.keys(converted).length > 0) {
         setProductionPlan(prev => {
           const next = {};
           Object.entries(prev).forEach(([k, v]) => {
@@ -3827,14 +3834,17 @@ ${question}`;
           try { localStorage.setItem('mfg_production_plan', JSON.stringify(next)); } catch {}
           return next;
         });
+      }
+      if (unmapped.length === 0) {
+        setFePlanRawData(null);
+        setFePlanItemsForMapping([]);
         if (!__silent) alert(`✅ FE 생산계획 ${Object.keys(converted).length}건 자동 저장 완료 (${[...uploadedMonths].join(', ')} 월 갱신)`);
-        return { ok: true, saved: Object.keys(converted).length };
       } else {
         setFePlanRawData(plan);
         setFePlanItemsForMapping(items);
-        if (!__silent) alert(`FE 계획 ${cnt}건 파싱됨. 미연결 품번 ${unmapped.length}개를 아래에서 연결하세요.`);
-        return { ok: true, saved: 0 };
+        if (!__silent) alert(`FE 계획 ${Object.keys(converted).length}건 저장됨 (품번 ${items.length}개 중 ${items.length - unmapped.length}개 연결). 미연결 ${unmapped.length}개는 "🔗 매칭"에서 연결하면 추가됩니다.`);
       }
+      return { ok: true, saved: Object.keys(converted).length };
     } catch (err) {
       if (!__silent) alert('FE 파싱 오류: ' + err.message);
       return { ok: false, saved: 0, reason: '예외:' + String(err.message || '').slice(0, 30) };
@@ -5357,7 +5367,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V054")))), React.createElement("nav", {
+  }, "V055")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
