@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V057</title>
+  <title>MFG Report V058</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -3252,38 +3252,50 @@ ${question}`;
 
   const loadPlanFromDrive = async (type, silent, preList) => {
     planErrRef.current[type] = '';
+    planSavedRef.current[type] = 0;
     try {
       const prefix = type === 'tcp' ? 'plan-xlsx-01.TCP' : 'plan-xlsx-02.FE';
       const list = preList || await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json();
       let files = (list.files || []).filter(f => (f.name || '').indexOf(prefix) === 0)
         .sort((a, b) => (b.name || '').localeCompare(a.name || ''));
-      if (files.length === 0) { planErrRef.current[type] = '파일없음'; if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.\n자동 백업이 먼저 실행되어야 합니다.'); return false; }
-      const target = files[0];
-      let j = null, lastErr = '';
-      for (let attempt = 0; attempt < 3 && !j; attempt++) {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
-        try {
-          const lr = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now());
-          if (!lr.ok) { lastErr = 'HTTP' + lr.status; continue; }
-          j = await lr.json();
+      if (files.length === 0) { planErrRef.current[type] = '파일없음'; if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.'); return false; }
+      // FE는 월별 파일이 따로 올라오므로 최근 2개월치를 모두 읽어야 한다(8월 파일만 읽으면 7월 계획이 갱신 안 됨)
+      const targets = type === 'fe' ? files.slice(0, 2).reverse() : [files[0]];
+      let savedSum = 0, okCount = 0, lastMod = null, lastErr = '';
+      for (const target of targets) {
+        let j = null;
+        for (let attempt = 0; attempt < 3 && !j; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
+          try {
+            const lr = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now());
+            if (!lr.ok) { lastErr = 'HTTP' + lr.status; continue; }
+            j = await lr.json();
+          } catch (le) { lastErr = String(le.message || '').slice(0, 20); }
         }
-        catch (le) { lastErr = String(le.message || '').slice(0, 20); }
+        if (!j) { lastErr = lastErr || '로드실패'; continue; }
+        const d = j.data || {};
+        const b64 = d.xlsxB64 || (d.data && d.data.xlsxB64);
+        const origName = d.origName || (d.data && d.data.origName) || target.name;
+        if (!b64) { lastErr = 'B64없음'; continue; }
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        let wb;
+        try { wb = readPlanWb(bytes, type); }
+        catch (pe) { lastErr = '엑셀읽기:' + String(pe.message || '').slice(0, 20); continue; }
+        const r = type === 'tcp' ? applyTcpPlanWb(wb, silent) : applyFePlanWb(wb, origName, silent);
+        if (r && r.ok) {
+          okCount++;
+          savedSum += (r.saved || 0);
+          if (target.modified) lastMod = target.modified;
+        } else {
+          lastErr = (r && r.reason) || '적용실패';
+        }
+        if (targets.length > 1) await new Promise(r => setTimeout(r, 600));
       }
-      if (!j) { planErrRef.current[type] = '로드실패(' + lastErr + ')'; if(!silent) alert('파일 로드 실패: ' + lastErr); return false; }
-      const d = j.data || {};
-      const b64 = d.xlsxB64 || (d.data && d.data.xlsxB64);
-      const origName = d.origName || (d.data && d.data.origName) || target.name.replace(/^plan-xlsx-/, '').replace(/\.json$/, '');
-      if (!b64) { planErrRef.current[type] = 'B64없음'; if(!silent) alert('백업 파일에서 엑셀 데이터를 찾지 못했습니다.'); return false; }
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      let wb;
-      try { wb = readPlanWb(bytes, type); }
-      catch (pe) { planErrRef.current[type] = '엑셀읽기:' + String(pe.message || '').slice(0, 25); if(!silent) alert('엑셀 읽기 오류: ' + pe.message); return false; }
-      const r = type === 'tcp' ? applyTcpPlanWb(wb, silent) : applyFePlanWb(wb, origName, silent);
-      planSavedRef.current[type] = (r && r.saved) || 0;
-      if (!(r && r.ok)) { planErrRef.current[type] = (r && r.reason) || '적용실패'; return false; }
-      return target.modified || true;
+      planSavedRef.current[type] = savedSum;
+      if (okCount === 0) { planErrRef.current[type] = lastErr || '적용실패'; if(!silent) alert('생산계획 불러오기 실패: ' + (lastErr || '')); return false; }
+      return lastMod || true;
     } catch (e) {
       planErrRef.current[type] = '예외:' + String(e.message || '').slice(0, 25);
       if(!silent) alert('드라이브 불러오기 오류: ' + e.message);
@@ -5369,7 +5381,7 @@ ${question}`;
     className: "text-lg font-bold text-white tracking-tight leading-none"
   }, "MFG Report", React.createElement("span", {
     className: "ml-1.5 px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 align-middle"
-  }, "V057")))), React.createElement("nav", {
+  }, "V058")))), React.createElement("nav", {
     className: "flex-1 py-5 px-3 space-y-1 overflow-y-auto"
   }, (() => {
     const alerts = {};
