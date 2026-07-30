@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V058</title>
+  <title>MFG Report V059</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -144,6 +144,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V059',
+  d: '2026-07-29',
+  items: ['FTFR·FTFR(세부): FTIV를 FE에서 분리해 독립 공정으로 표시 (TCP / FE / FTIV / 전체)', 'FE 집계에서 FTIV 제외 — 엑셀 내보내기에도 FTIV 그룹 별도 추가']
+}, {
   v: 'V058',
   d: '2026-07-28',
   items: ['FE 생산계획: 월별 파일(7월·8월)을 모두 읽도록 수정. 8월 계획이 새로 올라온 뒤 7월 계획이 갱신되지 않아 지난 계획이 남던 문제 해결', '버전 배지에 마우스를 올리면 업데이트 내역 표시']
@@ -2832,7 +2836,7 @@ function App() {
 
   const [fdYear, setFdYear] = useState(now0.getFullYear());
   const [fdMonth, setFdMonth] = useState(now0.getMonth() + 1);
-  const [fdSections, setFdSections] = useState(['TCP', 'FE']);
+  const [fdSections, setFdSections] = useState(['TCP', 'FE', 'FTIV']);
   const [fdSelectedLines, setFdSelectedLines] = useState(['ALL']);
   const [fdSelectedItems, setFdSelectedItems] = useState(['ALL']);
   const [fdViewMode, setFdViewMode] = useState('month');
@@ -4411,6 +4415,16 @@ ${question}`;
     if (!lineName) return true;
     return (FTFR_EXCLUDED_LINES[section] || []).includes(lineName);
   };
+  // FTFR 공정 구분 — FTIV를 FE에서 분리해 독립 공정으로 취급
+  const ftfrDataFor = sec => sec === 'TCP' ? tcpData : feData;
+  const ftfrSecMatch = (sec, l) => {
+    if (!l) return false;
+    if (sec === 'TCP') return l.section === 'TCP' && ['1PC', '2PC', 'Nospin'].includes(l.lineName);
+    if (sec === 'FTIV') return l.section === 'FE' && l.lineName === 'FTIV';
+    if (sec === 'FE') return l.section === 'FE' && l.lineName !== 'FTIV' && l.lineName !== 'ATV' && l.lineName !== 'ATV M/C';
+    return false;
+  };
+  const ftfrSecOf = l => l && l.section === 'FE' && l.lineName === 'FTIV' ? 'FTIV' : (l ? l.section : '');
   const getFtfrLinesFromSettings = section => {
     const data = section === 'TCP' ? tcpData : feData;
     const settingsLines = data?.settings?.[section]?.lines || [];
@@ -5396,7 +5410,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V058"), React.createElement("div", {
+  }, "V059"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -16786,20 +16800,17 @@ ${question}`;
       }, runout2Tot[s] || 0)))))));
     })));
   })(), activeTab === 'ftfr' && (tcpData || feData) && (() => {
-    const targetData = ftfrSection === 'TCP' ? tcpData : feData;
+    const targetData = ftfrDataFor(ftfrSection);
     const getFtfrLogs = (year, month) => {
       const collect = (data, sec) => (data?.productionLogs || []).filter(l => {
         const d = new Date(l.productionDate);
         if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return false;
-        if (sec === 'TCP' && !(l.section === 'TCP' && ['1PC', '2PC', 'Nospin'].includes(l.lineName))) return false;
-        if (sec === 'FE' && l.section !== 'FE') return false;
-        if (sec === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return false;
-        return true;
+        return ftfrSecMatch(sec, l);
       });
       if (ftfrSection === 'ALL') {
-        return [...collect(tcpData, 'TCP'), ...collect(feData, 'FE')];
+        return [...collect(tcpData, 'TCP'), ...collect(feData, 'FE'), ...collect(feData, 'FTIV')];
       }
-      return collect(ftfrSection === 'TCP' ? tcpData : feData, ftfrSection);
+      return collect(ftfrDataFor(ftfrSection), ftfrSection);
     };
     const aggFtfr = logs => {
       let g = 0,
@@ -16868,7 +16879,7 @@ ${question}`;
     const ftfrTargetVal = getFtfrTarget(ftfrSection, ftfrYear);
     const lineMap = {};
     monthLogs.forEach(l => {
-      const sec = ftfrSection === 'ALL' ? l.section : ftfrSection;
+      const sec = ftfrSection === 'ALL' ? ftfrSecOf(l) : ftfrSection;
       const dl = resolveLineName(sec, l.lineName);
       const key = ftfrSection === 'ALL' ? `${sec}/${dl}` : dl;
       if (!lineMap[key]) lineMap[key] = {
@@ -16898,13 +16909,10 @@ ${question}`;
       const collect = (data, sec) => (data?.productionLogs || []).filter(l => {
         const d = new Date(l.productionDate);
         if (d.getFullYear() !== ftfrYear) return false;
-        if (sec === 'TCP' && !(l.section === 'TCP' && ['1PC', '2PC', 'Nospin'].includes(l.lineName))) return false;
-        if (sec === 'FE' && l.section !== 'FE') return false;
-        if (sec === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return false;
-        return true;
+        return ftfrSecMatch(sec, l);
       });
-      if (ftfrSection === 'ALL') return [...collect(tcpData, 'TCP'), ...collect(feData, 'FE')];
-      return collect(ftfrSection === 'TCP' ? tcpData : feData, ftfrSection);
+      if (ftfrSection === 'ALL') return [...collect(tcpData, 'TCP'), ...collect(feData, 'FE'), ...collect(feData, 'FTIV')];
+      return collect(ftfrDataFor(ftfrSection), ftfrSection);
     })();
     const paretoMap = {};
     yearLogsForPareto.forEach(l => {
@@ -17119,13 +17127,16 @@ ${question}`;
     }, React.createElement("div", {
       className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
     }, "공정"), React.createElement("div", {
-      className: "p-2 grid grid-cols-3 gap-1"
+      className: "p-2 grid grid-cols-4 gap-1"
     }, [{
       k: 'TCP',
       l: 'TCP'
     }, {
       k: 'FE',
       l: 'FE'
+    }, {
+      k: 'FTIV',
+      l: 'FTIV'
     }, {
       k: 'ALL',
       l: '전체'
@@ -17500,14 +17511,12 @@ ${question}`;
     const collectLogs = (year, month) => {
       const result = [];
       fdSections.forEach(sec => {
-        const data = sec === 'TCP' ? tcpData : feData;
+        const data = ftfrDataFor(sec);
         (data?.productionLogs || []).forEach(l => {
           const d = new Date(l.productionDate);
           if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return;
-          if (sec === 'TCP' && !(l.section === 'TCP' && ['1PC', '2PC', 'Nospin'].includes(l.lineName))) return;
-          if (sec === 'FE' && l.section !== 'FE') return;
-          if (sec === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return;
-          const dl = resolveLineName(sec, l.lineName);
+          if (!ftfrSecMatch(sec, l)) return;
+          const dl = resolveLineName(sec === 'FTIV' ? 'FE' : sec, l.lineName);
           const lineKey = `${sec}/${dl}`;
           if (!fdSelectedLines.includes('ALL') && !fdSelectedLines.includes(lineKey)) return;
           if (!fdSelectedItems.includes('ALL') && !fdSelectedItems.includes(l.item)) return;
@@ -17685,12 +17694,10 @@ ${question}`;
     const fdLinesAvail = (() => {
       const set = new Set();
       fdSections.forEach(sec => {
-        const data = sec === 'TCP' ? tcpData : feData;
+        const data = ftfrDataFor(sec);
         (data?.productionLogs || []).forEach(l => {
-          if (sec === 'TCP' && !(l.section === 'TCP' && ['1PC', '2PC', 'Nospin'].includes(l.lineName))) return;
-          if (sec === 'FE' && l.section !== 'FE') return;
-          if (sec === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return;
-          const dl = resolveLineName(sec, l.lineName);
+          if (!ftfrSecMatch(sec, l)) return;
+          const dl = resolveLineName(sec === 'FTIV' ? 'FE' : sec, l.lineName);
           set.add(`${sec}/${dl}`);
         });
       });
@@ -17700,12 +17707,10 @@ ${question}`;
       const effLines = fdSelectedLines.includes('ALL') ? fdLinesAvail : fdSelectedLines;
       const set = new Set();
       fdSections.forEach(sec => {
-        const data = sec === 'TCP' ? tcpData : feData;
+        const data = ftfrDataFor(sec);
         (data?.productionLogs || []).forEach(l => {
-          if (sec === 'TCP' && !(l.section === 'TCP' && ['1PC', '2PC', 'Nospin'].includes(l.lineName))) return;
-          if (sec === 'FE' && l.section !== 'FE') return;
-          if (sec === 'FE' && (l.lineName === 'ATV' || l.lineName === 'ATV M/C')) return;
-          const dl = resolveLineName(sec, l.lineName);
+          if (!ftfrSecMatch(sec, l)) return;
+          const dl = resolveLineName(sec === 'FTIV' ? 'FE' : sec, l.lineName);
           if (!effLines.includes(`${sec}/${dl}`)) return;
           if (l.item) set.add(l.item);
         });
@@ -17771,8 +17776,8 @@ ${question}`;
     }, React.createElement("div", {
       className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
     }, "공정"), React.createElement("div", {
-      className: "p-2 grid grid-cols-2 gap-1"
-    }, ['TCP', 'FE'].map(s => React.createElement("button", {
+      className: "p-2 grid grid-cols-3 gap-1"
+    }, ['TCP', 'FE', 'FTIV'].map(s => React.createElement("button", {
       key: s,
       onClick: () => toggleSection(s),
       className: `py-1.5 rounded-lg text-xs font-bold ${fdSections.includes(s) ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
@@ -18064,12 +18069,12 @@ ${question}`;
           section: 'FE',
           sectionLabel: 'FE',
           isTotal: true,
-          match: l => l.section === 'FE' && !(l.lineName === 'ATV' || l.lineName === 'ATV M/C') && !isFtfrExcludedLine('FE', l.lineName)
+          match: l => ftfrSecMatch('FE', l) && !isFtfrExcludedLine('FE', l.lineName)
         });
         const feLines = getSectionDisplayLines('FE');
         const lineSet = new Set();
         feLines.forEach(line => {
-          if (line === 'ATV' || line === 'ATV M/C') return;
+          if (line === 'ATV' || line === 'ATV M/C' || line === 'FTIV') return;
           if (isFtfrExcludedLine('FE', line)) return;
           if (line === 'OLD ICV' || line === 'NEW ICV') {
             lineSet.add('ICV');
@@ -18092,8 +18097,25 @@ ${question}`;
             label: line,
             section: 'FE',
             sectionLabel: 'FE',
-            match: l => l.section === 'FE' && !(l.lineName === 'ATV' || l.lineName === 'ATV M/C') && feDisplayLine(l.lineName) === line
+            match: l => ftfrSecMatch('FE', l) && feDisplayLine(l.lineName) === line
           });
+        });
+      }
+      if (fdSections.includes('FTIV')) {
+        groupDefs.push({
+          key: 'FTIV/_total',
+          label: '총합계',
+          section: 'FTIV',
+          sectionLabel: 'FTIV',
+          isTotal: true,
+          match: l => ftfrSecMatch('FTIV', l)
+        });
+        groupDefs.push({
+          key: 'FTIV/FTIV',
+          label: 'FTIV',
+          section: 'FTIV',
+          sectionLabel: 'FTIV',
+          match: l => ftfrSecMatch('FTIV', l)
         });
       }
       const summary = {};
