@@ -301,7 +301,7 @@ const {
 const VERSION_NOTES = [{
   v: 'V060',
   d: '2026-08-01',
-  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영']
+  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영', '데이터 출력: 선택한 달에 실적이 없으면 실적이 있는 최근 달로 자동 이동']
 }, {
   v: 'V059',
   d: '2026-07-29',
@@ -3898,6 +3898,25 @@ ${question}`;
   // 자동 로드(DOM change 이벤트)는 렌더 시점 클로저를 잡으므로 stale 방지용 최신값 ref
   const allLogsRef = React.useRef(allLogs);
   allLogsRef.current = allLogs;
+  // 데이터 출력: 선택된 달에 실적이 없으면 실적이 있는 가장 최근 달로 자동 이동
+  const exportMonthAdjustedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (exportMonthAdjustedRef.current) return;
+    if (!allLogs.length) return;
+    const has = (y, m) => allLogs.some(l => {
+      const ds = (l.productionDate || '').slice(0, 7);
+      return ds === `${y}-${String(m).padStart(2, '0')}`;
+    });
+    exportMonthAdjustedRef.current = true;
+    if (has(exportYear, exportMonth)) return;
+    // 최대 24개월 전까지 거슬러 올라가며 실적이 있는 달을 찾는다
+    let y = exportYear, m = exportMonth;
+    for (let i = 0; i < 24; i++) {
+      m -= 1;
+      if (m < 1) { m = 12; y -= 1; }
+      if (has(y, m)) { setExportYear(y); setExportMonth(m); return; }
+    }
+  }, [allLogs]);
   const tcpDataRef = React.useRef(tcpData);
   tcpDataRef.current = tcpData;
   const feDataRef = React.useRef(feData);
@@ -5672,8 +5691,11 @@ ${question}`;
     className: "text-sm text-amber-800 font-medium"
   }, "👤 게스트 모드 — 일부 화면만 조회할 수 있습니다"), React.createElement("button", {
     onClick: () => {
-      localStorage.removeItem('mfg_guest');
-      localStorage.removeItem('mfg_auth_user');
+      if (window.MFG_USER && typeof window.MFG_USER.logout === 'function') { window.MFG_USER.logout(); return; }
+      ['mfg_guest', 'mfg_auth_user', 'mfg_g_email', 'mfg_g_name', 'mfg_g_role',
+       'mfg_g_apps', 'mfg_g_exp', 'mfg_g_lastcheck'].forEach(k => {
+        try { localStorage.removeItem(k); } catch (e) {}
+      });
       location.reload();
     },
     className: "text-xs px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-100 font-semibold"
