@@ -301,7 +301,7 @@ const {
 const VERSION_NOTES = [{
   v: 'V061',
   d: '2026-08-01',
-  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영', '데이터 출력: 선택한 달에 실적이 없으면 실적이 있는 최근 달로 자동 이동', 'Tool 교체: 비고의 «A → B» 표기를 인식해 품목 교체 매트릭스(라인별 평균 교체 시간) 추가 — «Tool 교체 & M/check»는 순수 교체 시간이 아니므로 제외']
+  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영', '데이터 출력: 선택한 달에 실적이 없으면 실적이 있는 최근 달로 자동 이동', 'Tool 교체: 비고의 «A → B» 표기를 인식해 품목 교체 매트릭스 추가 — 투입 인원 차이를 보정하기 위해 공수(분×인원) 기준, «Tool 교체 & M/check»는 제외']
 }, {
   v: 'V059',
   d: '2026-07-29',
@@ -10339,8 +10339,11 @@ ${question}`;
         recognized++;
         if (!byLine[line]) byLine[line] = {};
         const k = from + '\u0001' + to;
-        if (!byLine[line][k]) byLine[line][k] = { from: from, to: to, list: [] };
-        byLine[line][k].list.push(dur);
+        if (!byLine[line][k]) byLine[line][k] = { from: from, to: to, list: [], mins: [], wks: [] };
+        const wk = workerCount(log);
+        byLine[line][k].list.push(dur * wk);   // 공수(분 × 인원)
+        byLine[line][k].mins.push(dur);        // 실제 경과 시간
+        byLine[line][k].wks.push(wk);          // 투입 인원
       });
       return { byLine: byLine, recognized: recognized, noItem: noItem };
     })();
@@ -10394,11 +10397,15 @@ ${question}`;
             const cool = a <= gAvg * 0.75;
             tds.push(React.createElement("td", {
               key: t,
-              title: f + " \u2192 " + t + " : " + c.list.length + "\uD68C, \uD3C9\uADE0 " + a.toFixed(1) + "\uBD84 (\uCD5C\uC18C " + Math.min.apply(null, c.list) + " / \uCD5C\uB300 " + Math.max.apply(null, c.list) + ")",
+              title: (function() {
+                const am = c.mins.reduce(function(x, y) { return x + y; }, 0) / c.mins.length;
+                const aw = c.wks.reduce(function(x, y) { return x + y; }, 0) / c.wks.length;
+                return f + " \u2192 " + t + "\n\uD68C\uC218: " + c.list.length + "\uD68C\n\uD3C9\uADE0 \uACF5\uC218: " + a.toFixed(1) + "\uBD84(\uC778) \u00B7 \uCD5C\uC18C " + Math.min.apply(null, c.list) + " / \uCD5C\uB300 " + Math.max.apply(null, c.list) + "\n\uD3C9\uADE0 \uC18C\uC694\uC2DC\uAC04: " + am.toFixed(1) + "\uBD84\n\uD3C9\uADE0 \uD22C\uC785\uC778\uC6D0: " + aw.toFixed(1) + "\uBA85";
+              })(),
               className: "border border-slate-200 text-center px-2 py-1 " + (hot ? "bg-rose-50 text-rose-700 font-bold" : cool ? "bg-emerald-50 text-emerald-700" : "text-slate-700")
-            }, React.createElement("div", null, a.toFixed(0), "\uBD84"), React.createElement("div", {
+            }, React.createElement("div", null, a.toFixed(0)), React.createElement("div", {
               className: "text-[9px] text-slate-400"
-            }, c.list.length, "\uD68C")));
+            }, c.list.length + "\uD68C \u00B7 " + (c.wks.reduce(function(x, y) { return x + y; }, 0) / c.wks.length).toFixed(1) + "\uBA85")));
           });
           return React.createElement("tr", { key: f }, tds);
         });
@@ -10410,7 +10417,11 @@ ${question}`;
             className: "font-bold text-sm text-slate-800"
           }, line), React.createElement("span", {
             className: "text-[11px] text-slate-500"
-          }, all.length + "\uAC74 \u00B7 \uD3C9\uADE0 " + gAvg.toFixed(1) + "\uBD84")),
+          }, all.length + "\uAC74 \u00B7 \uD3C9\uADE0 \uACF5\uC218 " + gAvg.toFixed(1) + "\uBD84(\uC778) \u00B7 \uD3C9\uADE0 \uC18C\uC694 " + (function() {
+            const ms = [];
+            Object.keys(cells).forEach(function(k) { cells[k].mins.forEach(function(v) { ms.push(v); }); });
+            return ms.length ? (ms.reduce(function(x, y) { return x + y; }, 0) / ms.length).toFixed(1) : "0";
+          })() + "\uBD84")),
           React.createElement("div", {
             className: "overflow-x-auto"
           }, React.createElement("table", {
@@ -10426,9 +10437,9 @@ ${question}`;
         className: "bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2"
       }, React.createElement("div", {
         className: "font-bold text-sm text-slate-700"
-      }, "\uD83D\uDD01 \uD488\uBAA9 \uAD50\uCCB4 \uB9E4\uD2B8\uB9AD\uC2A4"), React.createElement("div", {
+      }, "\uD83D\uDD01 \uD488\uBAA9 \uAD50\uCCB4 \uB9E4\uD2B8\uB9AD\uC2A4 (\uACF5\uC218)"), React.createElement("div", {
         className: "text-[11px] text-slate-500"
-      }, "Tool \uAD50\uCCB4\uB9CC \u00B7 \uC778\uC2DD " + changeMatrix.recognized + "\uAC74 (M/check \uD3EC\uD568 \u00B7 \uD488\uBAA9 \uBBF8\uAE30\uC7AC \uC81C\uC678)")),
+      }, "\uACF5\uC218 \uAE30\uC900(\uBD84\u00D7\uC778\uC6D0) \u00B7 Tool \uAD50\uCCB4\uB9CC \u00B7 \uC778\uC2DD " + changeMatrix.recognized + "\uAC74")),
          React.createElement("div", { className: "p-3 space-y-4" }, blocks));
     };
     return React.createElement("div", {
