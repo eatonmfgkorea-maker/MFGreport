@@ -301,7 +301,7 @@ const {
 const VERSION_NOTES = [{
   v: 'V062',
   d: '2026-08-02',
-  items: ['Capacity 탭 추가 — 생산관리시스템에 등록된 CT를 TCP·FE 각각 표로 정리', '정시(TCP 440분 / FE 435분)와 잔업(TCP 560분 / FE 555분) 수량을 한 표에서 동시 표시', '같은 라인·품명은 셀 병합으로 묶어 인원별 비교가 쉽도록 구성', 'Ideal CT / 계획 CT 자동 계산, 적용 시점을 비고에 표시', '엑셀 내보내기 지원']
+  items: ['Capacity 탭 추가 — 생산관리시스템에 등록된 CT를 TCP·FE 각각 표로 정리', '정시(TCP 440분 / FE 435분)와 잔업(TCP 560분 / FE 555분) 수량을 한 표에서 동시 표시', '같은 라인·품명은 셀 병합으로 묶어 인원별 비교가 쉽도록 구성', '라인(1PC·2PC·Nospin 등) / 정시·잔업 / 인원 필터 추가 — 각각 전체 보기도 가능', 'Ideal CT / 계획 CT 자동 계산, 적용 시점을 비고에 표시', '엑셀 내보내기 지원']
 }, {
   v: 'V061',
   d: '2026-08-01',
@@ -2837,7 +2837,9 @@ function App() {
   const [toolMonth, setToolMonth] = useState(new Date().getMonth() + 1);
   const [toolSection, setToolSection] = useState('TCP');
   const [capSection, setCapSection] = useState('TCP');
-  const [capOt, setCapOt] = useState(false);       // false=정시, true=잔업
+  const [capLine, setCapLine] = useState('ALL');       // 라인 필터
+  const [capMode, setCapMode] = useState('ALL');       // ALL | reg(정시) | ot(잔업)
+  const [capWorker, setCapWorker] = useState('ALL');   // 인원 필터
   const [capActiveOnly, setCapActiveOnly] = useState(true);
   const [capSearch, setCapSearch] = useState('');
   const [toolSelectedLines, setToolSelectedLines] = useState(['ALL']);
@@ -10212,12 +10214,20 @@ ${question}`;
         });
       });
     });
+    const baseRows = rows.filter(r => !capActiveOnly || r.active);
+    const capLines = [...new Set(baseRows.map(r => r.line).filter(Boolean))].sort();
+    const capWorkers = [...new Set(baseRows
+      .filter(r => capLine === 'ALL' || r.line === capLine)
+      .map(r => r.workers))].sort((x, y) => x - y);
     const kw = capSearch.trim().toLowerCase();
-    const shown = rows.filter(r => {
-      if (capActiveOnly && !r.active) return false;
+    const shown = baseRows.filter(r => {
+      if (capLine !== 'ALL' && r.line !== capLine) return false;
+      if (capWorker !== 'ALL' && String(r.workers) !== String(capWorker)) return false;
       if (kw && !(r.item.toLowerCase().includes(kw) || r.line.toLowerCase().includes(kw))) return false;
       return true;
     }).sort((a, b) => a.line.localeCompare(b.line) || a.item.localeCompare(b.item) || a.workers - b.workers);
+    const showReg = capMode !== 'ot';
+    const showOt = capMode !== 'reg';
 
     // 라인 / 품명 병합용 rowSpan 계산
     const lineSpan = {}, itemSpan = {};
@@ -10231,13 +10241,24 @@ ${question}`;
 
     const exportCap = () => {
       if (typeof XLSX === 'undefined') { alert('엑셀 라이브러리 로딩 중입니다.'); return; }
-      const header = ['라인', '품명', '인원', '정시 기본수량', '정시 계획수량', '잔업 기본수량', '잔업 계획수량', 'Ideal CT(초)', '계획 CT(초)', '비고'];
-      const body = shown.map(r => [r.line, r.item, r.workers,
-        r.regBase || '', r.regPlan || '', r.otBase || '', r.otPlan || '',
-        r.baseCt ? Number(r.baseCt.toFixed(1)) : '', r.planCt ? Number(r.planCt.toFixed(1)) : '',
-        (r.startDate ? fmtD(r.startDate) + ' 적용' : '') + (r.endDate ? ' ~ ' + fmtD(r.endDate) + ' 종료' : '')]);
+      const header = ['라인', '품명', '인원'];
+      if (showReg) header.push('정시 Ideal수량', '정시 계획수량');
+      if (showOt) header.push('잔업 Ideal수량', '잔업 계획수량');
+      header.push('Ideal CT(초)', '계획 CT(초)', '비고');
+      const body = shown.map(r => {
+        const row = [r.line, r.item, r.workers];
+        if (showReg) row.push(r.regBase || '', r.regPlan || '');
+        if (showOt) row.push(r.otBase || '', r.otPlan || '');
+        row.push(r.baseCt ? Number(r.baseCt.toFixed(1)) : '', r.planCt ? Number(r.planCt.toFixed(1)) : '',
+          (r.startDate ? fmtD(r.startDate) + ' 적용' : '') + (r.endDate ? ' ~ ' + fmtD(r.endDate) + ' 종료' : ''));
+        return row;
+      });
       const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
-      ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 7 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 26 }];
+      const cols = [{ wch: 12 }, { wch: 20 }, { wch: 7 }];
+      if (showReg) cols.push({ wch: 14 }, { wch: 13 });
+      if (showOt) cols.push({ wch: 14 }, { wch: 13 });
+      cols.push({ wch: 12 }, { wch: 12 }, { wch: 26 });
+      ws['!cols'] = cols;
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Capacity');
       XLSX.writeFile(wb, 'Capacity_' + capSection + '.xlsx');
@@ -10256,9 +10277,28 @@ ${question}`;
         className: "flex bg-slate-100 rounded-lg p-1"
       }, ['TCP', 'FE'].map(sec => React.createElement("button", {
         key: sec,
-        onClick: () => setCapSection(sec),
+        onClick: () => { setCapSection(sec); setCapLine('ALL'); setCapWorker('ALL'); },
         className: "px-4 py-1.5 rounded-md text-sm font-bold transition " + (capSection === sec ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700")
-      }, sec))), React.createElement("label", {
+      }, sec))),
+        React.createElement("div", { className: "flex bg-slate-100 rounded-lg p-1 flex-wrap" },
+          ['ALL'].concat(capLines).map(ln => React.createElement("button", {
+            key: ln,
+            onClick: () => { setCapLine(ln); setCapWorker('ALL'); },
+            className: "px-3 py-1.5 rounded-md text-sm font-bold transition " + (capLine === ln ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700")
+          }, ln === 'ALL' ? '전체' : ln))),
+        React.createElement("div", { className: "flex bg-slate-100 rounded-lg p-1" },
+          [{ k: 'ALL', l: '전체' }, { k: 'reg', l: '정시 ' + regMin + '분' }, { k: 'ot', l: '잔업 ' + otMin + '분' }].map(o => React.createElement("button", {
+            key: o.k,
+            onClick: () => setCapMode(o.k),
+            className: "px-3 py-1.5 rounded-md text-sm font-bold transition " + (capMode === o.k ? (o.k === 'ot' ? "bg-white text-amber-600 shadow-sm" : "bg-white text-indigo-600 shadow-sm") : "text-slate-500 hover:text-slate-700")
+          }, o.l))),
+        React.createElement("div", { className: "flex bg-slate-100 rounded-lg p-1 flex-wrap" },
+          ['ALL'].concat(capWorkers).map(w => React.createElement("button", {
+            key: String(w),
+            onClick: () => setCapWorker(w),
+            className: "px-3 py-1.5 rounded-md text-sm font-bold transition " + (String(capWorker) === String(w) ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")
+          }, w === 'ALL' ? '전체' : w + '명'))),
+        React.createElement("label", {
         className: "flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer"
       }, React.createElement("input", {
         type: "checkbox", checked: capActiveOnly,
@@ -10281,27 +10321,31 @@ ${question}`;
       }, React.createElement("div", { className: "overflow-x-auto" },
         React.createElement("table", { className: "w-full text-sm border-collapse" },
           React.createElement("thead", { className: "bg-slate-50" },
-            React.createElement("tr", null,
-              th("라인", "text-left"), th("품명", "text-left"), th("인원", "text-right"),
-              React.createElement("th", {
-                className: "px-3 py-1.5 font-bold text-indigo-700 text-xs border border-slate-200 bg-indigo-50",
-                colSpan: 2
-              }, "정시 " + regMin + "분"),
-              React.createElement("th", {
-                className: "px-3 py-1.5 font-bold text-amber-700 text-xs border border-slate-200 bg-amber-50",
-                colSpan: 2
-              }, "잔업 " + otMin + "분"),
-              th("Ideal CT", "text-right"), th("계획 CT", "text-right"), th("비고", "text-left")),
-            React.createElement("tr", null,
-              th(""), th(""), th(""),
-              React.createElement("th", { className: "px-3 py-1 text-[11px] font-semibold text-indigo-600 border border-slate-200 bg-indigo-50/60 text-right" }, "기본수량"),
-              React.createElement("th", { className: "px-3 py-1 text-[11px] font-semibold text-indigo-600 border border-slate-200 bg-indigo-50/60 text-right" }, "계획수량"),
-              React.createElement("th", { className: "px-3 py-1 text-[11px] font-semibold text-amber-600 border border-slate-200 bg-amber-50/60 text-right" }, "기본수량"),
-              React.createElement("th", { className: "px-3 py-1 text-[11px] font-semibold text-amber-600 border border-slate-200 bg-amber-50/60 text-right" }, "계획수량"),
-              th(""), th(""), th(""))),
+            React.createElement("tr", null, (function() {
+              const hs = [th("라인", "text-left"), th("품명", "text-left"), th("인원", "text-right")];
+              if (showReg) hs.push(React.createElement("th", {
+                key: "hr", className: "px-3 py-1.5 font-bold text-indigo-700 text-xs border border-slate-200 bg-indigo-50", colSpan: 2
+              }, "정시 " + regMin + "분"));
+              if (showOt) hs.push(React.createElement("th", {
+                key: "ho", className: "px-3 py-1.5 font-bold text-amber-700 text-xs border border-slate-200 bg-amber-50", colSpan: 2
+              }, "잔업 " + otMin + "분"));
+              hs.push(th("Ideal CT", "text-right"), th("계획 CT", "text-right"), th("비고", "text-left"));
+              return hs;
+            })()),
+            React.createElement("tr", null, (function() {
+              const hs = [th(""), th(""), th("")];
+              if (showReg) hs.push(
+                React.createElement("th", { key: "sr1", className: "px-3 py-1 text-[11px] font-semibold text-indigo-600 border border-slate-200 bg-indigo-50/60 text-right" }, "Ideal 수량"),
+                React.createElement("th", { key: "sr2", className: "px-3 py-1 text-[11px] font-semibold text-indigo-600 border border-slate-200 bg-indigo-50/60 text-right" }, "계획수량"));
+              if (showOt) hs.push(
+                React.createElement("th", { key: "so1", className: "px-3 py-1 text-[11px] font-semibold text-amber-600 border border-slate-200 bg-amber-50/60 text-right" }, "Ideal 수량"),
+                React.createElement("th", { key: "so2", className: "px-3 py-1 text-[11px] font-semibold text-amber-600 border border-slate-200 bg-amber-50/60 text-right" }, "계획수량"));
+              hs.push(th(""), th(""), th(""));
+              return hs;
+            })())),
           React.createElement("tbody", null, shown.length === 0
             ? React.createElement("tr", null, React.createElement("td", {
-                colSpan: 10, className: "px-3 py-10 text-center text-slate-400 border border-slate-200"
+                colSpan: 6 + (showReg ? 2 : 0) + (showOt ? 2 : 0), className: "px-3 py-10 text-center text-slate-400 border border-slate-200"
               }, "표시할 CT 데이터가 없습니다"))
             : shown.map((r, i) => {
               const lk = r.line, ik = r.line + '\u0001' + r.item;
@@ -10315,10 +10359,14 @@ ${question}`;
                 className: "px-3 py-1.5 font-medium align-middle border border-slate-200 whitespace-nowrap"
               }, r.item));
               cells.push(React.createElement("td", { key: "W", className: "px-3 py-1.5 text-right font-medium border border-slate-200" }, r.workers));
-              cells.push(React.createElement("td", { key: "RB", className: "px-3 py-1.5 text-right font-semibold text-indigo-700 border border-slate-200 bg-indigo-50/30" }, r.regBase ? r.regBase.toLocaleString() : '-'));
-              cells.push(React.createElement("td", { key: "RP", className: "px-3 py-1.5 text-right text-indigo-600 border border-slate-200 bg-indigo-50/30" }, r.regPlan ? r.regPlan.toLocaleString() : '-'));
-              cells.push(React.createElement("td", { key: "OB", className: "px-3 py-1.5 text-right font-semibold text-amber-700 border border-slate-200 bg-amber-50/30" }, r.otBase ? r.otBase.toLocaleString() : '-'));
-              cells.push(React.createElement("td", { key: "OP", className: "px-3 py-1.5 text-right text-amber-600 border border-slate-200 bg-amber-50/30" }, r.otPlan ? r.otPlan.toLocaleString() : '-'));
+              if (showReg) {
+                cells.push(React.createElement("td", { key: "RB", className: "px-3 py-1.5 text-right font-semibold text-indigo-700 border border-slate-200 bg-indigo-50/30" }, r.regBase ? r.regBase.toLocaleString() : '-'));
+                cells.push(React.createElement("td", { key: "RP", className: "px-3 py-1.5 text-right text-indigo-600 border border-slate-200 bg-indigo-50/30" }, r.regPlan ? r.regPlan.toLocaleString() : '-'));
+              }
+              if (showOt) {
+                cells.push(React.createElement("td", { key: "OB", className: "px-3 py-1.5 text-right font-semibold text-amber-700 border border-slate-200 bg-amber-50/30" }, r.otBase ? r.otBase.toLocaleString() : '-'));
+                cells.push(React.createElement("td", { key: "OP", className: "px-3 py-1.5 text-right text-amber-600 border border-slate-200 bg-amber-50/30" }, r.otPlan ? r.otPlan.toLocaleString() : '-'));
+              }
               cells.push(React.createElement("td", { key: "BC", className: "px-3 py-1.5 text-right text-slate-600 border border-slate-200" }, r.baseCt ? r.baseCt.toFixed(1) : '-'));
               cells.push(React.createElement("td", { key: "PC", className: "px-3 py-1.5 text-right text-slate-600 border border-slate-200" }, r.planCt ? r.planCt.toFixed(1) : '-'));
               cells.push(React.createElement("td", { key: "N", className: "px-3 py-1.5 text-xs text-slate-500 border border-slate-200 whitespace-nowrap" },
@@ -10334,9 +10382,9 @@ ${question}`;
         className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4 text-xs text-slate-500 leading-relaxed"
       }, React.createElement("div", { className: "font-bold text-slate-700 mb-1.5 text-sm" }, "계산 기준"),
         React.createElement("div", null, "\u00B7 \uAE30\uC900\uBD84 \u2014 TCP \uC815\uC2DC 440\uBD84 / \uC794\uC5C5 560\uBD84, FE \uC815\uC2DC 435\uBD84 / \uC794\uC5C5 555\uBD84"),
-        React.createElement("div", null, "\u00B7 Ideal CT = \uAE30\uC900\uBD84 \u00D7 60 \u00F7 \uAE30\uBCF8\uC218\uB7C9 (\uCD08)"),
+        React.createElement("div", null, "\u00B7 Ideal CT = \uAE30\uC900\uBD84 \u00D7 60 \u00F7 Ideal \uC218\uB7C9 (\uCD08)"),
         React.createElement("div", null, "\u00B7 \uACC4\uD68D CT = \uAE30\uC900\uBD84 \u00D7 60 \u00F7 \uACC4\uD68D\uC218\uB7C9 (\uCD08)"),
-        React.createElement("div", null, "\u00B7 \uC794\uC5C5 \uC218\uB7C9\uC740 \uC815\uC2DC \uC218\uB7C9\uC744 \uAE30\uC900\uBD84 \uBE44\uC728\uB85C \uD658\uC0B0\uD55C \uAC12\uC774\uBA70, CT\uB294 \uC815\uC2DC\uC640 \uB3D9\uC77C\uD569\uB2C8\uB2E4"),
+        React.createElement("div", null, "\u00B7 \uC794\uC5C5 \uC218\uB7C9\uC740 \uC815\uC2DC \uC218\uB7C9\uC744 \uAE30\uC900\uBD84 \uBE44\uC728\uB85C \uD658\uC0B0\uD55C \uAC12\uC774\uBA70, CT\uB294 \uC815\uC2DC\uC640 \uB3D9\uC77C\uD569\uB2C8\uB2E4"), React.createElement("div", null, "\u00B7 \uB77C\uC778 \u00B7 \uC815\uC2DC/\uC794\uC5C5 \u00B7 \uC778\uC6D0\uC744 \uAC01\uAC01 \uC120\uD0DD\uD574 \uD544\uC694\uD55C \uAC83\uB9CC \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4"),
         React.createElement("div", null, "\u00B7 \uD68C\uC0C9 \uC904\uC740 \uC801\uC6A9 \uAE30\uAC04\uC774 \uC9C0\uB09C \uC774\uB825\uC785\uB2C8\uB2E4"))));
   })(), activeTab === 'tool' && (tcpData || feData) && (() => {
     const toolLines = (() => {
