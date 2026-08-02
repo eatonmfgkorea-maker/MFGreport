@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V060</title>
+  <title>MFG Report V061</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,9 +299,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V060',
+  v: 'V061',
   d: '2026-08-01',
-  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영', '데이터 출력: 선택한 달에 실적이 없으면 실적이 있는 최근 달로 자동 이동']
+  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영', '데이터 출력: 선택한 달에 실적이 없으면 실적이 있는 최근 달로 자동 이동', 'Tool 교체: 비고의 «A → B» 표기를 인식해 품목 교체 매트릭스(라인별 평균 교체 시간) 추가 — «Tool 교체 & M/check»는 순수 교체 시간이 아니므로 제외']
 }, {
   v: 'V059',
   d: '2026-07-29',
@@ -5588,7 +5588,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V060"), React.createElement("div", {
+  }, "V061"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -10306,6 +10306,131 @@ ${question}`;
       padT = 40,
       padB = 50;
     const cw = (W - padL - padR) / 12;
+    // ===== 품목 교체 매트릭스 (비고 내용에서 «A -> B» 인식) =====
+    const CHG_NORM = [[/^(HR\s*PE|HRPE|HR|HR4X4|HR6\.0)$/i, 'HRPE'], [/^(TK\s*MLD|TKMLD|TKM|TK|TK\s*ELD)$/i, 'TK MLD'], [/^(M\s*&\s*M|MM)$/i, 'M&M'], [/^(GM\s*11\.5|11\.5|GM)$/i, 'GM11.5'], [/^(Q200L|Q200LONG|Q200S|Q200)$/i, 'Q200'], [/^(Q201|Q021)$/i, 'Q201'], [/^(INEOS|INOES)$/i, 'INEOS'], [/^(JL\s*FRONT|JLFRONT|JL\s*F|JL)$/i, 'JL FRONT'], [/^(Y9\s*FRONT|Y9)$/i, 'Y9'], [/^(SK81|SK)$/i, 'SK81'], [/^(REAR)$/i, 'REAR'], [/^(PE)$/i, 'PE'], [/^(PU)$/i, 'PU'], [/^(KP1)$/i, 'KP1'], [/^(N352)$/i, 'N352'], [/^(K7)$/i, 'K7'], [/^(Y450)$/i, 'Y450'], [/^(V363)$/i, 'V363'], [/^(P15)$/i, 'P15'], [/^(JP360)$/i, 'JP360'], [/^(LT2)$/i, 'LT2'], [/^(TQ47)$/i, 'TQ47'], [/^(HM)$/i, 'HM']];
+    const normItem = raw => {
+      if (!raw) return null;
+      let v = String(raw).replace(/(tool|지그|교체|툴|&|m\/check|\/check)/gi, '').replace(/\s+/g, ' ').trim().replace(/^[-.\s]+|[-.\s]+$/g, '');
+      if (!v || v.length > 12) return null;
+      for (let i = 0; i < CHG_NORM.length; i++) {
+        if (CHG_NORM[i][0].test(v)) return CHG_NORM[i][1];
+      }
+      return null;
+    };
+    const CHG_PAT = /([A-Za-z0-9&.\s]{1,14}?)\s*(?:->|→|=>|-\?)\s*([A-Za-z0-9&.\s]{1,14}?)(?:\s*(?:지그|Tool|툴|$))/i;
+    const changeMatrix = (() => {
+      const byLine = {};
+      let recognized = 0, noItem = 0;
+      yearToolDowntimes.forEach(dt => {
+        // M/check가 섞인 항목은 순수 교체 시간이 아니므로 제외
+        if (String(dt.downtimeType || '') !== 'Tool 교체') return;
+        const log = logById[dt.productionLogId];
+        if (!log) return;
+        const line = resolveLineName(toolSection, log.lineName);
+        const m = CHG_PAT.exec(String(dt.content || '').trim());
+        if (!m) { noItem++; return; }
+        const from = normItem(m[1]), to = normItem(m[2]);
+        if (!from || !to || from === to) { noItem++; return; }
+        const st = parseHm(dt.startTime), en = parseHm(dt.endTime);
+        if (st === null || en === null) { noItem++; return; }
+        let dur = en - st;
+        if (dur < 0) dur += 1440;
+        if (dur <= 0 || dur > 240) { noItem++; return; }
+        recognized++;
+        if (!byLine[line]) byLine[line] = {};
+        const k = from + '\u0001' + to;
+        if (!byLine[line][k]) byLine[line][k] = { from: from, to: to, list: [] };
+        byLine[line][k].list.push(dur);
+      });
+      return { byLine: byLine, recognized: recognized, noItem: noItem };
+    })();
+    const matrixLines = Object.keys(changeMatrix.byLine).sort();
+
+    const renderChangeMatrix = () => {
+      if (!matrixLines.length) return null;
+      const blocks = matrixLines.map(function(line) {
+        const cells = changeMatrix.byLine[line];
+        const set = {};
+        Object.keys(cells).forEach(function(k) { set[cells[k].from] = 1; set[cells[k].to] = 1; });
+        const items = Object.keys(set).sort();
+        const all = [];
+        Object.keys(cells).forEach(function(k) { cells[k].list.forEach(function(v) { all.push(v); }); });
+        const gAvg = all.length ? all.reduce(function(a, b) { return a + b; }, 0) / all.length : 0;
+
+        const headCells = [React.createElement("th", {
+          key: "_h",
+          className: "sticky left-0 bg-slate-100 border border-slate-200 px-2 py-1 text-slate-600 font-bold whitespace-nowrap"
+        }, "From \\ To")];
+        items.forEach(function(t) {
+          headCells.push(React.createElement("th", {
+            key: t,
+            className: "bg-slate-100 border border-slate-200 px-2 py-1 text-slate-600 font-bold whitespace-nowrap"
+          }, t));
+        });
+
+        const bodyRows = items.map(function(f) {
+          const tds = [React.createElement("td", {
+            key: "_r",
+            className: "sticky left-0 bg-slate-50 border border-slate-200 px-2 py-1 font-bold text-slate-700 whitespace-nowrap"
+          }, f)];
+          items.forEach(function(t) {
+            if (f === t) {
+              tds.push(React.createElement("td", {
+                key: t,
+                className: "border border-slate-200 bg-slate-50 text-center text-slate-300"
+              }, "\u2013"));
+              return;
+            }
+            const c = cells[f + "\u0001" + t];
+            if (!c) {
+              tds.push(React.createElement("td", {
+                key: t,
+                className: "border border-slate-200 text-center text-slate-200"
+              }, "\u00B7"));
+              return;
+            }
+            const a = c.list.reduce(function(x, y) { return x + y; }, 0) / c.list.length;
+            const hot = a >= gAvg * 1.3;
+            const cool = a <= gAvg * 0.75;
+            tds.push(React.createElement("td", {
+              key: t,
+              title: f + " \u2192 " + t + " : " + c.list.length + "\uD68C, \uD3C9\uADE0 " + a.toFixed(1) + "\uBD84 (\uCD5C\uC18C " + Math.min.apply(null, c.list) + " / \uCD5C\uB300 " + Math.max.apply(null, c.list) + ")",
+              className: "border border-slate-200 text-center px-2 py-1 " + (hot ? "bg-rose-50 text-rose-700 font-bold" : cool ? "bg-emerald-50 text-emerald-700" : "text-slate-700")
+            }, React.createElement("div", null, a.toFixed(0), "\uBD84"), React.createElement("div", {
+              className: "text-[9px] text-slate-400"
+            }, c.list.length, "\uD68C")));
+          });
+          return React.createElement("tr", { key: f }, tds);
+        });
+
+        return React.createElement("div", { key: line },
+          React.createElement("div", {
+            className: "flex items-baseline gap-2 mb-1.5"
+          }, React.createElement("span", {
+            className: "font-bold text-sm text-slate-800"
+          }, line), React.createElement("span", {
+            className: "text-[11px] text-slate-500"
+          }, all.length + "\uAC74 \u00B7 \uD3C9\uADE0 " + gAvg.toFixed(1) + "\uBD84")),
+          React.createElement("div", {
+            className: "overflow-x-auto"
+          }, React.createElement("table", {
+            className: "text-[11px] border-collapse"
+          }, React.createElement("thead", null, React.createElement("tr", null, headCells)),
+             React.createElement("tbody", null, bodyRows)))
+        );
+      });
+
+      return React.createElement("div", {
+        className: "bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden mt-3"
+      }, React.createElement("div", {
+        className: "bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2"
+      }, React.createElement("div", {
+        className: "font-bold text-sm text-slate-700"
+      }, "\uD83D\uDD01 \uD488\uBAA9 \uAD50\uCCB4 \uB9E4\uD2B8\uB9AD\uC2A4"), React.createElement("div", {
+        className: "text-[11px] text-slate-500"
+      }, "Tool \uAD50\uCCB4\uB9CC \u00B7 \uC778\uC2DD " + changeMatrix.recognized + "\uAC74 (M/check \uD3EC\uD568 \u00B7 \uD488\uBAA9 \uBBF8\uAE30\uC7AC \uC81C\uC678)")),
+         React.createElement("div", { className: "p-3 space-y-4" }, blocks));
+    };
     return React.createElement("div", {
       className: "flex gap-3"
     }, React.createElement("div", {
@@ -10599,7 +10724,7 @@ ${question}`;
       }, Math.round(it.manMinutes)), React.createElement("td", {
         className: "px-3 py-1 text-slate-600"
       }, it.content))))))));
-    })()));
+    })(), renderChangeMatrix()));
   })(), activeTab === 'workhour' && (tcpData || feData) && (() => {
     const whLines = (() => {
       if (whSection === 'TCP') return ['1PC', '2PC', 'Nospin'];
