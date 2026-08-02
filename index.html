@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V061</title>
+  <title>MFG Report V062</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,9 +299,13 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V062',
+  d: '2026-08-02',
+  items: ['Capacity 탭 추가 — 생산관리시스템에 등록된 CT를 TCP·FE 각각 표로 정리', '라인·품명·기준분·인원·기본수량(Ideal)·Ideal CT·계획수량·계획 CT·적용시점 표시', '정시(TCP 440분 / FE 435분)와 잔업(TCP 560분 / FE 555분) 전환 가능', '엑셀 내보내기 지원']
+}, {
   v: 'V061',
   d: '2026-08-01',
-  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영', '데이터 출력: 선택한 달에 실적이 없으면 실적이 있는 최근 달로 자동 이동', 'Tool 교체: 비고의 «A → B» 표기를 인식해 품목 교체 매트릭스 추가 — 투입 인원 차이를 보정하기 위해 공수(분×인원) 기준, «Tool 교체 & M/check»는 제외']
+  items: ['로그인 방식을 구글 계정으로 변경 — 관리자가 승인한 계정만 접근', '로그인 없이 «게스트로 둘러보기»로 제한 조회 가능', '역할이 게스트인 계정은 자동으로 게스트 모드로 입장', '한 번 로그인하면 브라우저를 닫아도 로그인이 유지됨', '게스트도 데이터 출력 탭의 «해당 기간 생산일지» 엑셀 다운로드 사용 가능', '권한을 회수하면 다음 접속부터 즉시 반영', '데이터 출력: 선택한 달에 실적이 없으면 실적이 있는 최근 달로 자동 이동', 'Tool 교체: 비고의 «A → B» 표기를 인식해 품목 교체 매트릭스 추가 — 공수(분×인원) 기준, «Tool 교체 & M/check»는 제외, HR4X4는 PU·HR6.0/6.5는 HR로 분류']
 }, {
   v: 'V059',
   d: '2026-07-29',
@@ -2832,6 +2836,10 @@ function App() {
   const [toolYear, setToolYear] = useState(new Date().getFullYear());
   const [toolMonth, setToolMonth] = useState(new Date().getMonth() + 1);
   const [toolSection, setToolSection] = useState('TCP');
+  const [capSection, setCapSection] = useState('TCP');
+  const [capOt, setCapOt] = useState(false);       // false=정시, true=잔업
+  const [capActiveOnly, setCapActiveOnly] = useState(true);
+  const [capSearch, setCapSearch] = useState('');
   const [toolSelectedLines, setToolSelectedLines] = useState(['ALL']);
   const [toolDetailMonth, setToolDetailMonth] = useState(null);
   const [drYear, setDrYear] = useState(new Date().getFullYear());
@@ -5517,6 +5525,10 @@ ${question}`;
     icon: '👤',
     label: 'PCS/MH'
   }, {
+    id: 'capacity',
+    icon: '📐',
+    label: 'Capacity'
+  }, {
     id: 'tool',
     icon: '🔧',
     label: 'Tool 교체'
@@ -5588,7 +5600,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V061"), React.createElement("div", {
+  }, "V062"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -10169,6 +10181,157 @@ ${question}`;
     }, Math.round(total.actual).toLocaleString()), React.createElement("td", {
       className: `px-4 py-2 text-right ${achColorClass(total.ach)}`
     }, total.ach.toFixed(1), "%"))))))));
+  })(), activeTab === 'capacity' && (tcpData || feData) && (() => {
+    const capData = capSection === 'TCP' ? tcpData : feData;
+    const secSet = capData?.settings?.[capSection] || {};
+    const regularMin = capSection === 'TCP' ? 440 : 435;
+    const otMin = capSection === 'TCP' ? 560 : 555;
+    const baseMin = capOt ? otMin : regularMin;
+    const items = secSet.items || [];
+    const fmtD = d => {
+      if (!d) return '';
+      const t = String(d).slice(0, 10);
+      return t.replace(/-/g, '.');
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = [];
+    items.forEach(it => {
+      (it.ct || []).forEach(c => {
+        const bq = parseFloat(c.baseQty) || 0;
+        const pq = parseFloat(c.planQty) || 0;
+        if (bq <= 0 && pq <= 0) return;
+        const sd = c.startDate ? String(c.startDate).slice(0, 10) : '';
+        const ed = c.endDate ? String(c.endDate).slice(0, 10) : '';
+        const active = (!sd || sd <= today) && (!ed || ed >= today);
+        // 기준분 환산 (기본 수량은 정시 기준으로 등록되어 있으므로 잔업 시 비례 환산)
+        const ratio = baseMin / regularMin;
+        const bQty = bq > 0 ? Math.round(bq * ratio) : 0;
+        const pQty = pq > 0 ? Math.round(pq * ratio) : 0;
+        rows.push({
+          line: it.lineName || '',
+          item: it.item || '',
+          workers: parseFloat(c.workers) || 0,
+          baseQty: bQty,
+          planQty: pQty,
+          baseCt: bQty > 0 ? baseMin * 60 / bQty : null,
+          planCt: pQty > 0 ? baseMin * 60 / pQty : null,
+          startDate: sd,
+          endDate: ed,
+          active: active
+        });
+      });
+    });
+    const kw = capSearch.trim().toLowerCase();
+    const shown = rows.filter(r => {
+      if (capActiveOnly && !r.active) return false;
+      if (kw && !(r.item.toLowerCase().includes(kw) || r.line.toLowerCase().includes(kw))) return false;
+      return true;
+    }).sort((a, b) => a.line.localeCompare(b.line) || a.item.localeCompare(b.item) || a.workers - b.workers);
+
+    const exportCap = () => {
+      if (typeof XLSX === 'undefined') { alert('엑셀 라이브러리 로딩 중입니다.'); return; }
+      const header = ['라인', '품명', '기준분', '인원', '기본수량(Ideal)', 'Ideal CT(초)', '계획수량', '계획 CT(초)', '비고'];
+      const body = shown.map(r => [r.line, r.item, baseMin, r.workers,
+        r.baseQty || '', r.baseCt ? Number(r.baseCt.toFixed(1)) : '',
+        r.planQty || '', r.planCt ? Number(r.planCt.toFixed(1)) : '',
+        (r.startDate ? fmtD(r.startDate) + ' 적용' : '') + (r.endDate ? ' ~ ' + fmtD(r.endDate) + ' 종료' : '')]);
+      const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
+      ws['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 7 }, { wch: 15 }, { wch: 13 }, { wch: 12 }, { wch: 13 }, { wch: 26 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Capacity');
+      XLSX.writeFile(wb, `Capacity_${capSection}_${capOt ? '잔업' : '정시'}_${baseMin}분.xlsx`);
+    };
+
+    let lastLine = null;
+    return React.createElement("div", {
+      className: "space-y-3"
+    }, React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4"
+    }, React.createElement("div", {
+      className: "flex items-center gap-3 flex-wrap"
+    }, React.createElement("div", {
+      className: "flex bg-slate-100 rounded-lg p-1"
+    }, ['TCP', 'FE'].map(sec => React.createElement("button", {
+      key: sec,
+      onClick: () => setCapSection(sec),
+      className: "px-4 py-1.5 rounded-md text-sm font-bold transition " + (capSection === sec ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700")
+    }, sec))), React.createElement("div", {
+      className: "flex bg-slate-100 rounded-lg p-1"
+    }, [{ k: false, l: '정시 ' + regularMin + '분' }, { k: true, l: '잔업 ' + otMin + '분' }].map(o => React.createElement("button", {
+      key: String(o.k),
+      onClick: () => setCapOt(o.k),
+      className: "px-4 py-1.5 rounded-md text-sm font-bold transition " + (capOt === o.k ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")
+    }, o.l))), React.createElement("label", {
+      className: "flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer"
+    }, React.createElement("input", {
+      type: "checkbox",
+      checked: capActiveOnly,
+      onChange: e => setCapActiveOnly(e.target.checked),
+      className: "rounded"
+    }), "현재 적용분만"), React.createElement("input", {
+      type: "text",
+      value: capSearch,
+      onChange: e => setCapSearch(e.target.value),
+      placeholder: "품명 · 라인 검색",
+      className: "px-3 py-1.5 border border-slate-300 rounded-lg text-sm w-48"
+    }), React.createElement("div", {
+      className: "flex-1"
+    }), React.createElement("span", {
+      className: "text-xs text-slate-500"
+    }, shown.length, "건"), React.createElement("button", {
+      onClick: exportCap,
+      className: "px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg"
+    }, "엑셀"))), React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+    }, React.createElement("div", {
+      className: "overflow-x-auto"
+    }, React.createElement("table", {
+      className: "w-full text-sm"
+    }, React.createElement("thead", {
+      className: "bg-slate-50 border-b border-slate-200"
+    }, React.createElement("tr", null, ['라인', '품명', '기준분', '인원', '기본수량', 'Ideal CT', '계획수량', '계획 CT', '비고'].map((h, hi) => React.createElement("th", {
+      key: h,
+      className: "px-3 py-2 font-bold text-slate-600 text-xs whitespace-nowrap " + (hi >= 2 && hi <= 7 ? "text-right" : "text-left")
+    }, h)))), React.createElement("tbody", null, shown.length === 0 ? React.createElement("tr", null, React.createElement("td", {
+      colSpan: 9,
+      className: "px-3 py-10 text-center text-slate-400"
+    }, "표시할 CT 데이터가 없습니다")) : shown.map((r, i) => {
+      const newLine = r.line !== lastLine;
+      lastLine = r.line;
+      return React.createElement("tr", {
+        key: i,
+        className: (newLine && i > 0 ? "border-t-2 border-slate-200 " : "border-t border-slate-100 ") + (r.active ? "hover:bg-slate-50" : "bg-slate-50/60 text-slate-400 hover:bg-slate-100")
+      }, React.createElement("td", {
+        className: "px-3 py-1.5 font-semibold whitespace-nowrap"
+      }, newLine ? r.line : ''), React.createElement("td", {
+        className: "px-3 py-1.5 whitespace-nowrap"
+      }, r.item), React.createElement("td", {
+        className: "px-3 py-1.5 text-right text-slate-500"
+      }, baseMin), React.createElement("td", {
+        className: "px-3 py-1.5 text-right font-medium"
+      }, r.workers), React.createElement("td", {
+        className: "px-3 py-1.5 text-right font-semibold text-indigo-700"
+      }, r.baseQty ? r.baseQty.toLocaleString() : '-'), React.createElement("td", {
+        className: "px-3 py-1.5 text-right text-indigo-500"
+      }, r.baseCt ? r.baseCt.toFixed(1) + '초' : '-'), React.createElement("td", {
+        className: "px-3 py-1.5 text-right font-semibold text-emerald-700"
+      }, r.planQty ? r.planQty.toLocaleString() : '-'), React.createElement("td", {
+        className: "px-3 py-1.5 text-right text-emerald-600"
+      }, r.planCt ? r.planCt.toFixed(1) + '초' : '-'), React.createElement("td", {
+        className: "px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap"
+      }, r.startDate ? fmtD(r.startDate) + ' 적용' : '', r.endDate ? React.createElement("span", {
+        className: "text-rose-500"
+      }, ' ~ ' + fmtD(r.endDate) + ' 종료') : ''));
+    })))), React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4 text-xs text-slate-500 leading-relaxed"
+    }, React.createElement("div", {
+      className: "font-bold text-slate-700 mb-1.5 text-sm"
+    }, "계산 기준"),
+       React.createElement("div", null, "\u00B7 \uAE30\uC900\uBD84 \u2014 TCP \uC815\uC2DC 440\uBD84 / \uC794\uC5C5 560\uBD84, FE \uC815\uC2DC 435\uBD84 / \uC794\uC5C5 555\uBD84"),
+       React.createElement("div", null, "\u00B7 Ideal CT = \uAE30\uC900\uBD84 \u00D7 60 \u00F7 \uAE30\uBCF8\uC218\uB7C9 (\uCD08)"),
+       React.createElement("div", null, "\u00B7 \uACC4\uD68D CT = \uAE30\uC900\uBD84 \u00D7 60 \u00F7 \uACC4\uD68D\uC218\uB7C9 (\uCD08)"),
+       React.createElement("div", null, "\u00B7 \uC794\uC5C5 \uC218\uB7C9\uC740 \uC0DD\uC0B0\uAD00\uB9AC\uC2DC\uC2A4\uD15C\uC5D0 \uB4F1\uB85D\uB41C \uC815\uC2DC \uC218\uB7C9\uC744 \uAE30\uC900\uBD84 \uBE44\uC728\uB85C \uD658\uC0B0\uD55C \uAC12\uC785\uB2C8\uB2E4"),
+       React.createElement("div", null, "\u00B7 \uD68C\uC0C9 \uC904\uC740 \uC801\uC6A9 \uAE30\uAC04\uC774 \uC9C0\uB09C \uC774\uB825\uC785\uB2C8\uB2E4"))));
   })(), activeTab === 'tool' && (tcpData || feData) && (() => {
     const toolLines = (() => {
       if (toolSection === 'TCP') return ['1PC', '2PC', 'Nospin'];
@@ -10307,7 +10470,7 @@ ${question}`;
       padB = 50;
     const cw = (W - padL - padR) / 12;
     // ===== 품목 교체 매트릭스 (비고 내용에서 «A -> B» 인식) =====
-    const CHG_NORM = [[/^(HR\s*PE|HRPE|HR|HR4X4|HR6\.0)$/i, 'HRPE'], [/^(TK\s*MLD|TKMLD|TKM|TK|TK\s*ELD)$/i, 'TK MLD'], [/^(M\s*&\s*M|MM)$/i, 'M&M'], [/^(GM\s*11\.5|11\.5|GM)$/i, 'GM11.5'], [/^(Q200L|Q200LONG|Q200S|Q200)$/i, 'Q200'], [/^(Q201|Q021)$/i, 'Q201'], [/^(INEOS|INOES)$/i, 'INEOS'], [/^(JL\s*FRONT|JLFRONT|JL\s*F|JL)$/i, 'JL FRONT'], [/^(Y9\s*FRONT|Y9)$/i, 'Y9'], [/^(SK81|SK)$/i, 'SK81'], [/^(REAR)$/i, 'REAR'], [/^(PE)$/i, 'PE'], [/^(PU)$/i, 'PU'], [/^(KP1)$/i, 'KP1'], [/^(N352)$/i, 'N352'], [/^(K7)$/i, 'K7'], [/^(Y450)$/i, 'Y450'], [/^(V363)$/i, 'V363'], [/^(P15)$/i, 'P15'], [/^(JP360)$/i, 'JP360'], [/^(LT2)$/i, 'LT2'], [/^(TQ47)$/i, 'TQ47'], [/^(HM)$/i, 'HM']];
+    const CHG_NORM = [[/^(HR[ ]*PE|HRPE)$/i, 'HRPE'], [/^(HR[ ]*4X4)$/i, 'PU'], [/^(HR[ ]*6[.](0|5)|HR)$/i, 'HR'], [/^(TK\s*MLD|TKMLD|TKM|TK|TK\s*ELD)$/i, 'TK MLD'], [/^(M\s*&\s*M|MM)$/i, 'M&M'], [/^(GM\s*11\.5|11\.5|GM)$/i, 'GM11.5'], [/^(Q200L|Q200LONG|Q200S|Q200)$/i, 'Q200'], [/^(Q201|Q021)$/i, 'Q201'], [/^(INEOS|INOES)$/i, 'INEOS'], [/^(JL\s*FRONT|JLFRONT|JL\s*F|JL)$/i, 'JL FRONT'], [/^(Y9\s*FRONT|Y9)$/i, 'Y9'], [/^(SK81|SK)$/i, 'SK81'], [/^(REAR)$/i, 'REAR'], [/^(PE)$/i, 'PE'], [/^(PU)$/i, 'PU'], [/^(KP1)$/i, 'KP1'], [/^(N352)$/i, 'N352'], [/^(K7)$/i, 'K7'], [/^(Y450)$/i, 'Y450'], [/^(V363)$/i, 'V363'], [/^(P15)$/i, 'P15'], [/^(JP360)$/i, 'JP360'], [/^(LT2)$/i, 'LT2'], [/^(TQ47)$/i, 'TQ47'], [/^(HM)$/i, 'HM']];
     const normItem = raw => {
       if (!raw) return null;
       let v = String(raw).replace(/(tool|지그|교체|툴|&|m\/check|\/check)/gi, '').replace(/\s+/g, ' ').trim().replace(/^[-.\s]+|[-.\s]+$/g, '');
