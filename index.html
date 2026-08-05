@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V062</title>
+  <title>MFG Report V063</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,6 +299,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V063',
+  d: '2026-08-04',
+  items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿(CT그룹·아이템 시트) 엑셀 업로드 및 결과 내보내기', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
+}, {
   v: 'V062',
   d: '2026-08-02',
   items: ['Capacity 탭 추가 — 생산관리시스템에 등록된 CT를 TCP·FE 각각 표로 정리', '정시(TCP 440분 / FE 435분)와 잔업(TCP 560분 / FE 555분) 수량을 한 표에서 동시 표시', '같은 라인·품명은 셀 병합으로 묶어 인원별 비교가 쉽도록 구성', '라인(1PC·2PC·Nospin 등) / 정시·잔업 / 인원 필터 추가 — 각각 전체 보기도 가능', 'Ideal CT / 계획 CT 자동 계산, 적용 시점을 비고에 표시', '엑셀 내보내기 지원']
@@ -2762,6 +2766,8 @@ function App() {
             productionPlan,
             planItemMapping,
             lotFtfrNotes,
+            cuOverrides,
+            cuData,
             fePlanRaw: readFePlanRaw()
           }
         };
@@ -2775,7 +2781,7 @@ function App() {
       } catch {}
     }, 3000);
     return () => clearTimeout(timer);
-  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes]);
+  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, cuOverrides, cuData]);
   const [expandedNotes, setExpandedNotes] = useState({});
   const toggleNote = key => setExpandedNotes(prev => ({
     ...prev,
@@ -2842,6 +2848,108 @@ function App() {
   const [capWorker, setCapWorker] = useState('ALL');   // 인원 필터
   const [capActiveOnly, setCapActiveOnly] = useState(true);
   const [capSearch, setCapSearch] = useState('');
+  // Capacity Utilization
+  const [cuYear, setCuYear] = useState(new Date().getFullYear() + 1);
+  const [cuSection, setCuSection] = useState('TCP');
+  const [cuExpanded, setCuExpanded] = useState([]);
+  const [cuCalOpen, setCuCalOpen] = useState(false);
+  const [cuOverrides, setCuOverrides] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mfg_cu_workdays') || '{}'); } catch (e) { return {}; }
+  });
+  const [cuData, setCuData] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mfg_cu_ctdata') || 'null') || { groups: [], items: [] }; }
+    catch (e) { return { groups: [], items: [] }; }
+  });
+  const [cuMsg, setCuMsg] = useState('');
+  // ===== Capacity Utilization : 달력 · 근무일 =====
+  const CU_HOLIDAYS = {"2026": {"2026-01-01": "신정", "2026-03-01": "삼일절", "2026-05-05": "어린이날", "2026-06-06": "현충일", "2026-08-15": "광복절", "2026-10-03": "개천절", "2026-10-09": "한글날", "2026-12-25": "성탄절", "2026-02-16": "설날연휴", "2026-02-17": "설날", "2026-02-18": "설날연휴", "2026-09-24": "추석연휴", "2026-09-25": "추석", "2026-09-26": "추석연휴", "2026-05-24": "부처님오신날", "2026-03-02": "대체공휴일(삼일절)", "2026-05-25": "대체공휴일(부처님오신날)", "2026-08-17": "대체공휴일(광복절)", "2026-09-28": "대체공휴일(추석)", "2026-10-05": "대체공휴일(개천절)"}, "2027": {"2027-01-01": "신정", "2027-03-01": "삼일절", "2027-05-05": "어린이날", "2027-06-06": "현충일", "2027-08-15": "광복절", "2027-10-03": "개천절", "2027-10-09": "한글날", "2027-12-25": "성탄절", "2027-02-06": "설날연휴", "2027-02-07": "설날", "2027-02-08": "설날연휴", "2027-09-14": "추석연휴", "2027-09-15": "추석", "2027-09-16": "추석연휴", "2027-05-13": "부처님오신날", "2027-02-09": "대체공휴일(설날)", "2027-02-10": "대체공휴일(설날)", "2027-08-16": "대체공휴일(광복절)", "2027-10-04": "대체공휴일(개천절)", "2027-10-11": "대체공휴일(한글날)", "2027-12-27": "대체공휴일(성탄절)"}, "2028": {"2028-01-01": "신정", "2028-03-01": "삼일절", "2028-05-05": "어린이날", "2028-06-06": "현충일", "2028-08-15": "광복절", "2028-10-03": "추석", "2028-10-09": "한글날", "2028-12-25": "성탄절", "2028-01-26": "설날연휴", "2028-01-27": "설날", "2028-01-28": "설날연휴", "2028-10-02": "추석연휴", "2028-10-04": "추석연휴", "2028-05-02": "부처님오신날"}, "2029": {"2029-01-01": "신정", "2029-03-01": "삼일절", "2029-05-05": "어린이날", "2029-06-06": "현충일", "2029-08-15": "광복절", "2029-10-03": "개천절", "2029-10-09": "한글날", "2029-12-25": "성탄절", "2029-02-12": "설날연휴", "2029-02-13": "설날", "2029-02-14": "설날연휴", "2029-09-21": "추석연휴", "2029-09-22": "추석", "2029-09-23": "추석연휴", "2029-05-20": "부처님오신날", "2029-05-07": "대체공휴일(어린이날)", "2029-05-21": "대체공휴일(부처님오신날)", "2029-09-24": "대체공휴일(추석)", "2029-09-25": "대체공휴일(추석)"}, "2030": {"2030-01-01": "신정", "2030-03-01": "삼일절", "2030-05-05": "어린이날", "2030-06-06": "현충일", "2030-08-15": "광복절", "2030-10-03": "개천절", "2030-10-09": "한글날", "2030-12-25": "성탄절", "2030-02-02": "설날연휴", "2030-02-03": "설날", "2030-02-04": "설날연휴", "2030-09-11": "추석연휴", "2030-09-12": "추석", "2030-09-13": "추석연휴", "2030-05-09": "부처님오신날", "2030-02-05": "대체공휴일(설날)", "2030-02-06": "대체공휴일(설날)", "2030-05-06": "대체공휴일(어린이날)"}, "2031": {"2031-01-01": "신정", "2031-03-01": "삼일절", "2031-05-05": "어린이날", "2031-06-06": "현충일", "2031-08-15": "광복절", "2031-10-03": "개천절", "2031-10-09": "한글날", "2031-12-25": "성탄절", "2031-01-22": "설날연휴", "2031-01-23": "설날", "2031-01-24": "설날연휴", "2031-09-30": "추석연휴", "2031-10-01": "추석", "2031-10-02": "추석연휴", "2031-05-28": "부처님오신날", "2031-03-03": "대체공휴일(삼일절)"}, "2032": {"2032-01-01": "신정", "2032-03-01": "삼일절", "2032-05-05": "어린이날", "2032-06-06": "현충일", "2032-08-15": "광복절", "2032-10-03": "개천절", "2032-10-09": "한글날", "2032-12-25": "성탄절", "2032-02-10": "설날연휴", "2032-02-11": "설날", "2032-02-12": "설날연휴", "2032-09-18": "추석연휴", "2032-09-19": "추석", "2032-09-20": "추석연휴", "2032-05-16": "부처님오신날", "2032-05-17": "대체공휴일(부처님오신날)", "2032-08-16": "대체공휴일(광복절)", "2032-09-21": "대체공휴일(추석)", "2032-09-22": "대체공휴일(추석)", "2032-10-04": "대체공휴일(개천절)", "2032-10-11": "대체공휴일(한글날)", "2032-12-27": "대체공휴일(성탄절)"}};
+  const CU_BASE = { TCP: { reg: 440, ot: 560 }, FE: { reg: 435, ot: 555 } };
+  const CU_MONTHS = [1,2,3,4,5,6,7,8,9,10,11,12];
+  const CU_TYPE = {
+    W: { label: '평일',   cls: 'bg-blue-500 text-white' },
+    H: { label: '공휴일', cls: 'bg-rose-500 text-white' },
+    S: { label: '토요일', cls: 'bg-amber-500 text-white' },
+    X: { label: '불가',   cls: 'bg-slate-300 text-slate-500' }
+  };
+  const CU_ORDER = ['W', 'H', 'S', 'X'];
+  const cuIso = d => d.toISOString().slice(0, 10);
+  const cuAugShutdown = y => {
+    const d = new Date(Date.UTC(y, 7, 1));
+    while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1);
+    const set = new Set();
+    for (let i = 0; i < 5; i++) { const x = new Date(d); x.setUTCDate(d.getUTCDate() + i); set.add(cuIso(x)); }
+    return set;
+  };
+  const cuBaseType = (y, dt) => {
+    const k = cuIso(dt), w = dt.getUTCDay();
+    if (cuAugShutdown(y).has(k)) return 'X';
+    if (w === 6) return 'S';
+    if (w === 0) return 'X';
+    if ((CU_HOLIDAYS[y] || {})[k]) return 'H';
+    return 'W';
+  };
+  const cuDayType = (y, dt) => cuOverrides[cuIso(dt)] || cuBaseType(y, dt);
+  const cuCalendar = y => CU_MONTHS.map(m => {
+    let wd = 0, sat = 0, hd = 0, off = 0;
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    for (let d = 1; d <= last; d++) {
+      const t = cuDayType(y, new Date(Date.UTC(y, m - 1, d)));
+      if (t === 'W') wd++; else if (t === 'S') sat++; else if (t === 'H') hd++; else off++;
+    }
+    return { m, wd, sat, hd, off };
+  });
+  const cuMinutes = (c, sec) => {
+    const b = CU_BASE[sec] || CU_BASE.TCP;
+    return c.wd * (b.ot * 2) + (c.sat + c.hd) * b.reg;
+  };
+  const cuUtilClass = u => {
+    if (!u) return 'text-slate-300';
+    const p = u * 100;
+    if (p > 110.0000001) return 'bg-red-500 text-white font-bold';
+    if (p >= 90) return 'bg-yellow-300 text-slate-900 font-bold';
+    return 'bg-lime-400 text-slate-900 font-semibold';
+  };
+  const cuToggleDay = k => {
+    const dt = new Date(k + 'T00:00:00Z');
+    const cur = cuDayType(cuYear, dt);
+    const next = CU_ORDER[(CU_ORDER.indexOf(cur) + 1) % CU_ORDER.length];
+    setCuOverrides(prev => {
+      const n = { ...prev };
+      if (next === cuBaseType(cuYear, dt)) delete n[k]; else n[k] = next;
+      try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(n)); } catch (e) {}
+      return n;
+    });
+  };
+  const cuCalc = () => {
+    const cal = cuCalendar(cuYear);
+    const groups = (cuData.groups || []).filter(g => g['라인'] === cuSection);
+    const items = (cuData.items || []).filter(g => g['라인'] === cuSection);
+    const procs = [...new Set(groups.map(g => g['공정']))].sort();
+    const gKey = {};
+    groups.forEach(g => { gKey[g['공정'] + '|' + g['그룹명']] = g; });
+    return procs.map(proc => {
+      const months = CU_MONTHS.map((m, mi) => {
+        const cap = cuMinutes(cal[mi], cuSection);
+        let need = 0, chg = 0, qty = 0;
+        const detail = [];
+        items.filter(it => it['공정'] === proc).forEach(it => {
+          const q = Number(it[m + '월_수량']) || 0;
+          if (!q) return;
+          qty += Math.round(q);
+          const g = gKey[proc + '|' + (it['CT그룹명'] || it['아이템명'])];
+          const perMin = g ? (Number(g[m + '월_생산량']) || 0) / (Number(g['작업시간(분)']) || 440) : 0;
+          let n = 0;
+          if (perMin > 0) { n = q / perMin; need += n; }
+          const cq = Number(it['교체수량']) || 0, cct = Number(it['교체CT(분)']) || 0;
+          let c2 = 0;
+          if (cq > 0 && cct > 0) { c2 = Math.ceil(q / cq) * cct; chg += c2; }
+          detail.push({ name: it['아이템명'], qty: Math.round(q), min: n + c2 });
+        });
+        return { cap, need, chg, total: need + chg, qty, detail, util: cap > 0 ? (need + chg) / cap : 0 };
+      });
+      return { proc, months };
+    });
+  };
   const [toolSelectedLines, setToolSelectedLines] = useState(['ALL']);
   const [toolDetailMonth, setToolDetailMonth] = useState(null);
   const [drYear, setDrYear] = useState(new Date().getFullYear());
@@ -3569,6 +3677,8 @@ ${question}`;
           productionPlan,
           planItemMapping,
           lotFtfrNotes,
+          cuOverrides,
+          cuData,
           fePlanRaw: readFePlanRaw()
         }
       };
@@ -3685,6 +3795,14 @@ ${question}`;
               localStorage.setItem('mfg_fe_plan_raw', JSON.stringify(d.fePlanRaw));
             } catch {}
           }
+        }
+        if (d.cuOverrides !== undefined) {
+          setCuOverrides(d.cuOverrides || {});
+          try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
+        }
+        if (d.cuData !== undefined && d.cuData) {
+          setCuData(d.cuData);
+          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuData)); } catch {}
         }
         setShowDriveLoad(false);
         alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성률 계획 데이터가 복원되었습니다');
@@ -3850,6 +3968,14 @@ ${question}`;
                 } catch {}
                 return merged;
               });
+            }
+            if (d.cuOverrides !== undefined) {
+              setCuOverrides(d.cuOverrides || {});
+              try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
+            }
+            if (d.cuData !== undefined && d.cuData) {
+              setCuData(d.cuData);
+              try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuData)); } catch {}
             }
             if (d.planItemMapping !== undefined) {
               // 자동로드는 병합: 직접 연결해둔 매칭이 지워지지 않도록 보존
@@ -5531,6 +5657,10 @@ ${question}`;
     icon: '📐',
     label: 'Capacity'
   }, {
+    id: 'caputil',
+    icon: '📊',
+    label: 'Capacity Utilization'
+  }, {
     id: 'tool',
     icon: '🔧',
     label: 'Tool 교체'
@@ -5602,7 +5732,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V062"), React.createElement("div", {
+  }, "V063"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -10386,6 +10516,249 @@ ${question}`;
         React.createElement("div", null, "\u00B7 \uACC4\uD68D CT = \uAE30\uC900\uBD84 \u00D7 60 \u00F7 \uACC4\uD68D\uC218\uB7C9 (\uCD08)"),
         React.createElement("div", null, "\u00B7 \uC794\uC5C5 \uC218\uB7C9\uC740 \uC815\uC2DC \uC218\uB7C9\uC744 \uAE30\uC900\uBD84 \uBE44\uC728\uB85C \uD658\uC0B0\uD55C \uAC12\uC774\uBA70, CT\uB294 \uC815\uC2DC\uC640 \uB3D9\uC77C\uD569\uB2C8\uB2E4"), React.createElement("div", null, "\u00B7 \uB77C\uC778 \u00B7 \uC815\uC2DC/\uC794\uC5C5 \u00B7 \uC778\uC6D0\uC744 \uAC01\uAC01 \uC120\uD0DD\uD574 \uD544\uC694\uD55C \uAC83\uB9CC \uBCFC \uC218 \uC788\uC2B5\uB2C8\uB2E4"),
         React.createElement("div", null, "\u00B7 \uD68C\uC0C9 \uC904\uC740 \uC801\uC6A9 \uAE30\uAC04\uC774 \uC9C0\uB09C \uC774\uB825\uC785\uB2C8\uB2E4"))));
+  })(), activeTab === 'caputil' && (() => {
+    const cal = cuCalendar(cuYear);
+    const data = cuCalc();
+    const b = CU_BASE[cuSection];
+    const tot = cal.reduce((a, c) => ({ wd: a.wd + c.wd, sat: a.sat + c.sat, hd: a.hd + c.hd, off: a.off + c.off }), { wd: 0, sat: 0, hd: 0, off: 0 });
+    const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+    const years = Object.keys(CU_HOLIDAYS).sort();
+
+    const loadTemplate = e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const rd = new FileReader();
+      rd.onload = ev => {
+        try {
+          const wb = XLSX.read(new Uint8Array(ev.target.result), { cellDates: false });
+          const g = XLSX.utils.sheet_to_json(wb.Sheets['CT그룹'] || {});
+          const it = XLSX.utils.sheet_to_json(wb.Sheets['아이템'] || {});
+          if (!g.length && !it.length) { setCuMsg('CT그룹 · 아이템 시트를 찾지 못했습니다.'); return; }
+          const nd = { groups: g, items: it };
+          setCuData(nd);
+          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(nd)); } catch (x) {}
+          setCuMsg(`CT그룹 ${g.length}건 · 아이템 ${it.length}건 불러왔습니다. 잠시 후 공유저장소에 자동 저장됩니다.`);
+        } catch (err) { setCuMsg('불러오기 실패: ' + err.message); }
+      };
+      rd.readAsArrayBuffer(f);
+      e.target.value = '';
+    };
+
+    const exportCu = () => {
+      if (typeof XLSX === 'undefined') { setCuMsg('엑셀 모듈 로딩 중입니다.'); return; }
+      const aoa = [['공정', ...CU_MONTHS.map(m => m + '월'), '연평균']];
+      data.forEach(r => {
+        const us = r.months.map(x => x.util);
+        const avg = us.reduce((a, x) => a + x, 0) / (us.filter(x => x > 0).length || 1);
+        aoa.push([r.proc + ' 가동률(%)', ...r.months.map(x => Number((x.util * 100).toFixed(1))), Number((avg * 100).toFixed(1))]);
+        aoa.push([r.proc + ' 수량', ...r.months.map(x => Math.round(x.qty)), Math.round(r.months.reduce((a, x) => a + x.qty, 0))]);
+        aoa.push([r.proc + ' 필요(h)', ...r.months.map(x => Math.round(x.total / 60)), Math.round(r.months.reduce((a, x) => a + x.total, 0) / 60)]);
+        aoa.push([r.proc + ' 가용(h)', ...r.months.map(x => Math.round(x.cap / 60)), Math.round(r.months.reduce((a, x) => a + x.cap, 0) / 60)]);
+      });
+      aoa.push([]);
+      aoa.push(['평일', ...cal.map(c => c.wd), tot.wd]);
+      aoa.push(['토요일', ...cal.map(c => c.sat), tot.sat]);
+      aoa.push(['공휴일', ...cal.map(c => c.hd), tot.hd]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'CapacityUtilization');
+      XLSX.writeFile(wb, `CapacityUtilization_${cuSection}_${cuYear}.xlsx`);
+    };
+
+    return React.createElement("div", { className: "space-y-3" },
+      // ── 조작부 ──
+      React.createElement("div", {
+        className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center gap-3"
+      },
+        React.createElement("select", {
+          value: cuYear,
+          onChange: e => setCuYear(+e.target.value),
+          className: "px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-semibold"
+        }, years.map(y => React.createElement("option", { key: y, value: y }, y + '년'))),
+        React.createElement("div", { className: "flex bg-slate-100 rounded-lg p-1" },
+          ['TCP', 'FE'].map(sec => React.createElement("button", {
+            key: sec,
+            onClick: () => { setCuSection(sec); setCuExpanded([]); },
+            className: "px-4 py-1.5 rounded-md text-sm font-bold transition " +
+              (cuSection === sec ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700")
+          }, sec))),
+        React.createElement("button", {
+          onClick: () => setCuExpanded(cuExpanded.length ? [] : data.map(r => r.proc)),
+          className: "px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold rounded-lg"
+        }, cuExpanded.length ? "전체 접기" : "전체 펼치기"),
+        React.createElement("div", { className: "flex-1" }),
+        React.createElement("label", {
+          className: "px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-lg cursor-pointer"
+        }, "템플릿 불러오기", React.createElement("input", {
+          type: "file", accept: ".xlsx", className: "hidden", onChange: loadTemplate
+        })),
+        React.createElement("button", {
+          onClick: exportCu,
+          className: "px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg"
+        }, "엑셀")),
+      React.createElement("div", { className: "px-1 text-[11px] text-slate-400" },
+        (cuData.items || []).length
+          ? `CT 템플릿 ${(cuData.items || []).length}건 · 근무일 수정 ${Object.keys(cuOverrides).length}일 — 공유저장소에 자동 저장되어 모든 사용자가 함께 사용합니다`
+          : "CT 템플릿을 한 번만 올리면 공유저장소에 저장되어 모든 사용자가 함께 사용합니다"),
+
+      cuMsg ? React.createElement("div", {
+        className: "px-4 py-2 rounded-lg text-sm " + (cuMsg.indexOf('실패') >= 0 || cuMsg.indexOf('못') >= 0 ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700")
+      }, cuMsg) : null,
+
+      // ── 근무일 설정 ──
+      React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
+        React.createElement("button", {
+          onClick: () => setCuCalOpen(!cuCalOpen),
+          className: "w-full bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between hover:bg-slate-100"
+        }, React.createElement("span", { className: "font-bold text-sm text-slate-700" },
+            "📅 " + cuYear + "년 근무일 설정 ",
+            React.createElement("span", { className: "font-normal text-xs text-slate-500 ml-1" },
+              `평일 ${tot.wd} · 토 ${tot.sat} · 공휴일 ${tot.hd} · 불가 ${tot.off}`)),
+          React.createElement("span", { className: "text-slate-400 text-xs" }, cuCalOpen ? "▲ 닫기" : "▼ 열기")),
+        cuCalOpen ? React.createElement("div", { className: "p-4" },
+          React.createElement("div", { className: "flex flex-wrap items-center gap-3 mb-4 pb-3 border-b" },
+            ...['W', 'H', 'S', 'X'].map(t => React.createElement("div", {
+              key: t, className: "flex items-center gap-1.5 text-sm"
+            }, React.createElement("span", { className: "w-4 h-4 rounded inline-block " + CU_TYPE[t].cls.split(' ')[0] }),
+               CU_TYPE[t].label + (t === 'W' ? ' (주·야 잔업)' : t === 'X' ? '' : ' (주간 정시)'))),
+            React.createElement("div", { className: "flex-1" }),
+            React.createElement("span", { className: "text-xs text-slate-500" }, "날짜를 클릭하면 상태가 바뀝니다"),
+            React.createElement("button", {
+              onClick: () => {
+                if (!window.confirm(cuYear + '년 근무일 설정을 기본값으로 되돌릴까요?')) return;
+                setCuOverrides(prev => {
+                  const n = { ...prev };
+                  Object.keys(n).forEach(k => { if (k.slice(0, 4) === String(cuYear)) delete n[k]; });
+                  try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(n)); } catch (e) {}
+                  return n;
+                });
+              },
+              className: "px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold rounded-lg"
+            }, "근무일 초기화")),
+          React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" },
+            CU_MONTHS.map(m => {
+              const first = new Date(Date.UTC(cuYear, m - 1, 1));
+              const last = new Date(Date.UTC(cuYear, m, 0)).getUTCDate();
+              const cells = [];
+              for (let i = 0; i < first.getUTCDay(); i++) cells.push(React.createElement("div", { key: 'p' + i }));
+              for (let d = 1; d <= last; d++) {
+                const dt = new Date(Date.UTC(cuYear, m - 1, d));
+                const k = cuIso(dt), t = cuDayType(cuYear, dt);
+                const nm = (CU_HOLIDAYS[cuYear] || {})[k] || '';
+                cells.push(React.createElement("button", {
+                  key: k,
+                  title: k + ' ' + DOW[dt.getUTCDay()] + '요일 · ' + CU_TYPE[t].label + (nm ? ' · ' + nm : ''),
+                  onClick: () => cuToggleDay(k),
+                  className: "h-7 rounded text-[11px] font-bold hover:opacity-75 transition " + CU_TYPE[t].cls + (cuOverrides[k] ? " ring-2 ring-indigo-400" : "")
+                }, d));
+              }
+              const c = cal[m - 1];
+              return React.createElement("div", { key: m, className: "border border-slate-200 rounded-lg p-2" },
+                React.createElement("div", { className: "text-center font-bold text-sm text-slate-700 mb-1.5" }, m + "월"),
+                React.createElement("div", { className: "grid grid-cols-7 gap-0.5 text-[10px] text-center text-slate-400 mb-1" },
+                  DOW.map((w, i) => React.createElement("div", {
+                    key: w, className: i === 0 ? "text-rose-400" : i === 6 ? "text-blue-400" : ""
+                  }, w))),
+                React.createElement("div", { className: "grid grid-cols-7 gap-0.5" }, cells),
+                React.createElement("div", { className: "text-center text-[10px] text-slate-500 mt-1.5 pt-1.5 border-t" },
+                  `평일 ${c.wd} · 토 ${c.sat} · 공휴 ${c.hd}`));
+            }))) : null),
+
+      // ── 월별 조업일수 ──
+      React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
+        React.createElement("div", { className: "bg-slate-50 border-b border-slate-200 px-4 py-2 font-bold text-sm text-slate-700" },
+          "월별 조업일수 ",
+          React.createElement("span", { className: "font-normal text-xs text-slate-500 ml-2" },
+            `${cuSection} · 평일 주야잔업 ${b.ot}×2분 / 토·공휴일 주간정시 ${b.reg}분`)),
+        React.createElement("div", { className: "overflow-x-auto" },
+          React.createElement("table", { className: "w-full text-xs" },
+            React.createElement("thead", { className: "bg-slate-50" },
+              React.createElement("tr", null,
+                React.createElement("th", { className: "px-2 py-1.5 border text-left" }, "구분"),
+                ...CU_MONTHS.map(m => React.createElement("th", { key: m, className: "px-2 py-1.5 border" }, m + "월")),
+                React.createElement("th", { className: "px-2 py-1.5 border bg-slate-100" }, "계"))),
+            React.createElement("tbody", null,
+              [['평일 (주·야 잔업)', c => c.wd, 'text-blue-700 font-semibold'],
+               ['토요일 (주간 정시)', c => c.sat, 'text-amber-600'],
+               ['공휴일 (주간 정시)', c => c.hd, 'text-rose-600'],
+               ['근무 불가', c => c.off, 'text-slate-400']].map(([lb, fn, cls]) =>
+                React.createElement("tr", { key: lb },
+                  React.createElement("td", { className: "px-2 py-1 border font-medium" }, lb),
+                  ...cal.map((c, i) => React.createElement("td", { key: i, className: "px-2 py-1 border text-center " + cls }, fn(c) || '')),
+                  React.createElement("td", { className: "px-2 py-1 border text-center bg-slate-50 font-bold" }, cal.reduce((a, c) => a + fn(c), 0)))),
+              React.createElement("tr", { className: "bg-indigo-50" },
+                React.createElement("td", { className: "px-2 py-1 border font-bold text-indigo-800" }, "가용시간(h)"),
+                ...cal.map((c, i) => React.createElement("td", { key: i, className: "px-2 py-1 border text-center font-bold text-indigo-700" },
+                  Math.round(cuMinutes(c, cuSection) / 60).toLocaleString())),
+                React.createElement("td", { className: "px-2 py-1 border text-center bg-indigo-100 font-bold" },
+                  Math.round(cal.reduce((a, c) => a + cuMinutes(c, cuSection), 0) / 60).toLocaleString())))))),
+
+      // ── 라인별 가동률 ──
+      React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
+        React.createElement("div", { className: "bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between flex-wrap gap-2" },
+          React.createElement("span", { className: "font-bold text-sm text-slate-700" }, "라인별 가동률"),
+          React.createElement("div", { className: "flex items-stretch text-[11px] font-bold border border-slate-400" },
+            React.createElement("div", { className: "px-3 py-1 bg-lime-400 text-slate-900 border-r border-slate-400" }, "Utilization < 90%"),
+            React.createElement("div", { className: "px-3 py-1 bg-yellow-300 text-slate-900 border-r border-slate-400" }, "90% =< Utilization <= 110%"),
+            React.createElement("div", { className: "px-3 py-1 bg-red-500 text-white" }, "Utilization > 111%"))),
+        React.createElement("div", { className: "overflow-x-auto" },
+          React.createElement("table", { className: "w-full text-xs" },
+            React.createElement("thead", { className: "bg-slate-50" },
+              React.createElement("tr", null,
+                React.createElement("th", { className: "px-2 py-1.5 border text-left" }, "공정"),
+                ...CU_MONTHS.map(m => React.createElement("th", { key: m, className: "px-2 py-1.5 border" }, m + "월")),
+                React.createElement("th", { className: "px-2 py-1.5 border bg-slate-100" }, "연평균"))),
+            React.createElement("tbody", null, (() => {
+              if (!data.length) return [React.createElement("tr", { key: 'e' },
+                React.createElement("td", { colSpan: 14, className: "px-3 py-10 text-center text-slate-400 border" },
+                  "CT 템플릿을 불러오세요 (CT그룹 · 아이템 시트)"))];
+              const out = [];
+              data.forEach(r => {
+                const us = r.months.map(x => x.util);
+                const avg = us.reduce((a, x) => a + x, 0) / (us.filter(x => x > 0).length || 1);
+                const open = cuExpanded.indexOf(r.proc) !== -1;
+                out.push(React.createElement("tr", {
+                  key: r.proc,
+                  onClick: () => setCuExpanded(prev => prev.indexOf(r.proc) !== -1 ? prev.filter(x => x !== r.proc) : [...prev, r.proc]),
+                  className: "cursor-pointer hover:bg-slate-50"
+                }, React.createElement("td", { className: "px-2 py-1 border font-bold" },
+                    React.createElement("span", { className: "inline-block w-3 text-slate-400" }, open ? "▾" : "▸"), " " + r.proc),
+                  ...r.months.map((x, i) => React.createElement("td", { key: i, className: "px-2 py-1 border text-center " + cuUtilClass(x.util) },
+                    x.util ? (x.util * 100).toFixed(0) + '%' : '-')),
+                  React.createElement("td", { className: "px-2 py-1 border text-center bg-slate-50 " + cuUtilClass(avg) }, (avg * 100).toFixed(0) + '%')));
+                [['수량', x => x.qty ? Math.round(x.qty).toLocaleString() : '-', 'text-slate-700', Math.round(r.months.reduce((a, x) => a + x.qty, 0)).toLocaleString()],
+                 ['필요(h)', x => x.total ? Math.round(x.total / 60).toLocaleString() : '-', 'text-indigo-700', Math.round(r.months.reduce((a, x) => a + x.total, 0) / 60).toLocaleString()],
+                 ['가용(h)', x => Math.round(x.cap / 60).toLocaleString(), 'text-slate-500', Math.round(r.months.reduce((a, x) => a + x.cap, 0) / 60).toLocaleString()]
+                ].forEach(([lb, fn, cls, sum]) => {
+                  out.push(React.createElement("tr", { key: r.proc + lb, className: "bg-slate-50/40" },
+                    React.createElement("td", { className: "px-2 py-0.5 border text-[11px] text-slate-500 pl-6" }, lb),
+                    ...r.months.map((x, i) => React.createElement("td", { key: i, className: "px-2 py-0.5 border text-center text-[11px] " + cls }, fn(x))),
+                    React.createElement("td", { className: "px-2 py-0.5 border text-center text-[11px] bg-slate-100 font-semibold" }, sum)));
+                });
+                if (open) {
+                  const names = [...new Set(r.months.reduce((a, x) => a.concat(x.detail.map(d => d.name)), []))].sort();
+                  if (!names.length) out.push(React.createElement("tr", { key: r.proc + 'nd' },
+                    React.createElement("td", { colSpan: 14, className: "px-2 py-2 border text-center text-slate-400 text-[11px]" }, "아이템 수량이 없습니다")));
+                  names.forEach(nm => {
+                    const vals = r.months.map(x => Math.round((x.detail.find(d => d.name === nm) || {}).qty || 0));
+                    out.push(React.createElement("tr", { key: r.proc + '|' + nm, className: "bg-white" },
+                      React.createElement("td", { className: "px-2 py-0.5 border text-[11px] text-slate-600 pl-8" }, nm),
+                      ...vals.map((v, i) => React.createElement("td", { key: i, className: "px-2 py-0.5 border text-center text-[11px] " + (v ? "text-slate-700" : "text-slate-200") }, v ? v.toLocaleString() : '-')),
+                      React.createElement("td", { className: "px-2 py-0.5 border text-center text-[11px] bg-slate-50 font-semibold" }, vals.reduce((a, x) => a + x, 0).toLocaleString())));
+                  });
+                }
+              });
+              return out;
+            })())))),
+
+      React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4 text-xs text-slate-500 leading-relaxed" },
+        React.createElement("div", { className: "font-bold text-slate-700 mb-1.5 text-sm" }, "계산 기준"),
+        React.createElement("div", null, "\u00B7 \uD3C9\uC77C \u2014 \uC8FC\uAC04 \uC794\uC5C5 + \uC57C\uAC04 \uC794\uC5C5 (TCP 560\u00D72\uBD84, FE 555\u00D72\uBD84)"),
+        React.createElement("div", null, "\u00B7 \uD1A0\uC694\uC77C\u00B7\uACF5\uD734\uC77C \u2014 \uC8FC\uAC04 \uC815\uC2DC (TCP 440\uBD84, FE 435\uBD84)"),
+        React.createElement("div", null, "\u00B7 \uD544\uC694\uC2DC\uAC04 = \u03A3(\uC544\uC774\uD15C \uC218\uB7C9 \u00F7 CT\uADF8\uB8F9 \uC2DC\uAC04\uB2F9 \uB2A5\uB825) + \uAD50\uCCB4\uC2DC\uAC04"),
+        React.createElement("div", null, "\u00B7 \uAC00\uB3D9\uB960 = \uD544\uC694\uC2DC\uAC04 \u00F7 \uAC00\uC6A9\uC2DC\uAC04"),
+        React.createElement("div", null, "\u00B7 \uACF5\uC815\uBA85\uC744 \uD074\uB9AD\uD558\uBA74 \uC544\uC774\uD15C\uBCC4 \uC218\uB7C9\uC774 \uD3BC\uCE5C\uB2E4"),
+        React.createElement("div", null, "\u00B7 CT \uD15C\uD50C\uB9BF\uACFC \uADFC\uBB34\uC77C \uC124\uC815\uC740 \uACF5\uC720\uC800\uC7A5\uC18C\uC5D0 \uC800\uC7A5\uB418\uC5B4 \uBAA8\uB4E0 \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC801\uC6A9\uB429\uB2C8\uB2E4")));
   })(), activeTab === 'tool' && (tcpData || feData) && (() => {
     const toolLines = (() => {
       if (toolSection === 'TCP') return ['1PC', '2PC', 'Nospin'];
