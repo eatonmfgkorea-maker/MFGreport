@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V065</title>
+  <title>MFG Report V067</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,9 +299,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V065',
+  v: 'V067',
   d: '2026-08-04',
-  items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿 내려받기 → 수정 → 올리기 방식 (현재 등록된 CT·수량이 그대로 담겨 나옴)', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
+  items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
   v: 'V062',
   d: '2026-08-02',
@@ -2500,12 +2500,19 @@ function App() {
   const [cuSection, setCuSection] = useState('TCP');
   const [cuExpanded, setCuExpanded] = useState([]);
   const [cuCalOpen, setCuCalOpen] = useState(false);
+  const [cuMode, setCuMode] = useState('year');   // year=월별, five=5년
   const [cuOverrides, setCuOverrides] = useState(() => {
     try { return JSON.parse(localStorage.getItem('mfg_cu_workdays') || '{}'); } catch (e) { return {}; }
   });
-  const [cuData, setCuData] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_cu_ctdata') || 'null') || { groups: [], items: [] }; }
-    catch (e) { return { groups: [], items: [] }; }
+  // 연도별 CT 데이터 { '2027': {groups:[], items:[]}, ... }
+  const [cuDataByYear, setCuDataByYear] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('mfg_cu_ctdata') || 'null');
+      if (!raw) return {};
+      // 구버전(단일 데이터) → 현재 연도+1 로 이관
+      if (raw.groups || raw.items) return { [String(new Date().getFullYear() + 1)]: raw };
+      return raw;
+    } catch (e) { return {}; }
   });
   const [cuMsg, setCuMsg] = useState('');
   const [productionPlan, setProductionPlan] = useState(() => {
@@ -2780,7 +2787,7 @@ function App() {
             planItemMapping,
             lotFtfrNotes,
             cuOverrides,
-            cuData,
+            cuDataByYear,
             fePlanRaw: readFePlanRaw()
           }
         };
@@ -2794,7 +2801,7 @@ function App() {
       } catch {}
     }, 3000);
     return () => clearTimeout(timer);
-  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, cuOverrides, cuData]);
+  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, cuOverrides, cuDataByYear]);
   const [expandedNotes, setExpandedNotes] = useState({});
   const toggleNote = key => setExpandedNotes(prev => ({
     ...prev,
@@ -2921,10 +2928,12 @@ function App() {
       return n;
     });
   };
+  const cuYearData = () => cuDataByYear[String(cuYear)] || { groups: [], items: [] };
   const cuCalc = () => {
     const cal = cuCalendar(cuYear);
-    const groups = (cuData.groups || []).filter(g => g['라인'] === cuSection);
-    const items = (cuData.items || []).filter(g => g['라인'] === cuSection);
+    const cd = cuYearData();
+    const groups = (cd.groups || []).filter(g => g['라인'] === cuSection);
+    const items = (cd.items || []).filter(g => g['라인'] === cuSection);
     const procs = [...new Set(groups.map(g => g['공정']))].sort();
     const gKey = {};
     groups.forEach(g => { gKey[g['공정'] + '|' + g['그룹명']] = g; });
@@ -2950,6 +2959,45 @@ function App() {
       });
       return { proc, months };
     });
+  };
+  // 5년 집계 — 연도별 합계만
+  const cuCalc5 = () => {
+    const base = new Date().getFullYear() + 1;
+    const years = [];
+    for (let i = 0; i < 5; i++) years.push(base + i);
+    const procSet = new Set();
+    years.forEach(y => {
+      const cd = cuDataByYear[String(y)] || { groups: [] };
+      (cd.groups || []).filter(g => g['라인'] === cuSection).forEach(g => procSet.add(g['공정']));
+    });
+    const procs = [...procSet].sort();
+    const rows = procs.map(proc => {
+      const cells = years.map(y => {
+        const cal = cuCalendar(y);
+        const cd = cuDataByYear[String(y)] || { groups: [], items: [] };
+        const gKey = {};
+        (cd.groups || []).filter(g => g['라인'] === cuSection).forEach(g => { gKey[g['공정'] + '|' + g['그룹명']] = g; });
+        const items = (cd.items || []).filter(it => it['라인'] === cuSection && it['공정'] === proc);
+        let cap = 0, need = 0, chg = 0, qty = 0;
+        CU_MONTHS.forEach((m, mi) => {
+          cap += cuMinutes(cal[mi], cuSection);
+          items.forEach(it => {
+            const q = Number(it[m + '월_수량']) || 0;
+            if (!q) return;
+            qty += Math.round(q);
+            const g = gKey[proc + '|' + (it['CT그룹명'] || it['아이템명'])];
+            const perMin = g ? (Number(g[m + '월_생산량']) || 0) / (Number(g['작업시간(분)']) || 440) : 0;
+            if (perMin > 0) need += q / perMin;
+            const cq = Number(it['교체수량']) || 0, cct = Number(it['교체CT(분)']) || 0;
+            if (cq > 0 && cct > 0) chg += Math.ceil(q / cq) * cct;
+          });
+        });
+        const total = need + chg;
+        return { year: y, cap, total, qty, util: cap > 0 ? total / cap : 0, hasData: items.length > 0 };
+      });
+      return { proc, cells };
+    });
+    return { years, rows };
   };
   const [toolSelectedLines, setToolSelectedLines] = useState(['ALL']);
   const [toolDetailMonth, setToolDetailMonth] = useState(null);
@@ -3679,7 +3727,7 @@ ${question}`;
           planItemMapping,
           lotFtfrNotes,
           cuOverrides,
-          cuData,
+          cuDataByYear,
           fePlanRaw: readFePlanRaw()
         }
       };
@@ -3801,9 +3849,13 @@ ${question}`;
           setCuOverrides(d.cuOverrides || {});
           try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
         }
-        if (d.cuData !== undefined && d.cuData) {
-          setCuData(d.cuData);
-          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuData)); } catch {}
+        if (d.cuDataByYear !== undefined && d.cuDataByYear) {
+          setCuDataByYear(d.cuDataByYear);
+          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
+        } else if (d.cuData !== undefined && d.cuData) {
+          const mig = { [String(new Date().getFullYear() + 1)]: d.cuData };
+          setCuDataByYear(mig);
+          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(mig)); } catch {}
         }
         setShowDriveLoad(false);
         alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성률 계획 데이터가 복원되었습니다');
@@ -3974,9 +4026,13 @@ ${question}`;
               setCuOverrides(d.cuOverrides || {});
               try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
             }
-            if (d.cuData !== undefined && d.cuData) {
-              setCuData(d.cuData);
-              try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuData)); } catch {}
+            if (d.cuDataByYear !== undefined && d.cuDataByYear) {
+              setCuDataByYear(d.cuDataByYear);
+              try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
+            } else if (d.cuData !== undefined && d.cuData) {
+              const mig = { [String(new Date().getFullYear() + 1)]: d.cuData };
+              setCuDataByYear(mig);
+              try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(mig)); } catch {}
             }
             if (d.planItemMapping !== undefined) {
               // 자동로드는 병합: 직접 연결해둔 매칭이 지워지지 않도록 보존
@@ -5733,7 +5789,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V065"), React.createElement("div", {
+  }, "V067"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -10535,10 +10591,12 @@ ${question}`;
           const g = XLSX.utils.sheet_to_json(wb.Sheets['CT그룹'] || {});
           const it = XLSX.utils.sheet_to_json(wb.Sheets['아이템'] || {});
           if (!g.length && !it.length) { setCuMsg('CT그룹 · 아이템 시트를 찾지 못했습니다.'); return; }
-          const nd = { groups: g, items: it };
-          setCuData(nd);
-          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(nd)); } catch (x) {}
-          setCuMsg(`CT그룹 ${g.length}건 · 아이템 ${it.length}건 불러왔습니다. 잠시 후 공유저장소에 자동 저장됩니다.`);
+          setCuDataByYear(prev => {
+            const n = { ...prev, [String(cuYear)]: { groups: g, items: it } };
+            try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(n)); } catch (x) {}
+            return n;
+          });
+          setCuMsg(`${cuYear}년 · CT그룹 ${g.length}건 · 아이템 ${it.length}건 반영. 잠시 후 공유저장소에 자동 저장됩니다.`);
         } catch (err) { setCuMsg('불러오기 실패: ' + err.message); }
       };
       rd.readAsArrayBuffer(f);
@@ -10550,8 +10608,9 @@ ${question}`;
       const G_COLS = ['라인', '그룹명', '공정', '기준인원', '인원', '작업시간(분)'].concat(CU_MONTHS.map(m => m + '월_생산량'));
       const I_COLS = ['라인', '아이템명', '공정', 'CT그룹명', '교체수량', '교체CT(분)']
         .concat(CU_MONTHS.map(m => m + '월_수량')).concat(CU_MONTHS.map(m => m + '월_불량률'));
-      const groups = (cuData.groups || []);
-      const items = (cuData.items || []);
+      const cd = cuYearData();
+      const groups = (cd.groups || []);
+      const items = (cd.items || []);
       const toAoa = (cols, rows) => [cols].concat(rows.map(r => cols.map(c => {
         const v = r[c];
         return v === undefined || v === null ? '' : v;
@@ -10563,11 +10622,10 @@ ${question}`;
       const wsI = XLSX.utils.aoa_to_sheet(toAoa(I_COLS, items));
       wsI['!cols'] = I_COLS.map((c, i) => ({ wch: i < 4 ? 18 : 12 }));
       XLSX.utils.book_append_sheet(wb, wsI, '아이템');
-      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      XLSX.writeFile(wb, `CT그룹_아이템_템플릿_${stamp}.xlsx`);
+      XLSX.writeFile(wb, `CT그룹_아이템_템플릿_${cuYear}.xlsx`);
       setCuMsg(groups.length || items.length
-        ? `현재 등록된 CT그룹 ${groups.length}건 · 아이템 ${items.length}건을 내려받았습니다. 수정 후 다시 올리면 반영됩니다.`
-        : '빈 템플릿을 내려받았습니다. 내용을 채워서 올려주세요.');
+        ? `${cuYear}년 CT그룹 ${groups.length}건 · 아이템 ${items.length}건을 내려받았습니다. 수정 후 «템플릿 올리기»로 반영하세요.`
+        : `${cuYear}년은 데이터가 없어 빈 템플릿을 내려받았습니다.`);
     };
 
     return React.createElement("div", { className: "space-y-3" },
@@ -10575,11 +10633,11 @@ ${question}`;
       React.createElement("div", {
         className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center gap-3"
       },
-        React.createElement("select", {
+        cuMode === 'year' ? React.createElement("select", {
           value: cuYear,
           onChange: e => setCuYear(+e.target.value),
           className: "px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-semibold"
-        }, years.map(y => React.createElement("option", { key: y, value: y }, y + '년'))),
+        }, years.map(y => React.createElement("option", { key: y, value: y }, y + '년'))) : null,
         React.createElement("div", { className: "flex bg-slate-100 rounded-lg p-1" },
           ['TCP', 'FE'].map(sec => React.createElement("button", {
             key: sec,
@@ -10587,10 +10645,13 @@ ${question}`;
             className: "px-4 py-1.5 rounded-md text-sm font-bold transition " +
               (cuSection === sec ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700")
           }, sec))),
-        React.createElement("button", {
-          onClick: () => setCuExpanded(cuExpanded.length ? [] : data.map(r => r.proc)),
-          className: "px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-bold rounded-lg"
-        }, cuExpanded.length ? "전체 접기" : "전체 펼치기"),
+        React.createElement("div", { className: "flex bg-slate-100 rounded-lg p-1" },
+          [{ k: 'year', l: '월별' }, { k: 'five', l: '5년' }].map(o => React.createElement("button", {
+            key: o.k,
+            onClick: () => setCuMode(o.k),
+            className: "px-4 py-1.5 rounded-md text-sm font-bold transition " +
+              (cuMode === o.k ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700")
+          }, o.l))),
         React.createElement("div", { className: "flex-1" }),
         React.createElement("label", {
           className: "px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-lg cursor-pointer"
@@ -10600,18 +10661,42 @@ ${question}`;
         React.createElement("button", {
           onClick: downloadTemplate,
           className: "px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg"
-        }, "템플릿 내려받기")),
+        }, "템플릿 내려받기"),
+        (() => {
+          const has = Object.keys(cuDataByYear).filter(y => y !== String(cuYear) && (cuDataByYear[y].items || []).length).sort();
+          if (!has.length || (cuYearData().items || []).length) return null;
+          const src = has[has.length - 1];
+          return React.createElement("button", {
+            onClick: () => {
+              if (!window.confirm(`${src}년 CT 데이터를 ${cuYear}년으로 복사할까요?`)) return;
+              setCuDataByYear(prev => {
+                const n = { ...prev, [String(cuYear)]: JSON.parse(JSON.stringify(prev[src])) };
+                try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(n)); } catch (e) {}
+                return n;
+              });
+              setCuMsg(`${src}년 데이터를 ${cuYear}년으로 복사했습니다.`);
+            },
+            className: "px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-lg"
+          }, src + "년 복사");
+        })()),
       React.createElement("div", { className: "px-1 text-[11px] text-slate-400" },
-        (cuData.items || []).length
-          ? `CT 템플릿 ${(cuData.items || []).length}건 · 근무일 수정 ${Object.keys(cuOverrides).length}일 — 공유저장소에 자동 저장되어 모든 사용자가 함께 사용합니다`
-          : "CT 템플릿을 한 번만 올리면 공유저장소에 저장되어 모든 사용자가 함께 사용합니다"),
+        (() => {
+          const cd = cuYearData();
+          const has = Object.keys(cuDataByYear).filter(y => (cuDataByYear[y].items || []).length).sort();
+          return (cd.items || []).length
+            ? `${cuYear}년 CT 템플릿 ${(cd.items || []).length}건 · 근무일 수정 ${Object.keys(cuOverrides).filter(k => k.slice(0,4) === String(cuYear)).length}일`
+              + (has.length > 1 ? ` · 등록 연도: ${has.join(', ')}` : '')
+              + ' — 공유저장소에 자동 저장되어 모든 사용자가 함께 사용합니다'
+            : `${cuYear}년 CT 템플릿이 없습니다.`
+              + (has.length ? ` 등록된 연도: ${has.join(', ')} — «${has[has.length-1]}년 복사»로 시작할 수 있습니다` : ' «템플릿 내려받기»로 양식을 받아 채워서 올려주세요.');
+        })()),
 
       cuMsg ? React.createElement("div", {
         className: "px-4 py-2 rounded-lg text-sm " + (cuMsg.indexOf('실패') >= 0 || cuMsg.indexOf('못') >= 0 ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-700")
       }, cuMsg) : null,
 
       // ── 근무일 설정 ──
-      React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
+      cuMode !== 'year' ? null : React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
         React.createElement("button", {
           onClick: () => setCuCalOpen(!cuCalOpen),
           className: "w-full bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between hover:bg-slate-100"
@@ -10670,7 +10755,7 @@ ${question}`;
             }))) : null),
 
       // ── 월별 조업일수 ──
-      React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
+      cuMode !== 'year' ? null : React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
         React.createElement("div", { className: "bg-slate-50 border-b border-slate-200 px-4 py-2 font-bold text-sm text-slate-700" },
           "월별 조업일수 ",
           React.createElement("span", { className: "font-normal text-xs text-slate-500 ml-2" },
@@ -10701,7 +10786,8 @@ ${question}`;
       // ── 라인별 가동률 ──
       React.createElement("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" },
         React.createElement("div", { className: "bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center justify-between flex-wrap gap-2" },
-          React.createElement("span", { className: "font-bold text-sm text-slate-700" }, "라인별 가동률"),
+          React.createElement("span", { className: "font-bold text-sm text-slate-700" },
+            cuMode === 'five' ? "라인별 가동률 (5년)" : "라인별 가동률"),
           React.createElement("div", { className: "flex items-stretch text-[11px] font-bold border border-slate-400" },
             React.createElement("div", { className: "px-3 py-1 bg-lime-400 text-slate-900 border-r border-slate-400" }, "Utilization < 90%"),
             React.createElement("div", { className: "px-3 py-1 bg-yellow-300 text-slate-900 border-r border-slate-400" }, "90% =< Utilization <= 110%"),
@@ -10711,9 +10797,45 @@ ${question}`;
             React.createElement("thead", { className: "bg-slate-50" },
               React.createElement("tr", null,
                 React.createElement("th", { className: "px-2 py-1.5 border text-left" }, "공정"),
-                ...CU_MONTHS.map(m => React.createElement("th", { key: m, className: "px-2 py-1.5 border" }, m + "월")),
-                React.createElement("th", { className: "px-2 py-1.5 border bg-slate-100" }, "연평균"))),
+                ...(cuMode === 'five'
+                  ? cuCalc5().years.map(y => React.createElement("th", { key: y, className: "px-2 py-1.5 border" }, y + "년"))
+                  : CU_MONTHS.map(m => React.createElement("th", { key: m, className: "px-2 py-1.5 border" }, m + "월"))),
+                React.createElement("th", { className: "px-2 py-1.5 border bg-slate-100" }, "Total"))),
             React.createElement("tbody", null, (() => {
+              // ── 5년 모드 ──
+              if (cuMode === 'five') {
+                const f = cuCalc5();
+                if (!f.rows.length) return [React.createElement("tr", { key: 'e5' },
+                  React.createElement("td", { colSpan: 7, className: "px-3 py-10 text-center text-slate-400 border" },
+                    `${f.years[0]}~${f.years[f.years.length-1]}년 CT 데이터가 없습니다. 연도를 선택해 템플릿을 올려주세요.`))];
+                const o5 = [];
+                f.rows.forEach(r => {
+                  const capT = r.cells.reduce((a, x) => a + x.cap, 0);
+                  const totT = r.cells.reduce((a, x) => a + x.total, 0);
+                  const qtyT = r.cells.reduce((a, x) => a + x.qty, 0);
+                  const utilT = capT > 0 ? totT / capT : 0;
+                  o5.push(React.createElement("tr", { key: r.proc },
+                    React.createElement("td", { className: "px-2 py-1 border font-bold" }, r.proc),
+                    ...r.cells.map(x => React.createElement("td", {
+                      key: x.year,
+                      className: "px-2 py-1 border text-center " + cuUtilClass(x.util),
+                      title: x.hasData ? `수량 ${x.qty.toLocaleString()} · 필요 ${Math.round(x.total/60).toLocaleString()}h · 가용 ${Math.round(x.cap/60).toLocaleString()}h` : '데이터 없음'
+                    }, x.util ? (x.util * 100).toFixed(0) + '%' : '-')),
+                    React.createElement("td", { className: "px-2 py-1 border text-center bg-slate-50 " + cuUtilClass(utilT) },
+                      utilT ? (utilT * 100).toFixed(0) + '%' : '-')));
+                  [['수량', x => x.qty ? x.qty.toLocaleString() : '-', 'text-slate-700', qtyT.toLocaleString()],
+                   ['필요(h)', x => x.total ? Math.round(x.total / 60).toLocaleString() : '-', 'text-indigo-700', Math.round(totT / 60).toLocaleString()],
+                   ['가용(h)', x => Math.round(x.cap / 60).toLocaleString(), 'text-slate-500', Math.round(capT / 60).toLocaleString()]
+                  ].forEach(([lb, fn, cls, sum]) => {
+                    o5.push(React.createElement("tr", { key: r.proc + lb, className: "bg-slate-50/40" },
+                      React.createElement("td", { className: "px-2 py-0.5 border text-[11px] text-slate-500 pl-6" }, lb),
+                      ...r.cells.map(x => React.createElement("td", { key: x.year, className: "px-2 py-0.5 border text-center text-[11px] " + cls }, fn(x))),
+                      React.createElement("td", { className: "px-2 py-0.5 border text-center text-[11px] bg-slate-100 font-semibold" }, sum)));
+                  });
+                });
+                return o5;
+              }
+              // ── 월별 모드 ──
               if (!data.length) return [React.createElement("tr", { key: 'e' },
                 React.createElement("td", { colSpan: 14, className: "px-3 py-10 text-center text-slate-400 border" },
                   "CT 템플릿을 불러오세요 (CT그룹 · 아이템 시트)"))];
@@ -10764,7 +10886,8 @@ ${question}`;
         React.createElement("div", null, "\u00B7 \uAC00\uB3D9\uB960 = \uD544\uC694\uC2DC\uAC04 \u00F7 \uAC00\uC6A9\uC2DC\uAC04"),
         React.createElement("div", null, "\u00B7 \uACF5\uC815\uBA85\uC744 \uD074\uB9AD\uD558\uBA74 \uC544\uC774\uD15C\uBCC4 \uC218\uB7C9\uC774 \uD3BC\uCE5C\uB2E4"),
         React.createElement("div", null, "\u00B7 CT \uD15C\uD50C\uB9BF\uACFC \uADFC\uBB34\uC77C \uC124\uC815\uC740 \uACF5\uC720\uC800\uC7A5\uC18C\uC5D0 \uC800\uC7A5\uB418\uC5B4 \uBAA8\uB4E0 \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC801\uC6A9\uB429\uB2C8\uB2E4"),
-        React.createElement("div", null, "\u00B7 \u00AB\uD15C\uD50C\uB9BF \uB0B4\uB824\uBC1B\uAE30\u00BB \u2192 \uC5D1\uC140\uC5D0\uC11C \uC218\uC815 \u2192 \u00AB\uD15C\uD50C\uB9BF \uC62C\uB9AC\uAE30\u00BB \uC21C\uC11C\uB85C \uAD00\uB9AC\uD569\uB2C8\uB2E4")));
+        React.createElement("div", null, "\u00B7 \u00AB\uD15C\uD50C\uB9BF \uB0B4\uB824\uBC1B\uAE30\u00BB \u2192 \uC5D1\uC140\uC5D0\uC11C \uC218\uC815 \u2192 \u00AB\uD15C\uD50C\uB9BF \uC62C\uB9AC\uAE30\u00BB \uC21C\uC11C\uB85C \uAD00\uB9AC\uD569\uB2C8\uB2E4"),
+        React.createElement("div", null, "\u00B7 CT\u00B7\uC218\uB7C9\uACFC \uADFC\uBB34\uC77C\uC740 \uC5F0\uB3C4\uBCC4\uB85C \uB530\uB85C \uAD00\uB9AC\uB429\uB2C8\uB2E4 \u2014 \uC5F0\uB3C4\uB97C \uC120\uD0DD\uD55C \uB4A4 \uC62C\uB824\uC57C \uD574\uB2F9 \uC5F0\uB3C4\uC5D0 \uBC18\uC601\uB429\uB2C8\uB2E4")));
   })(), activeTab === 'tool' && (tcpData || feData) && (() => {
     const toolLines = (() => {
       if (toolSection === 'TCP') return ['1PC', '2PC', 'Nospin'];
