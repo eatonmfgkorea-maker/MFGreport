@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V067</title>
+  <title>MFG Report V069</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,9 +299,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V067',
+  v: 'V069',
   d: '2026-08-04',
-  items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
+  items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
   v: 'V062',
   d: '2026-08-02',
@@ -3001,10 +3001,14 @@ function App() {
   };
   const [toolSelectedLines, setToolSelectedLines] = useState(['ALL']);
   const [toolDetailMonth, setToolDetailMonth] = useState(null);
+  const [toolCmpMonth, setToolCmpMonth] = useState(null);
+  const [toolCmpBy, setToolCmpBy] = useState('line');
   const [drYear, setDrYear] = useState(new Date().getFullYear());
   const [drSection, setDrSection] = useState('TCP');
   const [drSelectedLines, setDrSelectedLines] = useState(['ALL']);
   const [drDetailMonth, setDrDetailMonth] = useState(null);
+  const [drCmpMonth, setDrCmpMonth] = useState(null);   // 전월 대비 비교 대상 월
+  const [drCmpBy, setDrCmpBy] = useState('line');       // line | item | reason
   const [defectKind, setDefectKind] = useState('process');
   const [pmStart, setPmStart] = useState(() => {
     const d = new Date();
@@ -3019,6 +3023,8 @@ function App() {
   const [dtSection, setDtSection] = useState('TCP');
   const [dtSelectedLines, setDtSelectedLines] = useState(['ALL']);
   const [dtDetailMonth, setDtDetailMonth] = useState(null);
+  const [dtCmpMonth, setDtCmpMonth] = useState(null);
+  const [dtCmpBy, setDtCmpBy] = useState('line');
   const [dtViewMode, setDtViewMode] = useState('all');
   const [dtTypeFilter, setDtTypeFilter] = useState('ALL');
   const [dtSearch, setDtSearch] = useState('');
@@ -5702,10 +5708,6 @@ ${question}`;
     icon: '⏸️',
     label: '비가동'
   }, {
-    id: 'achievement',
-    icon: '🎯',
-    label: '달성률'
-  }, {
     id: 'pcsmh',
     icon: '👤',
     label: 'PCS/MH'
@@ -5721,10 +5723,6 @@ ${question}`;
     id: 'tool',
     icon: '🔧',
     label: 'Tool 교체'
-  }, {
-    id: 'workhour',
-    icon: '⏱️',
-    label: 'Working Hour'
   }, {
     id: 'h52',
     icon: '🕐',
@@ -5789,7 +5787,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V067"), React.createElement("div", {
+  }, "V069"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -8410,6 +8408,46 @@ ${question}`;
       monthAgg[m].qty += parseFloat(r.quantity || 0);
       monthAgg[m].count += 1;
     });
+    // ===== 전월 대비 비교 분석 =====
+    const cmpAnalysis = (() => {
+      if (!drCmpMonth) return null;
+      const cur = drCmpMonth, prev = cur === 1 ? 12 : cur - 1;
+      const prevYear = cur === 1 ? drYear - 1 : drYear;
+      const keyOf = r => {
+        const log = logById[r.productionLogId];
+        if (!log) return null;
+        if (drCmpBy === 'line') return displayLine(log.lineName);
+        if (drCmpBy === 'item') return (log.item || '(미지정)');
+        const t = isDefect ? (r.defectType || '') : (r.reworkType || '');
+        const st = isDefect ? (r.defectSubType || '') : (r.reworkSubType || '');
+        return (t || '(미분류)') + (st ? ' / ' + st : '');
+      };
+      const bucket = {};
+      const addTo = (slot, recs, year, month) => {
+        recs.forEach(r => {
+          const log = logById[r.productionLogId];
+          if (!log) return;
+          const d = new Date(log.productionDate);
+          if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return;
+          const k = keyOf(r);
+          if (k == null) return;
+          if (!bucket[k]) bucket[k] = { key: k, cur: 0, prev: 0 };
+          bucket[k][slot] += parseFloat(r.quantity || 0);
+        });
+      };
+      // 현재월은 yearLogs 기반(sourceRecords), 전월은 연도가 다를 수 있어 전체에서 재조회
+      const allRecs = isDefect
+        ? (targetData?.defectLogs || []).filter(d => d.productionLogId != null && logById[d.productionLogId])
+        : (targetData?.reworkLogs || []).filter(r => r.productionLogId != null && logById[r.productionLogId]);
+      addTo('cur', allRecs, drYear, cur);
+      addTo('prev', allRecs, prevYear, prev);
+      const rows = Object.values(bucket).map(b => ({ ...b, diff: b.cur - b.prev }))
+        .filter(b => b.cur || b.prev)
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      const curT = rows.reduce((a, r) => a + r.cur, 0);
+      const prevT = rows.reduce((a, r) => a + r.prev, 0);
+      return { cur, prev, prevYear, rows, curT, prevT, diffT: curT - prevT };
+    })();
     const maxQty = Math.max(...Object.values(monthAgg).map(a => a.qty), 1);
     const totalYearQty = Object.values(monthAgg).reduce((s, a) => s + a.qty, 0);
     const totalYearCount = Object.values(monthAgg).reduce((s, a) => s + a.count, 0);
@@ -8493,6 +8531,21 @@ ${question}`;
       className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
       className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
+    }, "비교 (전월 대비)"), React.createElement("div", {
+      className: "p-2"
+    }, React.createElement("div", {
+      className: "grid grid-cols-4 gap-1"
+    }, Array.from({ length: 12 }, (_, i) => i + 1).map(m => React.createElement("button", {
+      key: m,
+      onClick: () => setDrCmpMonth(drCmpMonth === m ? null : m),
+      className: `py-1.5 rounded-lg text-xs font-bold transition-colors ${drCmpMonth === m ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
+    }, m))), drCmpMonth ? React.createElement("button", {
+      onClick: () => setDrCmpMonth(null),
+      className: "mt-1.5 w-full py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-600 hover:bg-slate-300"
+    }, "비교 해제") : null)), React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
+    }, React.createElement("div", {
+      className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
     }, "공정 구분"), React.createElement("div", {
       className: "p-2 grid grid-cols-2 gap-1"
     }, ['TCP', 'FE'].map(s => React.createElement("button", {
@@ -8534,7 +8587,72 @@ ${question}`;
       className: "accent-indigo-600"
     }), React.createElement("span", null, line)))))), React.createElement("div", {
       className: "flex-1 min-w-0 space-y-3"
+    }, cmpAnalysis ? React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border-2 border-indigo-200 overflow-hidden"
     }, React.createElement("div", {
+      className: "bg-indigo-50 border-b border-indigo-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2"
+    }, React.createElement("div", { className: "font-bold text-sm text-indigo-900" },
+        `${cmpAnalysis.cur}월 vs ${cmpAnalysis.prevYear !== drYear ? cmpAnalysis.prevYear + '년 ' : ''}${cmpAnalysis.prev}월 ${labelMain} 증감 분석`),
+      React.createElement("div", { className: "flex bg-white rounded-lg p-0.5 border border-indigo-200" },
+        [{ k: 'line', l: '라인별' }, { k: 'item', l: '아이템별' }, { k: 'reason', l: '유형별' }].map(o =>
+          React.createElement("button", {
+            key: o.k,
+            onClick: () => setDrCmpBy(o.k),
+            className: `px-3 py-1 rounded text-xs font-bold transition ${drCmpBy === o.k ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'}`
+          }, o.l)))),
+      React.createElement("div", { className: "p-4" },
+        React.createElement("div", { className: "grid grid-cols-3 gap-3 mb-4" },
+          [[`${cmpAnalysis.prev}월`, cmpAnalysis.prevT, 'text-slate-600'],
+           [`${cmpAnalysis.cur}월`, cmpAnalysis.curT, 'text-slate-800'],
+           ['증감', cmpAnalysis.diffT, cmpAnalysis.diffT > 0 ? 'text-rose-600' : cmpAnalysis.diffT < 0 ? 'text-blue-600' : 'text-slate-400']
+          ].map(([lb, v, cls]) => React.createElement("div", {
+            key: lb, className: "bg-slate-50 rounded-lg p-3 text-center"
+          }, React.createElement("div", { className: "text-xs text-slate-500" }, lb),
+             React.createElement("div", { className: `text-xl font-bold ${cls}` },
+               (lb === '증감' && v > 0 ? '+' : '') + Math.round(v).toLocaleString()),
+             lb === '증감' && cmpAnalysis.prevT > 0 ? React.createElement("div", { className: `text-[11px] ${cls}` },
+               (v > 0 ? '+' : '') + (v / cmpAnalysis.prevT * 100).toFixed(1) + '%') : null))),
+        cmpAnalysis.rows.length === 0
+          ? React.createElement("div", { className: "text-center text-slate-400 py-6 text-sm" }, "비교할 데이터가 없습니다")
+          : React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full text-xs" },
+              React.createElement("thead", { className: "bg-slate-50" },
+                React.createElement("tr", null,
+                  React.createElement("th", { className: "px-3 py-2 border text-left" },
+                    drCmpBy === 'line' ? '라인' : drCmpBy === 'item' ? '아이템' : '불량유형'),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, cmpAnalysis.prev + "월"),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, cmpAnalysis.cur + "월"),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, "증감"),
+                  React.createElement("th", { className: "px-3 py-2 border text-center w-32" }, "변동 비중"))),
+              React.createElement("tbody", null, cmpAnalysis.rows.map(r => {
+                const up = r.diff > 0, down = r.diff < 0;
+                const absSum = cmpAnalysis.rows.reduce((a, x) => a + Math.abs(x.diff), 0) || 1;
+                const share = Math.abs(r.diff) / absSum * 100;
+                const maxAbs = Math.max(...cmpAnalysis.rows.map(x => Math.abs(x.diff)), 1);
+                const w = Math.abs(r.diff) / maxAbs * 100;
+                return React.createElement("tr", { key: r.key, className: "hover:bg-slate-50" },
+                  React.createElement("td", { className: "px-3 py-1.5 border font-medium" }, r.key),
+                  React.createElement("td", { className: "px-3 py-1.5 border text-right text-slate-500" }, Math.round(r.prev).toLocaleString()),
+                  React.createElement("td", { className: "px-3 py-1.5 border text-right font-semibold" }, Math.round(r.cur).toLocaleString()),
+                  React.createElement("td", {
+                    className: `px-3 py-1.5 border text-right font-bold ${up ? 'text-rose-600' : down ? 'text-blue-600' : 'text-slate-300'}`
+                  }, r.diff === 0 ? '-' : (up ? '+' : '') + Math.round(r.diff).toLocaleString()),
+                  React.createElement("td", { className: "px-2 py-1.5 border" },
+                    React.createElement("div", { className: "flex items-center gap-1.5" },
+                      React.createElement("div", { className: "flex-1 h-3 bg-slate-100 rounded overflow-hidden" },
+                        React.createElement("div", {
+                          className: `h-full ${up ? 'bg-rose-400' : 'bg-blue-400'}`,
+                          style: { width: w + '%' }
+                        })),
+                      React.createElement("span", {
+                        className: `text-[10px] w-10 text-right ${up ? 'text-rose-600' : down ? 'text-blue-600' : 'text-slate-300'}`
+                      }, r.diff === 0 ? '-' : share.toFixed(0) + '%'))));
+              })))),
+        React.createElement("div", { className: "mt-3 text-[11px] text-slate-500" },
+          "\u00B7 \uBCC0\uB3D9 \uBE44\uC911 = \uC804\uCCB4 \uBCC0\uB3D9\uB7C9 \uC911 \uC774 \uD56D\uBAA9\uC774 \uCC28\uC9C0\uD558\uB294 \uBE44\uC728 (\uD074\uC218\uB85D \uBCC0\uD654\uB97C \uC8FC\uB3C4\uD55C \uD56D\uBAA9)",
+          React.createElement("br"),
+          "\u00B7 \uBE68\uAC15 = \uB298\uC5B4\uB09C \uD56D\uBAA9, \uD30C\uB791 = \uC904\uC5B4\uB4E0 \uD56D\uBAA9"))) : null,
+      React.createElement("div", {
       className: "grid grid-cols-2 gap-3"
     }, React.createElement("div", {
       className: "bg-white rounded-xl border border-slate-200 p-4"
@@ -8938,6 +9056,38 @@ ${question}`;
       monthAgg[m].count++;
       monthAgg[m].manMin += computeDur(dt, log);
     });
+    // ===== 전월 대비 비교 분석 (비가동) =====
+    const dtCmp = (() => {
+      if (!dtCmpMonth) return null;
+      const cur = dtCmpMonth, prev = cur === 1 ? 12 : cur - 1;
+      const prevYear = cur === 1 ? dtYear - 1 : dtYear;
+      const allDts = (targetData?.downtimeLogs || []).filter(dt => dt.productionLogId != null && logById[dt.productionLogId]);
+      const keyOf = (dt, log) => {
+        if (dtCmpBy === 'line') return dl(log.lineName);
+        if (dtCmpBy === 'item') return (log.item || '(미지정)');
+        return (dt.downtimeType || '(미분류)');
+      };
+      const bucket = {};
+      const addTo = (slot, year, month) => {
+        allDts.forEach(dt => {
+          const log = logById[dt.productionLogId];
+          if (!log) return;
+          const d2 = new Date(log.productionDate);
+          if (d2.getFullYear() !== year || d2.getMonth() + 1 !== month) return;
+          const k = keyOf(dt, log);
+          if (!bucket[k]) bucket[k] = { key: k, cur: 0, prev: 0 };
+          bucket[k][slot] += computeDur(dt, log);
+        });
+      };
+      addTo('cur', dtYear, cur);
+      addTo('prev', prevYear, prev);
+      const rows = Object.values(bucket).map(b => ({ ...b, diff: b.cur - b.prev }))
+        .filter(b => b.cur || b.prev)
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      const curT = rows.reduce((a, r) => a + r.cur, 0);
+      const prevT = rows.reduce((a, r) => a + r.prev, 0);
+      return { cur, prev, prevYear, rows, curT, prevT, diffT: curT - prevT };
+    })();
     const maxMin = Math.max(...Object.values(monthAgg).map(a => a.manMin), 1);
     const totalCount = Object.values(monthAgg).reduce((s, a) => s + a.count, 0);
     const totalMin = Object.values(monthAgg).reduce((s, a) => s + a.manMin, 0);
@@ -9105,6 +9255,21 @@ ${question}`;
       className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
       className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
+    }, "비교 (전월 대비)"), React.createElement("div", {
+      className: "p-2"
+    }, React.createElement("div", {
+      className: "grid grid-cols-4 gap-1"
+    }, Array.from({ length: 12 }, (_, i) => i + 1).map(m => React.createElement("button", {
+      key: m,
+      onClick: () => setDtCmpMonth(dtCmpMonth === m ? null : m),
+      className: `py-1.5 rounded-lg text-xs font-bold transition-colors ${dtCmpMonth === m ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
+    }, m))), dtCmpMonth ? React.createElement("button", {
+      onClick: () => setDtCmpMonth(null),
+      className: "mt-1.5 w-full py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-600 hover:bg-slate-300"
+    }, "비교 해제") : null)), React.createElement("div", {
+      className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
+    }, React.createElement("div", {
+      className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
     }, "공정 구분"), React.createElement("div", {
       className: "p-2 grid grid-cols-2 gap-1"
     }, ['TCP', 'FE'].map(s => React.createElement("button", {
@@ -9189,7 +9354,70 @@ ${question}`;
       className: "truncate"
     }, it)))))), React.createElement("div", {
       className: "flex-1 min-w-0 space-y-3"
-    }, dtViewMode === 'all' && React.createElement(React.Fragment, null, React.createElement("div", {
+    }, dtCmp ? React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border-2 border-indigo-200 overflow-hidden"
+    }, React.createElement("div", {
+      className: "bg-indigo-50 border-b border-indigo-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2"
+    }, React.createElement("div", { className: "font-bold text-sm text-indigo-900" },
+        `${dtCmp.cur}월 vs ${dtCmp.prevYear !== dtYear ? dtCmp.prevYear + '년 ' : ''}${dtCmp.prev}월 비가동 증감 분석 (man-min)`),
+      React.createElement("div", { className: "flex bg-white rounded-lg p-0.5 border border-indigo-200" },
+        [{ k: 'line', l: '라인별' }, { k: 'item', l: '아이템별' }, { k: 'reason', l: '유형별' }].map(o =>
+          React.createElement("button", {
+            key: o.k,
+            onClick: () => setDtCmpBy(o.k),
+            className: `px-3 py-1 rounded text-xs font-bold transition ${dtCmpBy === o.k ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'}`
+          }, o.l)))),
+      React.createElement("div", { className: "p-4" },
+        React.createElement("div", { className: "grid grid-cols-3 gap-3 mb-4" },
+          [[`${dtCmp.prev}월`, dtCmp.prevT, 'text-slate-600'],
+           [`${dtCmp.cur}월`, dtCmp.curT, 'text-slate-800'],
+           ['증감', dtCmp.diffT, dtCmp.diffT > 0 ? 'text-rose-600' : dtCmp.diffT < 0 ? 'text-blue-600' : 'text-slate-400']
+          ].map(([lb, v, cls]) => React.createElement("div", {
+            key: lb, className: "bg-slate-50 rounded-lg p-3 text-center"
+          }, React.createElement("div", { className: "text-xs text-slate-500" }, lb),
+             React.createElement("div", { className: `text-xl font-bold ${cls}` },
+               (lb === '증감' && v > 0 ? '+' : '') + Math.round(v).toLocaleString()),
+             React.createElement("div", { className: "text-[10px] text-slate-400" }, Math.round(Math.abs(v) / 60).toLocaleString() + 'h'),
+             lb === '증감' && dtCmp.prevT > 0 ? React.createElement("div", { className: `text-[11px] ${cls}` },
+               (v > 0 ? '+' : '') + (v / dtCmp.prevT * 100).toFixed(1) + '%') : null))),
+        dtCmp.rows.length === 0
+          ? React.createElement("div", { className: "text-center text-slate-400 py-6 text-sm" }, "비교할 데이터가 없습니다")
+          : React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full text-xs" },
+              React.createElement("thead", { className: "bg-slate-50" },
+                React.createElement("tr", null,
+                  React.createElement("th", { className: "px-3 py-2 border text-left" },
+                    dtCmpBy === 'line' ? '라인' : dtCmpBy === 'item' ? '아이템' : '비가동 유형'),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, dtCmp.prev + "월"),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, dtCmp.cur + "월"),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, "증감"),
+                  React.createElement("th", { className: "px-3 py-2 border text-center w-32" }, "변동 비중"))),
+              React.createElement("tbody", null, dtCmp.rows.map(r => {
+                const up = r.diff > 0, down = r.diff < 0;
+                const absSum = dtCmp.rows.reduce((a, x) => a + Math.abs(x.diff), 0) || 1;
+                const share = Math.abs(r.diff) / absSum * 100;
+                const maxAbs = Math.max(...dtCmp.rows.map(x => Math.abs(x.diff)), 1);
+                const w = Math.abs(r.diff) / maxAbs * 100;
+                return React.createElement("tr", { key: r.key, className: "hover:bg-slate-50" },
+                  React.createElement("td", { className: "px-3 py-1.5 border font-medium" }, r.key),
+                  React.createElement("td", { className: "px-3 py-1.5 border text-right text-slate-500" }, Math.round(r.prev).toLocaleString()),
+                  React.createElement("td", { className: "px-3 py-1.5 border text-right font-semibold" }, Math.round(r.cur).toLocaleString()),
+                  React.createElement("td", {
+                    className: `px-3 py-1.5 border text-right font-bold ${up ? 'text-rose-600' : down ? 'text-blue-600' : 'text-slate-300'}`
+                  }, r.diff === 0 ? '-' : (up ? '+' : '') + Math.round(r.diff).toLocaleString()),
+                  React.createElement("td", { className: "px-2 py-1.5 border" },
+                    React.createElement("div", { className: "flex items-center gap-1.5" },
+                      React.createElement("div", { className: "flex-1 h-3 bg-slate-100 rounded overflow-hidden" },
+                        React.createElement("div", { className: `h-full ${up ? 'bg-rose-400' : 'bg-blue-400'}`, style: { width: w + '%' } })),
+                      React.createElement("span", {
+                        className: `text-[10px] w-10 text-right ${up ? 'text-rose-600' : down ? 'text-blue-600' : 'text-slate-300'}`
+                      }, r.diff === 0 ? '-' : share.toFixed(0) + '%'))));
+              })))),
+        React.createElement("div", { className: "mt-3 text-[11px] text-slate-500" },
+          "\u00B7 \uBCC0\uB3D9 \uBE44\uC911 = \uC804\uCCB4 \uBCC0\uB3D9\uB7C9 \uC911 \uC774 \uD56D\uBAA9\uC774 \uCC28\uC9C0\uD558\uB294 \uBE44\uC728 (\uD074\uC218\uB85D \uBCC0\uD654\uB97C \uC8FC\uB3C4\uD55C \uD56D\uBAA9)",
+          React.createElement("br"),
+          "\u00B7 \uBE68\uAC15 = \uB298\uC5B4\uB09C \uD56D\uBAA9, \uD30C\uB791 = \uC904\uC5B4\uB4E0 \uD56D\uBAA9"))) : null,
+      dtViewMode === 'all' && React.createElement(React.Fragment, null, React.createElement("div", {
       className: "grid grid-cols-2 gap-3"
     }, React.createElement("div", {
       className: "bg-white rounded-xl border border-slate-200 p-4"
@@ -10952,6 +11180,60 @@ ${question}`;
       monthAgg[m].count++;
       monthAgg[m].manMinutes += computeDuration(dt, log);
     });
+    // ===== 품목 교체 매트릭스 (비고 내용에서 «A -> B» 인식) =====
+    const CHG_NORM = [[/^(HR[ ]*PE|HRPE)$/i, 'HRPE'], [/^(HR[ ]*4X4)$/i, 'PU'], [/^(HR[ ]*6[.](0|5)|HR)$/i, 'HR'], [/^(TK\s*MLD|TKMLD|TKM|TK|TK\s*ELD)$/i, 'TK MLD'], [/^(M\s*&\s*M|MM)$/i, 'M&M'], [/^(GM\s*11\.5|11\.5|GM)$/i, 'GM11.5'], [/^(Q200L|Q200LONG|Q200S|Q200)$/i, 'Q200'], [/^(Q201|Q021)$/i, 'Q201'], [/^(INEOS|INOES)$/i, 'INEOS'], [/^(JL\s*FRONT|JLFRONT|JL\s*F|JL)$/i, 'JL FRONT'], [/^(Y9\s*FRONT|Y9)$/i, 'Y9'], [/^(SK81|SK)$/i, 'SK81'], [/^(REAR)$/i, 'REAR'], [/^(PE)$/i, 'PE'], [/^(PU)$/i, 'PU'], [/^(KP1)$/i, 'KP1'], [/^(N352)$/i, 'N352'], [/^(K7)$/i, 'K7'], [/^(Y450)$/i, 'Y450'], [/^(V363)$/i, 'V363'], [/^(P15)$/i, 'P15'], [/^(JP360)$/i, 'JP360'], [/^(LT2)$/i, 'LT2'], [/^(TQ47)$/i, 'TQ47'], [/^(HM)$/i, 'HM']];
+    const normItem = raw => {
+      if (!raw) return null;
+      let v = String(raw).replace(/(tool|지그|교체|툴|&|m\/check|\/check)/gi, '').replace(/\s+/g, ' ').trim().replace(/^[-.\s]+|[-.\s]+$/g, '');
+      if (!v || v.length > 12) return null;
+      for (let i = 0; i < CHG_NORM.length; i++) {
+        if (CHG_NORM[i][0].test(v)) return CHG_NORM[i][1];
+      }
+      return null;
+    };
+    const CHG_PAT = /([A-Za-z0-9&.\s]{1,14}?)\s*(?:->|→|=>|-\?)\s*([A-Za-z0-9&.\s]{1,14}?)(?:\s*(?:지그|Tool|툴|$))/i;
+    // ===== 전월 대비 비교 분석 (Tool 교체) =====
+    const toolCmp = (() => {
+      if (!toolCmpMonth) return null;
+      const cur = toolCmpMonth, prev = cur === 1 ? 12 : cur - 1;
+      const prevYear = cur === 1 ? toolYear - 1 : toolYear;
+      const allDts = (targetData?.downtimeLogs || []).filter(dt =>
+        dt.productionLogId != null && logById[dt.productionLogId] && String(dt.downtimeType || '').indexOf('Tool') === 0);
+      const keyOf = (dt, log) => {
+        if (toolCmpBy === 'line') return resolveLineName(toolSection, log.lineName);
+        if (toolCmpBy === 'item') return (log.item || '(미지정)');
+        if (toolCmpBy === 'type') return (dt.downtimeType || '(미분류)');
+        // change = 교체 조합 (A → B)
+        const m = CHG_PAT.exec(String(dt.content || '').trim());
+        if (!m) return '(품목 미기재)';
+        const f = normItem(m[1]), t = normItem(m[2]);
+        if (!f || !t || f === t) return '(품목 미기재)';
+        return f + ' → ' + t;
+      };
+      const bucket = {};
+      const addTo = (slot, year, month) => {
+        allDts.forEach(dt => {
+          const log = logById[dt.productionLogId];
+          if (!log) return;
+          const d2 = new Date(log.productionDate);
+          if (d2.getFullYear() !== year || d2.getMonth() + 1 !== month) return;
+          const k = keyOf(dt, log);
+          if (!bucket[k]) bucket[k] = { key: k, cur: 0, prev: 0, curN: 0, prevN: 0 };
+          bucket[k][slot] += computeDuration(dt, log);
+          bucket[k][slot === 'cur' ? 'curN' : 'prevN'] += 1;
+        });
+      };
+      addTo('cur', toolYear, cur);
+      addTo('prev', prevYear, prev);
+      const rows = Object.values(bucket).map(b => ({ ...b, diff: b.cur - b.prev, diffN: b.curN - b.prevN }))
+        .filter(b => b.cur || b.prev)
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      const curT = rows.reduce((a, r) => a + r.cur, 0);
+      const prevT = rows.reduce((a, r) => a + r.prev, 0);
+      const curNT = rows.reduce((a, r) => a + r.curN, 0);
+      const prevNT = rows.reduce((a, r) => a + r.prevN, 0);
+      return { cur, prev, prevYear, rows, curT, prevT, diffT: curT - prevT, curNT, prevNT };
+    })();
     const maxMin = Math.max(...Object.values(monthAgg).map(a => a.manMinutes), 1);
     const maxCount = Math.max(...Object.values(monthAgg).map(a => a.count), 1);
     let detailByLine = {};
@@ -11025,18 +11307,6 @@ ${question}`;
       padT = 40,
       padB = 50;
     const cw = (W - padL - padR) / 12;
-    // ===== 품목 교체 매트릭스 (비고 내용에서 «A -> B» 인식) =====
-    const CHG_NORM = [[/^(HR[ ]*PE|HRPE)$/i, 'HRPE'], [/^(HR[ ]*4X4)$/i, 'PU'], [/^(HR[ ]*6[.](0|5)|HR)$/i, 'HR'], [/^(TK\s*MLD|TKMLD|TKM|TK|TK\s*ELD)$/i, 'TK MLD'], [/^(M\s*&\s*M|MM)$/i, 'M&M'], [/^(GM\s*11\.5|11\.5|GM)$/i, 'GM11.5'], [/^(Q200L|Q200LONG|Q200S|Q200)$/i, 'Q200'], [/^(Q201|Q021)$/i, 'Q201'], [/^(INEOS|INOES)$/i, 'INEOS'], [/^(JL\s*FRONT|JLFRONT|JL\s*F|JL)$/i, 'JL FRONT'], [/^(Y9\s*FRONT|Y9)$/i, 'Y9'], [/^(SK81|SK)$/i, 'SK81'], [/^(REAR)$/i, 'REAR'], [/^(PE)$/i, 'PE'], [/^(PU)$/i, 'PU'], [/^(KP1)$/i, 'KP1'], [/^(N352)$/i, 'N352'], [/^(K7)$/i, 'K7'], [/^(Y450)$/i, 'Y450'], [/^(V363)$/i, 'V363'], [/^(P15)$/i, 'P15'], [/^(JP360)$/i, 'JP360'], [/^(LT2)$/i, 'LT2'], [/^(TQ47)$/i, 'TQ47'], [/^(HM)$/i, 'HM']];
-    const normItem = raw => {
-      if (!raw) return null;
-      let v = String(raw).replace(/(tool|지그|교체|툴|&|m\/check|\/check)/gi, '').replace(/\s+/g, ' ').trim().replace(/^[-.\s]+|[-.\s]+$/g, '');
-      if (!v || v.length > 12) return null;
-      for (let i = 0; i < CHG_NORM.length; i++) {
-        if (CHG_NORM[i][0].test(v)) return CHG_NORM[i][1];
-      }
-      return null;
-    };
-    const CHG_PAT = /([A-Za-z0-9&.\s]{1,14}?)\s*(?:->|→|=>|-\?)\s*([A-Za-z0-9&.\s]{1,14}?)(?:\s*(?:지그|Tool|툴|$))/i;
     const changeMatrix = (() => {
       const byLine = {};
       let recognized = 0, noItem = 0;
@@ -11185,6 +11455,21 @@ ${question}`;
       className: "bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
       className: "bg-slate-50 text-slate-700 border-b border-slate-200 text-center py-1.5 font-bold text-sm"
+    }, "비교 (전월 대비)"), React.createElement("div", {
+      className: "p-2"
+    }, React.createElement("div", {
+      className: "grid grid-cols-4 gap-1"
+    }, Array.from({ length: 12 }, (_, i) => i + 1).map(m => React.createElement("button", {
+      key: m,
+      onClick: () => setToolCmpMonth(toolCmpMonth === m ? null : m),
+      className: `py-1.5 rounded-lg text-xs font-bold transition-colors ${toolCmpMonth === m ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
+    }, m))), toolCmpMonth ? React.createElement("button", {
+      onClick: () => setToolCmpMonth(null),
+      className: "mt-1.5 w-full py-1 rounded-lg text-[11px] font-bold bg-slate-200 text-slate-600 hover:bg-slate-300"
+    }, "비교 해제") : null)), React.createElement("div", {
+      className: "bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden"
+    }, React.createElement("div", {
+      className: "bg-slate-50 text-slate-700 border-b border-slate-200 text-center py-1.5 font-bold text-sm"
     }, "공정 구분"), React.createElement("div", {
       className: "p-2 grid grid-cols-2 gap-1"
     }, ['TCP', 'FE'].map(s => React.createElement("button", {
@@ -11224,7 +11509,74 @@ ${question}`;
       }
     }), React.createElement("span", null, line)))))), React.createElement("div", {
       className: "flex-1 min-w-0 space-y-3"
+    }, toolCmp ? React.createElement("div", {
+      className: "bg-white rounded-xl shadow-sm border-2 border-indigo-200 overflow-hidden"
     }, React.createElement("div", {
+      className: "bg-indigo-50 border-b border-indigo-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2"
+    }, React.createElement("div", { className: "font-bold text-sm text-indigo-900" },
+        `${toolCmp.cur}월 vs ${toolCmp.prevYear !== toolYear ? toolCmp.prevYear + '년 ' : ''}${toolCmp.prev}월 Tool 교체 증감 분석 (man-min)`),
+      React.createElement("div", { className: "flex bg-white rounded-lg p-0.5 border border-indigo-200" },
+        [{ k: 'line', l: '라인별' }, { k: 'item', l: '아이템별' }, { k: 'change', l: '교체조합별' }, { k: 'type', l: '유형별' }].map(o =>
+          React.createElement("button", {
+            key: o.k,
+            onClick: () => setToolCmpBy(o.k),
+            className: `px-3 py-1 rounded text-xs font-bold transition ${toolCmpBy === o.k ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'}`
+          }, o.l)))),
+      React.createElement("div", { className: "p-4" },
+        React.createElement("div", { className: "grid grid-cols-3 gap-3 mb-4" },
+          [[`${toolCmp.prev}월`, toolCmp.prevT, toolCmp.prevNT, 'text-slate-600'],
+           [`${toolCmp.cur}월`, toolCmp.curT, toolCmp.curNT, 'text-slate-800'],
+           ['증감', toolCmp.diffT, toolCmp.curNT - toolCmp.prevNT, toolCmp.diffT > 0 ? 'text-rose-600' : toolCmp.diffT < 0 ? 'text-blue-600' : 'text-slate-400']
+          ].map(([lb, v, n, cls]) => React.createElement("div", {
+            key: lb, className: "bg-slate-50 rounded-lg p-3 text-center"
+          }, React.createElement("div", { className: "text-xs text-slate-500" }, lb),
+             React.createElement("div", { className: `text-xl font-bold ${cls}` },
+               (lb === '증감' && v > 0 ? '+' : '') + Math.round(v).toLocaleString()),
+             React.createElement("div", { className: "text-[10px] text-slate-400" },
+               Math.round(Math.abs(v) / 60).toLocaleString() + 'h · ' + (lb === '증감' && n > 0 ? '+' : '') + n + '회'),
+             lb === '증감' && toolCmp.prevT > 0 ? React.createElement("div", { className: `text-[11px] ${cls}` },
+               (v > 0 ? '+' : '') + (v / toolCmp.prevT * 100).toFixed(1) + '%') : null))),
+        toolCmp.rows.length === 0
+          ? React.createElement("div", { className: "text-center text-slate-400 py-6 text-sm" }, "비교할 데이터가 없습니다")
+          : React.createElement("div", { className: "overflow-x-auto" },
+            React.createElement("table", { className: "w-full text-xs" },
+              React.createElement("thead", { className: "bg-slate-50" },
+                React.createElement("tr", null,
+                  React.createElement("th", { className: "px-3 py-2 border text-left" },
+                    toolCmpBy === 'line' ? '라인' : toolCmpBy === 'item' ? '아이템' : toolCmpBy === 'change' ? '교체 조합' : '교체 유형'),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, toolCmp.prev + "월"),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, toolCmp.cur + "월"),
+                  React.createElement("th", { className: "px-3 py-2 border text-right w-24" }, "증감"),
+                  React.createElement("th", { className: "px-3 py-2 border text-center w-20" }, "횟수"),
+                  React.createElement("th", { className: "px-3 py-2 border text-center w-32" }, "변동 비중"))),
+              React.createElement("tbody", null, toolCmp.rows.map(r => {
+                const up = r.diff > 0, down = r.diff < 0;
+                const absSum = toolCmp.rows.reduce((a, x) => a + Math.abs(x.diff), 0) || 1;
+                const share = Math.abs(r.diff) / absSum * 100;
+                const maxAbs = Math.max(...toolCmp.rows.map(x => Math.abs(x.diff)), 1);
+                const w = Math.abs(r.diff) / maxAbs * 100;
+                return React.createElement("tr", { key: r.key, className: "hover:bg-slate-50" },
+                  React.createElement("td", { className: "px-3 py-1.5 border font-medium" }, r.key),
+                  React.createElement("td", { className: "px-3 py-1.5 border text-right text-slate-500" }, Math.round(r.prev).toLocaleString()),
+                  React.createElement("td", { className: "px-3 py-1.5 border text-right font-semibold" }, Math.round(r.cur).toLocaleString()),
+                  React.createElement("td", {
+                    className: `px-3 py-1.5 border text-right font-bold ${up ? 'text-rose-600' : down ? 'text-blue-600' : 'text-slate-300'}`
+                  }, r.diff === 0 ? '-' : (up ? '+' : '') + Math.round(r.diff).toLocaleString()),
+                  React.createElement("td", { className: "px-2 py-1.5 border text-center text-[11px] text-slate-500" },
+                    r.prevN + "→" + r.curN),
+                  React.createElement("td", { className: "px-2 py-1.5 border" },
+                    React.createElement("div", { className: "flex items-center gap-1.5" },
+                      React.createElement("div", { className: "flex-1 h-3 bg-slate-100 rounded overflow-hidden" },
+                        React.createElement("div", { className: `h-full ${up ? 'bg-rose-400' : 'bg-blue-400'}`, style: { width: w + '%' } })),
+                      React.createElement("span", {
+                        className: `text-[10px] w-10 text-right ${up ? 'text-rose-600' : down ? 'text-blue-600' : 'text-slate-300'}`
+                      }, r.diff === 0 ? '-' : share.toFixed(0) + '%'))));
+              })))),
+        React.createElement("div", { className: "mt-3 text-[11px] text-slate-500" },
+          "\u00B7 \uBCC0\uB3D9 \uBE44\uC911 = \uC804\uCCB4 \uBCC0\uB3D9\uB7C9 \uC911 \uC774 \uD56D\uBAA9\uC774 \uCC28\uC9C0\uD558\uB294 \uBE44\uC728",
+          React.createElement("br"),
+          "\u00B7 \uAD50\uCCB4\uC870\uD569\uBCC4\uC740 \uBE44\uACE0\uC758 \u00ABA \u2192 B\u00BB \uD45C\uAE30\uB97C \uC778\uC2DD\uD55C \uACB0\uACFC\uC785\uB2C8\uB2E4"))) : null,
+      React.createElement("div", {
       className: "bg-white rounded-lg shadow-sm border border-slate-200 border border-slate-200 p-4"
     }, React.createElement("h3", {
       className: "text-center text-lg font-bold text-slate-800 mb-2"
