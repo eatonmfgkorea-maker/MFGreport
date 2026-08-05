@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V071</title>
+  <title>MFG Report V072</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V071',
+  v: 'V072',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -3050,6 +3050,7 @@ function App() {
   const __simMonthAgo = new Date(); __simMonthAgo.setDate(__simMonthAgo.getDate() - 30);
   const __fmtD = d => d.toISOString().slice(0,10);
   const [simSection, setSimSection] = useState('TCP');
+  const [simView, setSimView] = useState('sim'); // 'sim' | 'ideal'
   const [simStart, setSimStart] = useState(__fmtD(__simMonthAgo));
   const [simEnd, setSimEnd] = useState(__fmtD(__simToday));
   const [simSelLines, setSimSelLines] = useState(['ALL']);
@@ -5787,7 +5788,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V071"), React.createElement("div", {
+  }, "V072"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13522,6 +13523,37 @@ ${question}`;
     const EMPTY = new Set();
     const base = compute({moved:{},exclDt:EMPTY,exDefSt:EMPTY,exDefTy:EMPTY,exDefSub:EMPTY,exRwSt:EMPTY,exRwTy:EMPTY,exRwSub:EMPTY,formula:SIM_DEFAULT});
     const sim = compute({moved:simMoved,exclDt:simExclDt,exDefSt:simExclDefSt,exDefTy:simExclDefTy,exDefSub:simExclDefSub,exRwSt:simExclRwSt,exRwTy:simExclRwTy,exRwSub:simExclRwSub,formula:simFormula});
+    // ===== Ideal 계산: A=시뮬(비가동 조정 반영), P 분자=계획수량 기대치, Q=100 =====
+    const ideal = (()=>{
+      const idata = simSection==='TCP'?tcpData:feData;
+      const ctBaseI = idata?.settings?.[simSection]?.ctBaseMinutes || 435;
+      const itemsI = idata?.settings?.[simSection]?.items || [];
+      let planExp=0, expOut=0, noPlan=0;
+      filtered.forEach(l=>{
+        const c = computeLogContribution(l);
+        if(!c) return;
+        expOut += c.expectedOutput||0;
+        const itemDef = itemsI.find(i=>i.item===l.item);
+        let planQty=null;
+        if(itemDef?.ct && Array.isArray(itemDef.ct)){
+          const wc = parseFloat(l.workers)||(Array.isArray(l.selectedWorkers)?l.selectedWorkers.length:1);
+          const td = new Date(l.productionDate);
+          const ce = itemDef.ct.find(cc=>{
+            if(cc.workers!==wc)return false;
+            const sd=new Date(cc.startDate); const ed=cc.endDate?new Date(cc.endDate):new Date('9999-12-31');
+            return td>=sd&&td<=ed;
+          });
+          planQty = ce?ce.planQty:null;
+        }
+        const pq=parseFloat(planQty)||0;
+        if(pq>0&&ctBaseI>0&&(c.expectedOutput||0)>0) planExp += (c.operatingTime||0)/ctBaseI*pq;
+        else if((c.expectedOutput||0)>0) noPlan++;
+      });
+      const P = expOut>0? Math.max(0,planExp/expOut*100) : 0;
+      const A = sim.A;
+      const Q = 100;
+      return {A,P,Q,OEE:A/100*P/100*Q/100*100,planExp,expOut,noPlan};
+    })();
     // 토글 헬퍼
     const tArr=(arr,v,all)=>{ if(arr.includes('ALL'))return[v]; if(arr.includes(v)){const n=arr.filter(x=>x!==v);return n;} const n=[...arr,v]; return n.length===all.length-1?['ALL']:n; };
     const tSet=(set,v)=>{ const n=new Set(set); n.has(v)?n.delete(v):n.add(v); return n; };
@@ -13538,7 +13570,7 @@ ${question}`;
         React.createElement("div",{className:"text-slate-300 text-lg"},"→"),
         // 시뮬
         React.createElement("div",{className:"text-center"},
-          React.createElement("div",{className:"text-[10px] font-semibold "+color},"시뮬"),
+          React.createElement("div",{className:"text-[10px] font-semibold "+color},simView==='ideal'?'Ideal':'시뮬'),
           React.createElement("div",{className:"text-2xl font-black "+color},s.toFixed(1),React.createElement("span",{className:"text-sm"},"%")))),
       React.createElement("div",{className:"text-xs mt-1"},dlt(b,s)));
     const tokLabel=t=>['+','-','*','/'].includes(t)?t:(SIM_FIELDS.find(x=>x.id===t)?.label||t);
@@ -13561,9 +13593,16 @@ ${question}`;
       // 헤더
       React.createElement("div",{className:"flex items-center justify-between"},
         React.createElement("div",null,
-          React.createElement("h2",{className:"text-lg font-bold text-slate-800"},"🧪 OEE 시뮬레이터"),
-          React.createElement("p",{className:"text-xs text-slate-500 mt-0.5"},"비가동·불량·재작업·수식을 조정해 OEE 변화를 실험합니다 · ",React.createElement("b",{className:"text-violet-600"},"여기 조정은 다른 탭에 영향 없음"))),
-        React.createElement("button",{onClick:resetSim,className:"px-3 py-1.5 bg-slate-200 rounded text-sm font-semibold text-slate-700"},"↺ 초기화")),
+          React.createElement("h2",{className:"text-lg font-bold text-slate-800"},simView==='ideal'?"🏆 Ideal OEE":"🧪 OEE 시뮬레이터"),
+          React.createElement("p",{className:"text-xs text-slate-500 mt-0.5"},simView==='ideal'?
+            "선택 기간에 우리가 낼 수 있는 최상의 OEE · Q=100% · P=계획수량 기준 최대":
+            "비가동·불량·재작업·수식을 조정해 OEE 변화를 실험합니다 · ",
+            simView!=='ideal'&&React.createElement("b",{className:"text-violet-600"},"여기 조정은 다른 탭에 영향 없음"))),
+        React.createElement("div",{className:"flex items-center gap-2"},
+          React.createElement("div",{className:"flex gap-1 bg-slate-100 rounded-lg p-0.5"},
+            React.createElement("button",{onClick:()=>setSimView('sim'),className:"px-3 py-1 rounded-md text-sm font-semibold "+(simView==='sim'?'bg-white text-violet-700 shadow-sm':'text-slate-500')},"🧪 시뮬"),
+            React.createElement("button",{onClick:()=>setSimView('ideal'),className:"px-3 py-1 rounded-md text-sm font-semibold "+(simView==='ideal'?'bg-white text-amber-600 shadow-sm':'text-slate-500')},"🏆 Ideal")),
+          React.createElement("button",{onClick:resetSim,className:"px-3 py-1.5 bg-slate-200 rounded text-sm font-semibold text-slate-700"},"↺ 초기화"))),
       // 선택 영역
       React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3 flex flex-wrap gap-4 items-start"},
         React.createElement("div",null,React.createElement("div",{className:"text-xs font-bold text-slate-600 mb-1"},"공정"),
@@ -13578,7 +13617,7 @@ ${question}`;
         React.createElement("div",null,React.createElement("div",{className:"text-xs font-bold text-slate-600 mb-1"},"아이템"),
           React.createElement("div",{className:"flex flex-wrap gap-1"},simItems.map(it=>React.createElement("button",{key:it,onClick:()=>setSimSelItems(tArr(simSelItems,it,simItems)),className:"px-2 py-1 rounded text-xs "+((it==='ALL'?simSelItems.includes('ALL'):simSelItems.includes('ALL')||simSelItems.includes(it))?'bg-blue-500 text-white':'bg-slate-100 text-slate-600')},it==='ALL'?'전체':it))))),
       // 현재 OEE 요약 배너 (크게 — 시뮬과 바로 비교)
-      React.createElement("div",{className:"bg-gradient-to-r from-slate-50 to-violet-50 rounded-lg border border-violet-200 p-4 flex items-center justify-center gap-6"},
+      simView==='sim' && React.createElement("div",{className:"bg-gradient-to-r from-slate-50 to-violet-50 rounded-lg border border-violet-200 p-4 flex items-center justify-center gap-6"},
         React.createElement("div",{className:"text-center"},
           React.createElement("div",{className:"text-xs text-slate-500 font-semibold mb-0.5"},"현재 OEE"),
           React.createElement("div",{className:"text-4xl font-black text-slate-600"},base.OEE.toFixed(1),React.createElement("span",{className:"text-xl"},"%"))),
@@ -13589,22 +13628,45 @@ ${question}`;
         React.createElement("div",{className:"text-center pl-2"},
           React.createElement("div",{className:"text-xs text-slate-400 font-semibold mb-0.5"},"변화"),
           React.createElement("div",{className:"text-2xl font-black "+((sim.OEE-base.OEE)>0.05?'text-emerald-600':(sim.OEE-base.OEE)<-0.05?'text-rose-600':'text-slate-400')},((sim.OEE-base.OEE)>0?'▲':(sim.OEE-base.OEE)<0?'▼':'=')+Math.abs(sim.OEE-base.OEE).toFixed(1)))),
+      // Ideal 배너
+      simView==='ideal' && React.createElement("div",{className:"bg-gradient-to-r from-slate-50 to-amber-50 rounded-lg border border-amber-200 p-4 flex items-center justify-center gap-6"},
+        React.createElement("div",{className:"text-center"},
+          React.createElement("div",{className:"text-xs text-slate-500 font-semibold mb-0.5"},"현재 OEE"),
+          React.createElement("div",{className:"text-4xl font-black text-slate-600"},base.OEE.toFixed(1),React.createElement("span",{className:"text-xl"},"%"))),
+        React.createElement("div",{className:"text-3xl text-slate-300"},"→"),
+        React.createElement("div",{className:"text-center"},
+          React.createElement("div",{className:"text-xs text-amber-500 font-semibold mb-0.5"},"Ideal OEE"),
+          React.createElement("div",{className:"text-4xl font-black text-amber-600"},ideal.OEE.toFixed(1),React.createElement("span",{className:"text-xl"},"%"))),
+        React.createElement("div",{className:"text-center pl-2"},
+          React.createElement("div",{className:"text-xs text-slate-400 font-semibold mb-0.5"},"Gap"),
+          React.createElement("div",{className:"text-2xl font-black "+((ideal.OEE-base.OEE)>0.05?'text-rose-600':'text-slate-400')},(ideal.OEE-base.OEE>0?'▲':'=')+Math.abs(ideal.OEE-base.OEE).toFixed(1)))),
       // 게이지
-      React.createElement("div",{className:"grid grid-cols-4 gap-3"},
+      simView==='sim' && React.createElement("div",{className:"grid grid-cols-4 gap-3"},
         gauge("OEE",base.OEE,sim.OEE,"text-violet-700"),
         gauge("가동률 A",base.A,sim.A,"text-blue-600"),
         gauge("성능 P",base.P,sim.P,"text-amber-600"),
         gauge("품질 Q",base.Q,sim.Q,"text-emerald-600")),
+      simView==='ideal' && React.createElement("div",{className:"grid grid-cols-4 gap-3"},
+        gauge("OEE",base.OEE,ideal.OEE,"text-amber-600"),
+        gauge("가동률 A",base.A,ideal.A,"text-blue-600"),
+        gauge("성능 P",base.P,ideal.P,"text-amber-600"),
+        gauge("품질 Q",base.Q,ideal.Q,"text-emerald-600")),
+      // Ideal 계산 설명
+      simView==='ideal' && React.createElement("div",{className:"bg-amber-50/60 rounded-lg border border-amber-200 p-3 text-xs text-slate-600 space-y-1"},
+        React.createElement("div",null,React.createElement("b",{className:"text-blue-600"},"A (가동률)"),": 아래 비가동 조정(계획↔비계획·제외) 그대로 반영 — 시뮬과 동일"),
+        React.createElement("div",null,React.createElement("b",{className:"text-amber-600"},"P (성능)"),": 가동시간 기준 계획수량 기대치 ",React.createElement("b",null,Math.round(ideal.planExp).toLocaleString()),"개 ÷ CT 기대생산량 ",React.createElement("b",null,Math.round(ideal.expOut).toLocaleString()),"개 = ",React.createElement("b",null,ideal.P.toFixed(1)+"%")," (해당 시간에 계획대로 다 만들었을 때의 최대 P)"),
+        React.createElement("div",null,React.createElement("b",{className:"text-emerald-600"},"Q (품질)"),": 100% 고정 (불량·재작업 0 가정)"),
+        ideal.noPlan>0 && React.createElement("div",{className:"text-rose-500"},"⚠️ 계획수량(planQty) 미설정으로 P 분자에서 빠진 일지 "+ideal.noPlan+"건 — 설정에서 CT별 계획수량을 입력하면 정확해집니다")),
       // 수식 조정 토글
-      React.createElement("button",{onClick:()=>setSimShowFormula(v=>!v),className:"text-sm font-semibold text-violet-700"},(simShowFormula?'▼':'▶')+" 🧮 수식 전체 조정 (A·P·Q 공식)"),
-      simShowFormula && React.createElement("div",{className:"bg-white rounded-lg border border-violet-200 p-3"},
+      simView==='sim' && React.createElement("button",{onClick:()=>setSimShowFormula(v=>!v),className:"text-sm font-semibold text-violet-700"},(simShowFormula?'▼':'▶')+" 🧮 수식 전체 조정 (A·P·Q 공식)"),
+      simView==='sim' && simShowFormula && React.createElement("div",{className:"bg-white rounded-lg border border-violet-200 p-3"},
         React.createElement("div",{className:"flex items-center gap-2 mb-2"},
           React.createElement("div",{className:"flex gap-1"},['A','P','Q'].map(m=>React.createElement("button",{key:m,onClick:()=>setSimEditMetric(m),className:"px-2 py-0.5 rounded text-xs font-bold "+(simEditMetric===m?'bg-violet-600 text-white':'bg-slate-100 text-slate-600')},m))),
           React.createElement("span",{className:"text-xs text-slate-400 ml-auto"},"이 수식은 시뮬 탭에서만 적용")),
         fpart("num",simEditMetric+" 분자"),
         fpart("den",simEditMetric+" 분모")),
       // 비가동/불량/재작업
-      React.createElement("div",{className:"grid grid-cols-3 gap-3"},
+      React.createElement("div",{className:simView==='sim'?"grid grid-cols-3 gap-3":"grid grid-cols-1 gap-3"},
         React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
           React.createElement("div",{className:"font-bold text-slate-700 mb-1 text-sm"},"⏱️ 비가동"),
           React.createElement("p",{className:"text-xs text-slate-400 mb-2"},"계획↔비계획 · 제외(A영향)"),
@@ -13616,7 +13678,7 @@ ${question}`;
                 React.createElement("td",{className:"text-center"},React.createElement("button",{onClick:()=>cycMv(type,info.cat),className:"px-2 py-0.5 rounded font-semibold "+(cur==='계획'?'bg-indigo-100 text-indigo-700':'bg-orange-100 text-orange-700')+(mv?' ring-1 ring-violet-400':'')},cur+(mv?'*':''))),
                 React.createElement("td",{className:"text-center"},React.createElement("input",{type:"checkbox",checked:ex,onChange:()=>setSimExclDt(tSet(simExclDt,type))})));
             })))),
-        React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
+        simView==='sim' && React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
           React.createElement("div",{className:"font-bold text-slate-700 mb-1 text-sm"},"⚠️ 불량 ",React.createElement("span",{className:"text-xs font-normal text-slate-400"},"제외(Q영향)")),
           [{title:'스테이션',data:defSt,set:simExclDefSt,setter:setSimExclDefSt},{title:'대분류',data:defTy,set:simExclDefTy,setter:setSimExclDefTy},{title:'세부종류',data:defSub,set:simExclDefSub,setter:setSimExclDefSub}].map(grp=>
             React.createElement("div",{key:grp.title,className:"mb-2"},
@@ -13626,7 +13688,7 @@ ${question}`;
                 Object.entries(grp.data).map(([k,qty])=>{const ex=grp.set.has(k);
                   return React.createElement("button",{key:k,onClick:()=>grp.setter(tSet(grp.set,k)),className:"px-1.5 py-0.5 rounded text-xs border "+(ex?'bg-slate-100 text-slate-400 line-through border-slate-200':'bg-rose-50 text-rose-700 border-rose-200')},k+" ("+Math.round(qty)+")");
                 }))))),
-        React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
+        simView==='sim' && React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
           React.createElement("div",{className:"font-bold text-slate-700 mb-1 text-sm"},"🔧 재작업 ",React.createElement("span",{className:"text-xs font-normal text-slate-400"},"제외(Q영향)")),
           [{title:'스테이션',data:rwSt,set:simExclRwSt,setter:setSimExclRwSt},{title:'대분류',data:rwTy,set:simExclRwTy,setter:setSimExclRwTy},{title:'세부종류',data:rwSub,set:simExclRwSub,setter:setSimExclRwSub}].map(grp=>
             React.createElement("div",{key:grp.title,className:"mb-2"},
@@ -13637,7 +13699,7 @@ ${question}`;
                   return React.createElement("button",{key:k,onClick:()=>grp.setter(tSet(grp.set,k)),className:"px-1.5 py-0.5 rounded text-xs border "+(ex?'bg-slate-100 text-slate-400 line-through border-slate-200':'bg-cyan-50 text-cyan-700 border-cyan-200')},k+" ("+Math.round(qty)+")");
                 })))))),
       // 계산 내역
-      React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
+      simView==='sim' && React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
         React.createElement("div",{className:"font-bold text-slate-700 mb-2 text-sm"},"📊 계산 내역 (기준 → 시뮬)"),
         React.createElement("div",{className:"grid grid-cols-4 gap-2 text-xs"},
           React.createElement("div",{className:"bg-slate-50 rounded p-2"},"계획비가동 ",React.createElement("b",null,Math.round(base.plannedDt)),"→",React.createElement("b",{className:"text-violet-700"},Math.round(sim.plannedDt)),"분"),
