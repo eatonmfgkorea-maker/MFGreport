@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V064</title>
+  <title>MFG Report V065</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,9 +299,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V064',
+  v: 'V065',
   d: '2026-08-04',
-  items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿(CT그룹·아이템 시트) 엑셀 업로드 및 결과 내보내기', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
+  items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿 내려받기 → 수정 → 올리기 방식 (현재 등록된 CT·수량이 그대로 담겨 나옴)', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
   v: 'V062',
   d: '2026-08-02',
@@ -5733,7 +5733,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V064"), React.createElement("div", {
+  }, "V065"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -10545,25 +10545,29 @@ ${question}`;
       e.target.value = '';
     };
 
-    const exportCu = () => {
-      if (typeof XLSX === 'undefined') { setCuMsg('엑셀 모듈 로딩 중입니다.'); return; }
-      const aoa = [['공정', ...CU_MONTHS.map(m => m + '월'), '연평균']];
-      data.forEach(r => {
-        const us = r.months.map(x => x.util);
-        const avg = us.reduce((a, x) => a + x, 0) / (us.filter(x => x > 0).length || 1);
-        aoa.push([r.proc + ' 가동률(%)', ...r.months.map(x => Number((x.util * 100).toFixed(1))), Number((avg * 100).toFixed(1))]);
-        aoa.push([r.proc + ' 수량', ...r.months.map(x => Math.round(x.qty)), Math.round(r.months.reduce((a, x) => a + x.qty, 0))]);
-        aoa.push([r.proc + ' 필요(h)', ...r.months.map(x => Math.round(x.total / 60)), Math.round(r.months.reduce((a, x) => a + x.total, 0) / 60)]);
-        aoa.push([r.proc + ' 가용(h)', ...r.months.map(x => Math.round(x.cap / 60)), Math.round(r.months.reduce((a, x) => a + x.cap, 0) / 60)]);
-      });
-      aoa.push([]);
-      aoa.push(['평일', ...cal.map(c => c.wd), tot.wd]);
-      aoa.push(['토요일', ...cal.map(c => c.sat), tot.sat]);
-      aoa.push(['공휴일', ...cal.map(c => c.hd), tot.hd]);
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const downloadTemplate = () => {
+      if (typeof XLSX === 'undefined') { setCuMsg('엑셀 모듈 로딩 중입니다. 잠시 후 다시 시도하세요.'); return; }
+      const G_COLS = ['라인', '그룹명', '공정', '기준인원', '인원', '작업시간(분)'].concat(CU_MONTHS.map(m => m + '월_생산량'));
+      const I_COLS = ['라인', '아이템명', '공정', 'CT그룹명', '교체수량', '교체CT(분)']
+        .concat(CU_MONTHS.map(m => m + '월_수량')).concat(CU_MONTHS.map(m => m + '월_불량률'));
+      const groups = (cuData.groups || []);
+      const items = (cuData.items || []);
+      const toAoa = (cols, rows) => [cols].concat(rows.map(r => cols.map(c => {
+        const v = r[c];
+        return v === undefined || v === null ? '' : v;
+      })));
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'CapacityUtilization');
-      XLSX.writeFile(wb, `CapacityUtilization_${cuSection}_${cuYear}.xlsx`);
+      const wsG = XLSX.utils.aoa_to_sheet(toAoa(G_COLS, groups));
+      wsG['!cols'] = G_COLS.map((c, i) => ({ wch: i < 3 ? 14 : 12 }));
+      XLSX.utils.book_append_sheet(wb, wsG, 'CT그룹');
+      const wsI = XLSX.utils.aoa_to_sheet(toAoa(I_COLS, items));
+      wsI['!cols'] = I_COLS.map((c, i) => ({ wch: i < 4 ? 18 : 12 }));
+      XLSX.utils.book_append_sheet(wb, wsI, '아이템');
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      XLSX.writeFile(wb, `CT그룹_아이템_템플릿_${stamp}.xlsx`);
+      setCuMsg(groups.length || items.length
+        ? `현재 등록된 CT그룹 ${groups.length}건 · 아이템 ${items.length}건을 내려받았습니다. 수정 후 다시 올리면 반영됩니다.`
+        : '빈 템플릿을 내려받았습니다. 내용을 채워서 올려주세요.');
     };
 
     return React.createElement("div", { className: "space-y-3" },
@@ -10590,13 +10594,13 @@ ${question}`;
         React.createElement("div", { className: "flex-1" }),
         React.createElement("label", {
           className: "px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-lg cursor-pointer"
-        }, "템플릿 불러오기", React.createElement("input", {
+        }, "템플릿 올리기", React.createElement("input", {
           type: "file", accept: ".xlsx", className: "hidden", onChange: loadTemplate
         })),
         React.createElement("button", {
-          onClick: exportCu,
-          className: "px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg"
-        }, "엑셀")),
+          onClick: downloadTemplate,
+          className: "px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg"
+        }, "템플릿 내려받기")),
       React.createElement("div", { className: "px-1 text-[11px] text-slate-400" },
         (cuData.items || []).length
           ? `CT 템플릿 ${(cuData.items || []).length}건 · 근무일 수정 ${Object.keys(cuOverrides).length}일 — 공유저장소에 자동 저장되어 모든 사용자가 함께 사용합니다`
@@ -10759,7 +10763,8 @@ ${question}`;
         React.createElement("div", null, "\u00B7 \uD544\uC694\uC2DC\uAC04 = \u03A3(\uC544\uC774\uD15C \uC218\uB7C9 \u00F7 CT\uADF8\uB8F9 \uC2DC\uAC04\uB2F9 \uB2A5\uB825) + \uAD50\uCCB4\uC2DC\uAC04"),
         React.createElement("div", null, "\u00B7 \uAC00\uB3D9\uB960 = \uD544\uC694\uC2DC\uAC04 \u00F7 \uAC00\uC6A9\uC2DC\uAC04"),
         React.createElement("div", null, "\u00B7 \uACF5\uC815\uBA85\uC744 \uD074\uB9AD\uD558\uBA74 \uC544\uC774\uD15C\uBCC4 \uC218\uB7C9\uC774 \uD3BC\uCE5C\uB2E4"),
-        React.createElement("div", null, "\u00B7 CT \uD15C\uD50C\uB9BF\uACFC \uADFC\uBB34\uC77C \uC124\uC815\uC740 \uACF5\uC720\uC800\uC7A5\uC18C\uC5D0 \uC800\uC7A5\uB418\uC5B4 \uBAA8\uB4E0 \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC801\uC6A9\uB429\uB2C8\uB2E4")));
+        React.createElement("div", null, "\u00B7 CT \uD15C\uD50C\uB9BF\uACFC \uADFC\uBB34\uC77C \uC124\uC815\uC740 \uACF5\uC720\uC800\uC7A5\uC18C\uC5D0 \uC800\uC7A5\uB418\uC5B4 \uBAA8\uB4E0 \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC801\uC6A9\uB429\uB2C8\uB2E4"),
+        React.createElement("div", null, "\u00B7 \u00AB\uD15C\uD50C\uB9BF \uB0B4\uB824\uBC1B\uAE30\u00BB \u2192 \uC5D1\uC140\uC5D0\uC11C \uC218\uC815 \u2192 \u00AB\uD15C\uD50C\uB9BF \uC62C\uB9AC\uAE30\u00BB \uC21C\uC11C\uB85C \uAD00\uB9AC\uD569\uB2C8\uB2E4")));
   })(), activeTab === 'tool' && (tcpData || feData) && (() => {
     const toolLines = (() => {
       if (toolSection === 'TCP') return ['1PC', '2PC', 'Nospin'];
