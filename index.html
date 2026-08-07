@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V073</title>
+  <title>MFG Report V074</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V073',
+  v: 'V074',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -2531,6 +2531,10 @@ function App() {
   const saveReviewTargets = next => { setReviewTargets(next); try { localStorage.setItem('mfg_review_targets', JSON.stringify(next)); } catch {} };
   const saveReviewNotes = next => { setReviewNotes(next); try { localStorage.setItem('mfg_review_notes', JSON.stringify(next)); } catch {} };
   const saveReviewHolidays = next => { setReviewHolidays(next); try { localStorage.setItem('mfg_review_holidays', JSON.stringify(next)); } catch {} };
+  const [reviewJig, setReviewJig] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_jig') || '{}'); } catch { return {}; } });
+  const [reviewJigNotes, setReviewJigNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_jignotes') || '{}'); } catch { return {}; } });
+  const saveReviewJig = next => { setReviewJig(next); try { localStorage.setItem('mfg_review_jig', JSON.stringify(next)); } catch {} };
+  const saveReviewJigNotes = next => { setReviewJigNotes(next); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(next)); } catch {} };
   const [prSubTab, setPrSubTab] = useState('calendar');
   const [prSection, setPrSection] = useState('TCP');
   const [prMonth, setPrMonth] = useState('');
@@ -2809,6 +2813,8 @@ function App() {
             reviewTargets,
             reviewNotes,
             reviewHolidays,
+            reviewJig,
+            reviewJigNotes,
             fePlanRaw: readFePlanRaw()
           }
         };
@@ -2822,7 +2828,7 @@ function App() {
       } catch {}
     }, 3000);
     return () => clearTimeout(timer);
-  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, cuOverrides, cuDataByYear, reviewChanges, reviewTargets, reviewNotes, reviewHolidays]);
+  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, cuOverrides, cuDataByYear, reviewChanges, reviewTargets, reviewNotes, reviewHolidays, reviewJig, reviewJigNotes]);
   const [expandedNotes, setExpandedNotes] = useState({});
   const toggleNote = key => setExpandedNotes(prev => ({
     ...prev,
@@ -3760,6 +3766,8 @@ ${question}`;
           reviewTargets,
           reviewNotes,
           reviewHolidays,
+          reviewJig,
+          reviewJigNotes,
           fePlanRaw: readFePlanRaw()
         }
       };
@@ -3864,6 +3872,8 @@ ${question}`;
         if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfg_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
         if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfg_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
         if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfg_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
+        if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfg_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
+        if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
         if (d.productionPlan !== undefined) {
           setProductionPlan(d.productionPlan || {});
           try {
@@ -4052,6 +4062,8 @@ ${question}`;
             if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfg_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
             if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfg_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
             if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfg_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
+            if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfg_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
+            if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
             if (d.productionPlan !== undefined) {
               // 자동로드는 병합: 드라이브 값 우선, 로컬에만 있는 계획(자동저장분)은 보존
               setProductionPlan(prev => {
@@ -5825,7 +5837,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V073"), React.createElement("div", {
+  }, "V074"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13747,12 +13759,13 @@ ${question}`;
   })(), activeTab === 'prodreview' && (() => {
     const h = React.createElement;
     const pad2 = n => String(n).padStart(2, '0');
+    const normR = s => String(s || '').toUpperCase().replace(/[^A-Z0-9가-힣]/g, '');
     const secData = prSection === 'TCP' ? tcpData : feData;
     const ctBaseR = secData?.settings?.[prSection]?.ctBaseMinutes || 435;
     const itemsDefR = secData?.settings?.[prSection]?.items || [];
     const feRaw = readFePlanRaw();
     const feRows = Array.isArray(feRaw?.rows) ? feRaw.rows : [];
-    // ===== 달력 데이터 구성: months / lines / dayMap(line|date -> {shift->[{name,sysItem,qty}]}) =====
+    // ===== 달력 데이터: 데이터 탭에서 업로드된 생산계획(productionPlan/FE raw) 기반 =====
     const monthSet = new Set();
     if (prSection === 'TCP') Object.keys(productionPlan).forEach(k => { if (k.startsWith('TCP|')) monthSet.add(k.split('|')[3].slice(0, 7)); });
     else feRows.forEach(r => monthSet.add(String(r.date || '').slice(0, 7)));
@@ -13780,17 +13793,19 @@ ${question}`;
       feRows.forEach(r => {
         const ds = String(r.date || '');
         if (ds.slice(0, 7) !== curMonth) return;
-        const sysItem = planItemMapping['FE|' + r.pno] || null;
+        let sysItem = planItemMapping['FE|' + r.pno] || null;
+        if (!sysItem) { const m = itemsDefR.find(i => normR(i.item) === normR(r.name) || normR(i.item) === normR(r.pno)); if (m) sysItem = m.item; }
         addEntry(r.line, ds, r.shift || '주간', r.name || r.pno, sysItem, Math.round(r.qty || 0));
       });
     }
     const tcpOrder = ['1PC', '2PC', 'Nospin', '세척', 'Pack', 'Y9'];
     const linesR = prSection === 'TCP' ? tcpOrder.filter(l => lineSet.includes(l)).concat(lineSet.filter(l => !tcpOrder.includes(l))) : lineSet;
     const shownLines = prLine === '전체' ? linesR : linesR.filter(l => l === prLine);
-    // CT 매칭 (workers 최대 편성 기준) — 투입시간·인원 산출
+    // CT 매칭: 아이템명 정확 → 정규화 매칭 폴백, workers 최대 편성
     const ctBest = (sysItem, dateStr) => {
       if (!sysItem) return null;
-      const it = itemsDefR.find(i => i.item === sysItem);
+      let it = itemsDefR.find(i => i.item === sysItem);
+      if (!it) it = itemsDefR.find(i => normR(i.item) === normR(sysItem));
       if (!it || !Array.isArray(it.ct)) return null;
       const td = new Date(dateStr);
       let best = null;
@@ -13803,23 +13818,23 @@ ${question}`;
     };
     const daySummary = (line, date) => {
       const rec = dayMap[line + '|' + date] || {};
-      const shifts = prShift === '전체' ? Object.keys(rec) : [prShift];
-      let items = [], minutes = 0, workers = 0, hasCT = false;
-      shifts.forEach(s => (rec[s] || []).forEach(e => {
+      const shiftKeys = (prShift === '전체' ? Object.keys(rec) : [prShift]).filter(s => (rec[s] || []).length);
+      let items = [], minutes = 0, workers = 0;
+      shiftKeys.forEach(s => (rec[s] || []).forEach(e => {
         items.push(e);
-        const c = ctBest(e.sysItem, date);
-        if (c && c.baseQty > 0) { minutes += e.qty / c.baseQty * ctBaseR; workers = Math.max(workers, c.workers || 0); hasCT = true; }
+        const c = ctBest(e.sysItem || e.name, date);
+        if (c && c.baseQty > 0) { minutes += e.qty / c.baseQty * ctBaseR; workers = Math.max(workers, c.workers || 0); }
       }));
-      return { items, minutes, workers, hasCT };
+      const threshold = Math.max(1, shiftKeys.length) * 480;
+      return { items, minutes, workers, over: minutes > threshold };
     };
-    // 월 주차 구성 (일~토)
     const weeksOf = ym => {
       if (!ym) return [];
       const [Y, M] = ym.split('-').map(Number);
       const first = new Date(Y, M - 1, 1);
-      const start = new Date(first); start.setDate(1 - first.getDay());
+      const start0 = new Date(first); start0.setDate(1 - first.getDay());
       const weeks = [];
-      let cur = new Date(start);
+      let cur = new Date(start0);
       while (true) {
         const wk = [];
         for (let i = 0; i < 7; i++) { wk.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
@@ -13838,13 +13853,12 @@ ${question}`;
       saveReviewHolidays(next);
     };
     const isHoliday = date => !!reviewHolidays[prSection + '|' + date];
-    // ===== 달력 렌더 =====
-    const renderLineCal = line => h("div", { key: line, className: "bg-white rounded-lg border border-slate-200 p-4 mb-4 pr-cal" },
+    const renderLineCal = line => h("div", { key: line, className: "bg-white rounded-lg border border-slate-200 p-4 mb-4" },
       h("div", { className: "flex items-center gap-2 mb-2" },
         h("span", { className: "w-2 h-2 rounded-full bg-blue-600 inline-block" }),
         h("span", { className: "font-bold text-slate-800" }, line, " 생산계획"),
         h("span", { className: "text-xs text-slate-400" }, curMonth.replace('-', '년 ') + '월 · ' + prShift)),
-      h("div", { className: "text-[11px] text-slate-400 mb-1" }, "🟦 정시 · 🟧 잔업(투입 8시간 초과) · 날짜 클릭 = 휴일 표시(빨강) 토글"),
+      h("div", { className: "text-[11px] text-slate-400 mb-1" }, "🟦 정시 · 🟧 잔업(교대당 투입 8시간 초과) · 날짜 클릭 = 휴일 표시(빨강) 토글"),
       h("table", { className: "w-full border-collapse text-xs", style: { tableLayout: 'fixed' } },
         h("thead", null, h("tr", null, ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map((d, i) =>
           h("th", { key: d, className: "border border-slate-300 py-1 " + (i === 0 ? 'bg-rose-100 text-rose-600' : i === 6 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600') }, d)))),
@@ -13853,7 +13867,7 @@ ${question}`;
           const ds = fmtYMD(d);
           const hol = isHoliday(ds);
           const sum = inMonth ? daySummary(line, ds) : { items: [] };
-          const badge = sum.hasCT && sum.items.length ? (sum.minutes > 480 ? h("span", { className: "float-right text-[10px] px-1 rounded bg-orange-100 text-orange-600 border border-orange-300 font-bold" }, "잔업") : h("span", { className: "float-right text-[10px] px-1 rounded bg-blue-100 text-blue-700 border border-blue-300 font-bold" }, "정시")) : null;
+          const badge = !hol && sum.items.length ? (sum.over ? h("span", { className: "float-right text-[10px] px-1 rounded bg-orange-100 text-orange-600 border border-orange-300 font-bold" }, "잔업") : h("span", { className: "float-right text-[10px] px-1 rounded bg-blue-100 text-blue-700 border border-blue-300 font-bold" }, "정시")) : null;
           const bg = hol ? 'bg-rose-200/70' : di === 0 ? 'bg-rose-50' : di === 6 ? 'bg-blue-50' : 'bg-white';
           return h("td", { key: di, className: "border border-slate-300 align-top p-1 " + bg, style: { height: '5.6rem' } },
             inMonth && h("div", null,
@@ -13863,7 +13877,7 @@ ${question}`;
                 h("span", { className: "truncate text-slate-700", style: { maxWidth: '65%' } }, e.name),
                 h("span", { className: "text-blue-700 font-semibold" }, e.qty.toLocaleString()))),
               !hol && prShowItems && sum.items.length > 4 && h("div", { className: "text-[10px] text-slate-400" }, "+" + (sum.items.length - 4) + "건")));
-        })))))); 
+        }))))));
     const printCalendar = () => {
       const w = window.open('', '_blank');
       if (!w) return;
@@ -13880,7 +13894,7 @@ ${question}`;
             const s = daySummary(line, ds);
             const hol = isHoliday(ds);
             let c = '<b' + (hol ? ' style="color:#dc2626"' : '') + '>' + ds.slice(5).replace('-', '/') + '</b>';
-            if (!hol && s.hasCT && s.items.length) c += ' <span style="font-size:9px">' + (s.minutes > 480 ? '[잔업]' : '[정시]') + '</span>';
+            if (!hol && s.items.length) c += ' <span style="font-size:9px">' + (s.over ? '[잔업]' : '[정시]') + '</span>';
             if (!hol && s.workers) c += '<div style="color:#64748b;font-size:9px">인원 ' + s.workers + '</div>';
             if (!hol) s.items.forEach(e => { c += '<div>' + e.name + ' <b style="float:right">' + e.qty.toLocaleString() + '</b></div>'; });
             return '<td valign=top style="height:70px;' + (hol ? 'background:#fecaca' : d.getDay() === 0 ? 'background:#fff1f2' : d.getDay() === 6 ? 'background:#eff6ff' : '') + '">' + c + '</td>';
@@ -13892,12 +13906,14 @@ ${question}`;
       w.document.close();
       setTimeout(() => w.print(), 300);
     };
-    // ===== 계획 변경 데이터 =====
+    // ===== 계획 변경: 같은 날+같은 사유+같은 부서 = 1건 =====
     const tKey = prSection + '|' + prYear;
+    const nKey = prSection + '|' + prYear + '-' + pad2(prSelMonth);
     const targetVal = reviewTargets[tKey] !== undefined ? reviewTargets[tKey] : 4;
-    const noteVal = reviewNotes[tKey] || { action: '', support: '' };
+    const noteVal = reviewNotes[nKey] || { action: '', support: '' };
     const yearChanges = reviewChanges.filter(c => c.section === prSection && String(c.date || '').slice(0, 4) === String(prYear));
-    const monthCnt = Array.from({ length: 12 }, (_, i) => yearChanges.filter(c => parseInt(String(c.date).slice(5, 7)) === i + 1).length);
+    const uniqCount = arr => new Set(arr.map(c => String(c.date) + '|' + String(c.reason || '').trim() + '|' + String(c.dept || '').trim())).size;
+    const monthCnt = Array.from({ length: 12 }, (_, i) => uniqCount(yearChanges.filter(c => parseInt(String(c.date).slice(5, 7)) === i + 1)));
     const selChanges = yearChanges.filter(c => parseInt(String(c.date).slice(5, 7)) === prSelMonth);
     const maxCnt = Math.max(6, targetVal + 2, ...monthCnt);
     const addChangeRow = () => {
@@ -13941,27 +13957,109 @@ ${question}`;
       const w = window.open('', '_blank');
       if (!w) return;
       let body = '<h2>' + prSection + ' 생산계획 변경 현황 · ' + prYear + '년</h2>';
-      body += '<p>목표(Target): 월 ' + targetVal + '회</p>';
-      body += '<table border=1 cellspacing=0 cellpadding=4 style="border-collapse:collapse;font-size:11px"><tr><th>월</th>' + monthCnt.map((_, i) => '<th>' + (i + 1) + '월</th>').join('') + '</tr>';
+      body += '<p>목표(Target): 월 ' + targetVal + '회 · 집계 기준: 같은 날짜+사유+부서 = 1건</p>';
+      body += '<table border=1 cellspacing=0 cellpadding=4 style="border-collapse:collapse;font-size:11px"><tr><th></th>' + monthCnt.map((_, i) => '<th>' + (i + 1) + '월</th>').join('') + '</tr>';
       body += '<tr><td>변경횟수</td>' + monthCnt.map(c => '<td align=center' + (c > targetVal ? ' style="color:#dc2626;font-weight:bold"' : '') + '>' + c + '</td>').join('') + '</tr></table>';
       body += '<h3>' + prSelMonth + '월 변경 내역</h3>';
       body += '<table border=1 cellspacing=0 cellpadding=4 style="border-collapse:collapse;font-size:11px;width:100%"><tr><th>변경일자</th><th>변경사유</th><th>부서</th><th>세부내용</th><th>업체</th><th>Part</th></tr>';
       selChanges.forEach(c => { body += '<tr><td>' + c.date + '</td><td>' + c.reason + '</td><td>' + c.dept + '</td><td>' + c.detail + '</td><td>' + c.vendor + '</td><td>' + c.part + '</td></tr>'; });
       body += '</table>';
-      if (noteVal.action) body += '<h3>Action</h3><p>' + noteVal.action.replace(/\n/g, '<br>') + '</p>';
-      if (noteVal.support) body += '<h3>Support needed</h3><p>' + noteVal.support.replace(/\n/g, '<br>') + '</p>';
+      if (noteVal.action) body += '<h3>Action (' + prSelMonth + '월)</h3><p>' + noteVal.action.replace(/\n/g, '<br>') + '</p>';
+      if (noteVal.support) body += '<h3>Support needed (' + prSelMonth + '월)</h3><p>' + noteVal.support.replace(/\n/g, '<br>') + '</p>';
       w.document.write('<html><head><title>계획변경 ' + prYear + '</title><style>body{font-family:Malgun Gothic,sans-serif}</style></head><body>' + body + '</body></html>');
+      w.document.close();
+      setTimeout(() => w.print(), 300);
+    };
+    // ===== Tool 교체 (Jig change) =====
+    const jigLines = prSection === 'TCP' ? ['1PC', '2PC'] : ['FE'];
+    const jigKey = line => prSection + '|' + line + '|' + prYear;
+    const jigNoteKey = line => prSection + '|' + line + '|' + prYear + '-' + pad2(prSelMonth);
+    const emptyJig = () => ({ goal: Array(12).fill(''), mps: Array(12).fill(''), act: Array(12).fill('') });
+    const jigData = line => { const d = reviewJig[jigKey(line)]; return d && d.goal ? d : emptyJig(); };
+    const setJigVal = (line, row, mi, val) => {
+      const cur = jigData(line);
+      const next = { goal: [...cur.goal], mps: [...cur.mps], act: [...cur.act] };
+      next[row][mi] = val;
+      saveReviewJig({ ...reviewJig, [jigKey(line)]: next });
+    };
+    const jigNum = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const jigTotal = arr => { const ns = arr.map(jigNum).filter(n => n !== null); return ns.length ? Math.round(ns.reduce((a, b) => a + b, 0) * 100) / 100 : ''; };
+    const renderJigLine = line => {
+      const d = jigData(line);
+      const nums = [...d.goal, ...d.mps, ...d.act].map(jigNum).filter(n => n !== null);
+      const jMax = Math.max(1, ...(nums.length ? nums : [1]));
+      const jn = reviewJigNotes[jigNoteKey(line)] || { cause: '', support: '' };
+      const setJn = (field, val) => saveReviewJigNotes({ ...reviewJigNotes, [jigNoteKey(line)]: { ...jn, [field]: val } });
+      return h("div", { key: line, className: "bg-white rounded-lg border border-slate-200 p-4" },
+        h("div", { className: "font-bold text-slate-700 mb-3" }, line + " — # of Jig change"),
+        h("div", { className: "relative", style: { height: '12rem' } },
+          h("div", { className: "absolute inset-x-0 bottom-5 flex items-end justify-around", style: { height: '10rem' } },
+            Array.from({ length: 12 }, (_, i) => {
+              const gv = jigNum(d.goal[i]), mv = jigNum(d.mps[i]), av = jigNum(d.act[i]);
+              return h("div", { key: i, className: "relative flex items-end justify-center gap-0.5", style: { width: '7%', height: '10rem' } },
+                gv !== null && h("div", { className: "absolute left-0 right-0 border-t-2 border-red-500 z-10", style: { bottom: (gv / jMax * 10) + 'rem' } }),
+                h("div", { className: "bg-sky-300 rounded-t", style: { width: '38%', height: (mv !== null ? mv / jMax * 10 : 0) + 'rem', minHeight: mv !== null && mv > 0 ? '0.15rem' : '0' }, title: 'MPS ' + (mv ?? '-') }),
+                h("div", { className: "bg-blue-700 rounded-t", style: { width: '38%', height: (av !== null ? av / jMax * 10 : 0) + 'rem', minHeight: av !== null && av > 0 ? '0.15rem' : '0' }, title: 'Act. ' + (av ?? '-') }));
+            })),
+          h("div", { className: "absolute inset-x-0 bottom-0 flex justify-around" },
+            Array.from({ length: 12 }, (_, i) => h("span", { key: i, onClick: () => setPrSelMonth(i + 1), className: "text-xs cursor-pointer " + (prSelMonth === i + 1 ? 'font-bold text-blue-700' : 'text-slate-500'), style: { width: '7%', textAlign: 'center' } }, (i + 1) + '월')))),
+        h("div", { className: "flex items-center gap-3 text-xs text-slate-500 mb-3" },
+          h("span", { className: "inline-flex items-center gap-1" }, h("span", { className: "w-3 h-2 bg-sky-300 inline-block rounded-sm" }), "MPS"),
+          h("span", { className: "inline-flex items-center gap-1" }, h("span", { className: "w-3 h-2 bg-blue-700 inline-block rounded-sm" }), "Act."),
+          h("span", { className: "inline-flex items-center gap-1" }, h("span", { className: "w-4 border-t-2 border-red-500 inline-block" }), prYear + " Goal")),
+        h("div", { className: "mb-2" },
+          h("div", { className: "font-bold text-blue-800 text-sm mb-1" }, "Cause ", h("span", { className: "text-xs font-normal text-slate-400" }, prSelMonth + "월")),
+          h("textarea", { value: jn.cause, onChange: e => setJn('cause', e.target.value), rows: 3, placeholder: "이 달의 Cause 입력...", className: "w-full border rounded p-2 text-sm" })),
+        h("div", null,
+          h("div", { className: "font-bold text-blue-800 text-sm mb-1" }, "Support needed ", h("span", { className: "text-xs font-normal text-slate-400" }, prSelMonth + "월")),
+          h("textarea", { value: jn.support, onChange: e => setJn('support', e.target.value), rows: 3, placeholder: "이 달의 Support needed 입력...", className: "w-full border rounded p-2 text-sm" })));
+    };
+    const renderJigTable = line => {
+      const d = jigData(line);
+      const rows = [['goal', prYear + ' Goal'], ['mps', 'MPS'], ['act', 'Act.']];
+      return h("div", { key: line, className: "mb-4" },
+        h("div", { className: "font-bold text-slate-700 text-sm mb-1" }, line),
+        h("div", { className: "overflow-x-auto" },
+          h("table", { className: "w-full border-collapse text-xs", style: { minWidth: '56rem' } },
+            h("thead", null, h("tr", { className: "bg-slate-100 text-slate-600" },
+              h("th", { className: "border border-slate-200 px-2 py-1", style: { width: '6rem' } }, ""),
+              Array.from({ length: 12 }, (_, i) => h("th", { key: i, className: "border border-slate-200 px-1 py-1" }, (i + 1) + '월')),
+              h("th", { className: "border border-slate-200 px-1 py-1", style: { width: '4rem' } }, "Total"))),
+            h("tbody", null, rows.map(([rk, label]) => h("tr", { key: rk },
+              h("td", { className: "border border-slate-200 px-2 py-1 font-semibold bg-slate-50 whitespace-nowrap" }, label),
+              Array.from({ length: 12 }, (_, i) => h("td", { key: i, className: "border border-slate-200 p-0.5" },
+                h("input", { type: "number", step: "any", value: d[rk][i], onChange: e => setJigVal(line, rk, i, e.target.value), className: "w-full px-1 py-0.5 text-center border-0 focus:ring-1 focus:ring-blue-400 rounded text-xs" }))),
+              h("td", { className: "border border-slate-200 px-1 py-1 text-center font-bold bg-slate-50" }, jigTotal(d[rk]))))))));
+    };
+    const printJig = () => {
+      const w = window.open('', '_blank');
+      if (!w) return;
+      let body = '<h2>' + prSection + ' Tool(Jig) 교체 현황 · ' + prYear + '년</h2>';
+      jigLines.forEach(line => {
+        const d = jigData(line);
+        const jn = reviewJigNotes[jigNoteKey(line)] || {};
+        body += '<h3>' + line + ' — # of Jig change</h3>';
+        body += '<table border=1 cellspacing=0 cellpadding=4 style="border-collapse:collapse;font-size:11px"><tr><th></th>' + Array.from({ length: 12 }, (_, i) => '<th>' + (i + 1) + '월</th>').join('') + '<th>Total</th></tr>';
+        [['goal', prYear + ' Goal'], ['mps', 'MPS'], ['act', 'Act.']].forEach(([rk, label]) => {
+          body += '<tr><td><b>' + label + '</b></td>' + d[rk].map(v => '<td align=center>' + (v === '' ? '' : v) + '</td>').join('') + '<td align=center><b>' + jigTotal(d[rk]) + '</b></td></tr>';
+        });
+        body += '</table>';
+        if (jn.cause) body += '<p><b>Cause (' + prSelMonth + '월):</b> ' + String(jn.cause).replace(/\n/g, '<br>') + '</p>';
+        if (jn.support) body += '<p><b>Support needed (' + prSelMonth + '월):</b> ' + String(jn.support).replace(/\n/g, '<br>') + '</p>';
+      });
+      w.document.write('<html><head><title>Tool 교체 ' + prYear + '</title><style>body{font-family:Malgun Gothic,sans-serif}</style></head><body>' + body + '</body></html>');
       w.document.close();
       setTimeout(() => w.print(), 300);
     };
     // ===== 렌더 =====
     return h("div", { className: "space-y-4" },
-      h("div", { className: "flex items-center gap-2" },
+      h("div", { className: "flex items-center gap-2 flex-wrap" },
         h("div", { className: "flex gap-1 bg-slate-100 rounded-lg p-0.5" },
           h("button", { onClick: () => setPrSubTab('calendar'), className: "px-4 py-1.5 rounded-md text-sm font-semibold " + (prSubTab === 'calendar' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500') }, "📆 생산계획 달력"),
-          h("button", { onClick: () => setPrSubTab('changes'), className: "px-4 py-1.5 rounded-md text-sm font-semibold " + (prSubTab === 'changes' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500') }, "🔁 계획 변경 관리")),
+          h("button", { onClick: () => setPrSubTab('changes'), className: "px-4 py-1.5 rounded-md text-sm font-semibold " + (prSubTab === 'changes' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500') }, "🔁 계획 변경 관리"),
+          h("button", { onClick: () => setPrSubTab('jig'), className: "px-4 py-1.5 rounded-md text-sm font-semibold " + (prSubTab === 'jig' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500') }, "🔧 Tool 교체 현황")),
         h("div", { className: "flex gap-1 ml-2" }, ['TCP', 'FE'].map(s => h("button", { key: s, onClick: () => { setPrSection(s); setPrLine('전체'); setPrMonth(''); }, className: "px-3 py-1.5 rounded text-sm font-bold border " + (prSection === s ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300') }, s)))),
-      // ---------- 달력 서브탭 ----------
+      // ---------- 달력 ----------
       prSubTab === 'calendar' && h("div", null,
         h("div", { className: "bg-white rounded-lg border border-slate-200 p-3 mb-4 flex flex-wrap items-center gap-3" },
           h("span", { className: "text-sm font-semibold text-slate-600" }, "월 선택"),
@@ -13977,14 +14075,18 @@ ${question}`;
           h("button", { onClick: printCalendar, className: "ml-auto px-3 py-1.5 border border-blue-300 text-blue-700 rounded text-sm font-semibold hover:bg-blue-50" }, "🖨 인쇄 / PDF")),
         monthsR.length === 0 && h("div", { className: "text-center py-10 text-slate-400" }, prSection + " 생산계획 데이터가 없습니다. 데이터 탭에서 생산계획을 업로드하세요."),
         shownLines.map(renderLineCal)),
-      // ---------- 계획 변경 서브탭 ----------
+      // ---------- 계획 변경 ----------
       prSubTab === 'changes' && h("div", null,
         h("div", { className: "bg-white rounded-lg border border-slate-200 p-3 mb-4 flex flex-wrap items-center gap-3" },
           h("span", { className: "text-sm font-semibold text-slate-600" }, "년도"),
           h("select", { value: prYear, onChange: e => setPrYear(parseInt(e.target.value)), className: "px-2 py-1 border rounded text-sm" },
             [prYear - 1, prYear, prYear + 1].filter((v, i, a) => a.indexOf(v) === i).map(y => h("option", { key: y, value: y }, y + '년'))),
+          h("span", { className: "text-sm font-semibold text-slate-600" }, "월"),
+          h("select", { value: prSelMonth, onChange: e => setPrSelMonth(parseInt(e.target.value)), className: "px-2 py-1 border rounded text-sm" },
+            Array.from({ length: 12 }, (_, i) => h("option", { key: i, value: i + 1 }, (i + 1) + '월'))),
           h("span", { className: "text-sm font-semibold text-slate-600 ml-2" }, "목표(Target)"),
           h("input", { type: "number", value: targetVal, min: 0, onChange: e => saveReviewTargets({ ...reviewTargets, [tKey]: parseInt(e.target.value) || 0 }), className: "w-16 px-2 py-1 border rounded text-sm" }),
+          h("span", { className: "text-xs text-slate-400" }, "같은 날짜·사유·부서는 1건 집계 · Action/Support는 월별 저장"),
           h("button", { onClick: printChanges, className: "ml-auto px-3 py-1.5 border border-blue-300 text-blue-700 rounded text-sm font-semibold hover:bg-blue-50" }, "🖨 인쇄 / PDF")),
         h("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4" },
           h("div", { className: "lg:col-span-2 bg-white rounded-lg border border-slate-200 p-4" },
@@ -13997,16 +14099,16 @@ ${question}`;
                   c > 0 && h("span", { className: "text-xs font-bold " + (c > targetVal ? 'text-red-600' : 'text-slate-600') }, c),
                   h("div", { className: "w-full rounded-t " + (c > targetVal ? 'bg-red-400' : 'bg-blue-500') + (prSelMonth === i + 1 ? ' ring-2 ring-blue-700' : ' opacity-80 group-hover:opacity-100'), style: { height: (c / maxCnt * 13) + 'rem', minHeight: c > 0 ? '0.2rem' : '0' } }),
                   h("span", { className: "text-xs mt-1 " + (prSelMonth === i + 1 ? 'font-bold text-blue-700' : 'text-slate-500') }, (i + 1) + '월'))))),
-            h("div", { className: "text-xs text-slate-400 mt-2 text-center" }, "막대(월)를 클릭하면 그 달의 변경 내역이 아래 표시됩니다")),
+            h("div", { className: "text-xs text-slate-400 mt-2 text-center" }, "막대(월)를 클릭하면 그 달의 변경 내역·Action이 아래 표시됩니다")),
           h("div", { className: "bg-white rounded-lg border border-slate-200 p-4 space-y-3" },
-            h("div", null, h("div", { className: "font-bold text-slate-700 text-sm mb-1" }, "Action"),
-              h("textarea", { value: noteVal.action, onChange: e => saveReviewNotes({ ...reviewNotes, [tKey]: { ...noteVal, action: e.target.value } }), rows: 4, placeholder: "Action 입력...", className: "w-full border rounded p-2 text-sm" })),
-            h("div", null, h("div", { className: "font-bold text-slate-700 text-sm mb-1" }, "Support needed"),
-              h("textarea", { value: noteVal.support, onChange: e => saveReviewNotes({ ...reviewNotes, [tKey]: { ...noteVal, support: e.target.value } }), rows: 4, placeholder: "Support needed 입력...", className: "w-full border rounded p-2 text-sm" })))),
+            h("div", null, h("div", { className: "font-bold text-slate-700 text-sm mb-1" }, "Action ", h("span", { className: "text-xs font-normal text-slate-400" }, prYear + "년 " + prSelMonth + "월")),
+              h("textarea", { value: noteVal.action, onChange: e => saveReviewNotes({ ...reviewNotes, [nKey]: { ...noteVal, action: e.target.value } }), rows: 4, placeholder: "이 달의 Action 입력...", className: "w-full border rounded p-2 text-sm" })),
+            h("div", null, h("div", { className: "font-bold text-slate-700 text-sm mb-1" }, "Support needed ", h("span", { className: "text-xs font-normal text-slate-400" }, prYear + "년 " + prSelMonth + "월")),
+              h("textarea", { value: noteVal.support, onChange: e => saveReviewNotes({ ...reviewNotes, [nKey]: { ...noteVal, support: e.target.value } }), rows: 4, placeholder: "이 달의 Support needed 입력...", className: "w-full border rounded p-2 text-sm" })))),
         h("div", { className: "bg-white rounded-lg border border-slate-200 p-4" },
           h("div", { className: "flex items-center gap-2 mb-3 flex-wrap" },
             h("span", { className: "font-bold text-slate-700" }, "선택 월: " + prYear + '년 ' + prSelMonth + '월'),
-            h("span", { className: "text-xs text-slate-400" }, "· " + selChanges.length + "건"),
+            h("span", { className: "text-xs text-slate-400" }, "표시 " + selChanges.length + "건 · 집계 " + uniqCount(selChanges) + "건"),
             h("div", { className: "ml-auto flex gap-2" },
               h("button", { onClick: dlChangeTemplate, className: "px-3 py-1.5 border border-slate-300 rounded text-sm font-semibold text-slate-600 hover:bg-slate-50" }, "⬇ 엑셀 템플릿 받기"),
               h("label", { className: "px-3 py-1.5 border border-slate-300 rounded text-sm font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer" }, "⬆ 엑셀 업로드",
@@ -14024,7 +14126,22 @@ ${question}`;
                 h("td", { className: "border border-slate-200 p-1", style: { width: '7rem' } }, h("input", { value: c.vendor, onChange: e => updChange(c.id, 'vendor', e.target.value), placeholder: "업체", className: "w-full px-1 py-0.5 border rounded text-sm" })),
                 h("td", { className: "border border-slate-200 p-1", style: { width: '8rem' } }, h("input", { value: c.part, onChange: e => updChange(c.id, 'part', e.target.value), placeholder: "Part", className: "w-full px-1 py-0.5 border rounded text-sm" })),
                 h("td", { className: "border border-slate-200 p-1 text-center", style: { width: '3rem' } }, h("button", { onClick: () => delChange(c.id), className: "text-rose-500 hover:text-rose-700 text-sm font-bold" }, "✕")))))),
-          h("button", { onClick: addChangeRow, className: "mt-2 px-3 py-1.5 border border-dashed border-blue-400 text-blue-600 rounded text-sm font-semibold hover:bg-blue-50" }, "+ 행 추가"))));
+          h("button", { onClick: addChangeRow, className: "mt-2 px-3 py-1.5 border border-dashed border-blue-400 text-blue-600 rounded text-sm font-semibold hover:bg-blue-50" }, "+ 행 추가"))),
+      // ---------- Tool 교체 ----------
+      prSubTab === 'jig' && h("div", null,
+        h("div", { className: "bg-white rounded-lg border border-slate-200 p-3 mb-4 flex flex-wrap items-center gap-3" },
+          h("span", { className: "text-sm font-semibold text-slate-600" }, "년도"),
+          h("select", { value: prYear, onChange: e => setPrYear(parseInt(e.target.value)), className: "px-2 py-1 border rounded text-sm" },
+            [prYear - 1, prYear, prYear + 1].filter((v, i, a) => a.indexOf(v) === i).map(y => h("option", { key: y, value: y }, y + '년'))),
+          h("span", { className: "text-sm font-semibold text-slate-600" }, "월"),
+          h("select", { value: prSelMonth, onChange: e => setPrSelMonth(parseInt(e.target.value)), className: "px-2 py-1 border rounded text-sm" },
+            Array.from({ length: 12 }, (_, i) => h("option", { key: i, value: i + 1 }, (i + 1) + '월'))),
+          h("span", { className: "text-xs text-slate-400" }, "Cause/Support는 선택한 월별로 저장됩니다"),
+          h("button", { onClick: printJig, className: "ml-auto px-3 py-1.5 border border-blue-300 text-blue-700 rounded text-sm font-semibold hover:bg-blue-50" }, "🖨 인쇄 / PDF")),
+        h("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4" }, jigLines.map(renderJigLine)),
+        h("div", { className: "bg-white rounded-lg border border-slate-200 p-4" },
+          h("div", { className: "font-bold text-slate-700 mb-3" }, "데이터 입력 — 월별 값 (Goal / MPS / Act.)"),
+          jigLines.map(renderJigTable))));
   })(), activeTab === 'prodreport' && (tcpData || feData) && (() => {
     const empMap = {};
     [...(tcpData?.employees || []), ...(feData?.employees || [])].forEach(e => {
@@ -15478,6 +15595,8 @@ ${question}`;
               reviewTargets,
               reviewNotes,
               reviewHolidays,
+              reviewJig,
+              reviewJigNotes,
               fePlanRaw: readFePlanRaw()
             }
           };
@@ -15794,6 +15913,8 @@ ${question}`;
               reviewTargets,
               reviewNotes,
               reviewHolidays,
+              reviewJig,
+              reviewJigNotes,
               fePlanRaw: readFePlanRaw()
             }
           };
