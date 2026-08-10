@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V081</title>
+  <title>MFG Report V083</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V081',
+  v: 'V083',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -5838,7 +5838,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V081"), React.createElement("div", {
+  }, "V083"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13774,14 +13774,14 @@ ${question}`;
     const curMonth = monthsR.includes(prMonth) ? prMonth : (monthsR[monthsR.length - 1] || '');
     const lineSet = [];
     const dayMap = {};
-    const addEntry = (line, date, shift, name, sysItem, qty) => {
+    const addEntry = (line, date, shift, name, sysItem, qty, pno) => {
       if (!lineSet.includes(line)) lineSet.push(line);
       const key = line + '|' + date;
       if (!dayMap[key]) dayMap[key] = {};
       if (!dayMap[key][shift]) dayMap[key][shift] = [];
       const arr = dayMap[key][shift];
       const ex = arr.find(e => e.name === name);
-      if (ex) ex.qty += qty; else arr.push({ name, sysItem, qty });
+      if (ex) ex.qty += qty; else arr.push({ name, sysItem, qty, pno });
     };
     if (prSection === 'TCP') {
       Object.entries(productionPlan).forEach(([k, qty]) => {
@@ -13796,18 +13796,24 @@ ${question}`;
         if (ds.slice(0, 7) !== curMonth) return;
         let sysItem = planItemMapping['FE|' + r.pno] || null;
         if (!sysItem) { const m = itemsDefR.find(i => normR(i.item) === normR(r.name) || normR(i.item) === normR(r.pno)); if (m) sysItem = m.item; }
-        addEntry(r.line, ds, r.shift || '주간', r.name || r.pno, sysItem, Math.round(r.qty || 0));
+        addEntry(r.line, ds, r.shift || '주간', r.name || r.pno, sysItem, Math.round(r.qty || 0), r.pno);
       });
     }
     const tcpOrder = ['1PC', '2PC', 'Nospin', '세척', 'Pack', 'Y9'];
     const linesR = prSection === 'TCP' ? tcpOrder.filter(l => lineSet.includes(l)).concat(lineSet.filter(l => !tcpOrder.includes(l))) : lineSet;
     const shownLines = prLine === '전체' ? linesR : linesR.filter(l => l === prLine);
     // CT 매칭: 아이템명 정확 → 정규화 매칭 폴백, workers 최대 편성
-    const ctBest = (sysItem, dateStr) => {
-      if (!sysItem) return null;
-      let it = itemsDefR.find(i => i.item === sysItem);
-      if (!it) it = itemsDefR.find(i => normR(i.item) === normR(sysItem));
-      if (!it || !Array.isArray(it.ct)) return null;
+    const hasCT = i => Array.isArray(i.ct) && i.ct.length > 0;
+    const ctBest = (key, dateStr) => {
+      if (!key) return null;
+      const nk = normR(key);
+      // 정확 → 정규화 → 부분(접두) 매칭. CT가 실제 있는 아이템만 대상으로 오매칭 방지
+      let it = itemsDefR.find(i => i.item === key && hasCT(i)) || itemsDefR.find(i => normR(i.item) === nk && hasCT(i));
+      if (!it && nk) {
+        const cands = itemsDefR.filter(i => hasCT(i) && (normR(i.item).indexOf(nk) === 0 || nk.indexOf(normR(i.item)) === 0));
+        if (cands.length) it = cands.sort((a, b) => normR(b.item).length - normR(a.item).length)[0];
+      }
+      if (!it) return null;
       const td = new Date(dateStr);
       let best = null;
       it.ct.forEach(c => {
@@ -13817,40 +13823,41 @@ ${question}`;
       });
       return best;
     };
+    // 계획 항목 → CT: 매핑아이템 → 품목명 → Part No 순으로 시도
+    const ctResolve = (e, dateStr) => ctBest(e.sysItem, dateStr) || ctBest(e.name, dateStr) || ctBest(e.pno, dateStr);
     const daySummary = (line, date) => {
       const rec = dayMap[line + '|' + date] || {};
       const shiftKeys = (prShift === '전체' ? Object.keys(rec) : [prShift]).filter(s => (rec[s] || []).length);
-      let items = [], minutes = 0, workers = 0;
+      let items = [], minutes = 0, workers = 0, noCT = 0;
       shiftKeys.forEach(s => (rec[s] || []).forEach(e => {
         items.push(e);
-        const c = ctBest(e.sysItem || e.name, date);
-        if (c) {
-          const pq = parseFloat(c.planQty) || 0, bq = parseFloat(c.baseQty) || 0;
-          // 계획수량(planQty) = 정시(8h) 기준 하루 생산 가능량 → 수량/계획수량 × 480분
-          if (pq > 0) minutes += e.qty / pq * 480;
-          else if (bq > 0) minutes += e.qty / bq * ctBaseR;
-          workers = Math.max(workers, c.workers || 0);
-        }
+        const c = ctResolve(e, date);
+        const pq = c ? parseFloat(c.planQty) || 0 : 0, bq = c ? parseFloat(c.baseQty) || 0 : 0;
+        // 계획수량(planQty) = 정시(8h) 기준 하루 생산 가능량 → 수량/계획수량 × 480분
+        if (pq > 0) minutes += e.qty / pq * 480;
+        else if (bq > 0) minutes += e.qty / bq * ctBaseR;
+        else noCT++;
+        if (c) workers = Math.max(workers, c.workers || 0);
       }));
       const threshold = Math.max(1, shiftKeys.length) * 480;
-      return { items, minutes, workers, over: minutes > threshold };
+      return { items, minutes, workers, noCT, over: minutes > threshold, unknown: noCT > 0 && minutes === 0 };
     };
     // 요약 뷰용: 특정 교대(주간/야간)의 상태 반환. 토요일은 특근.
     const shiftStatus = (line, date, shift) => {
       const rec = dayMap[line + '|' + date] || {};
       const list = rec[shift] || [];
       if (!list.length) return null;
-      let minutes = 0;
+      let minutes = 0, noCT = 0;
       list.forEach(e => {
-        const c = ctBest(e.sysItem || e.name, date);
-        if (c) {
-          const pq = parseFloat(c.planQty) || 0, bq = parseFloat(c.baseQty) || 0;
-          if (pq > 0) minutes += e.qty / pq * 480;
-          else if (bq > 0) minutes += e.qty / bq * ctBaseR;
-        }
+        const c = ctResolve(e, date);
+        const pq = c ? parseFloat(c.planQty) || 0 : 0, bq = c ? parseFloat(c.baseQty) || 0 : 0;
+        if (pq > 0) minutes += e.qty / pq * 480;
+        else if (bq > 0) minutes += e.qty / bq * ctBaseR;
+        else noCT++;
       });
       const isSat = new Date(date).getDay() === 6;
       if (isSat) return '특근';
+      if (noCT > 0 && minutes === 0) return '?'; // CT 미등록 — 정시로 단정하지 않음
       return minutes > 480 ? '잔업' : '정시';
     };
     const weeksOf = ym => {
@@ -13878,13 +13885,13 @@ ${question}`;
       saveReviewHolidays(next);
     };
     const isHoliday = date => !!reviewHolidays[prSection + '|' + date];
-    const badgeCls = st => st === '잔업' ? 'bg-orange-100 text-orange-600 border-orange-300' : st === '특근' ? 'bg-amber-200 text-amber-800 border-amber-400' : 'bg-blue-100 text-blue-700 border-blue-300';
+    const badgeCls = st => st === '잔업' ? 'bg-orange-100 text-orange-600 border-orange-300' : st === '특근' ? 'bg-amber-200 text-amber-800 border-amber-400' : st === '?' ? 'bg-slate-100 text-slate-400 border-slate-300' : 'bg-blue-100 text-blue-700 border-blue-300';
     const renderLineCal = line => h("div", { key: line, className: "bg-white rounded-lg border border-slate-200 p-4 mb-4" },
       h("div", { className: "flex items-center gap-2 mb-2" },
         h("span", { className: "w-2 h-2 rounded-full bg-blue-600 inline-block" }),
         h("span", { className: "font-bold text-slate-800" }, line, " 생산계획"),
         h("span", { className: "text-xs text-slate-400" }, curMonth.replace('-', '년 ') + '월' + (prSummary ? ' · 요약' : ' · ' + prShift))),
-      h("div", { className: "text-[11px] text-slate-400 mb-1" }, prSummary ? "🟦 정시 · 🟧 잔업 · 🟨 특근(토요일) · 셀마다 주간/야간 표시 · 날짜 클릭 = 휴일 토글" : "🟦 정시 · 🟧 잔업(교대당 계획수량 기준 투입 8시간 초과) · 날짜 클릭 = 휴일 표시(빨강) 토글"),
+      h("div", { className: "text-[11px] text-slate-400 mb-1" }, prSummary ? "🟦 정시 · 🟧 잔업 · 🟨 특근(토요일) · ⬜ ? = CT 미등록으로 판정 불가 · 날짜 클릭 = 휴일 토글" : "🟦 정시 · 🟧 잔업(교대당 계획수량 기준 투입 8시간 초과) · 날짜 클릭 = 휴일 표시(빨강) 토글"),
       h("table", { className: "w-full border-collapse text-xs", style: { tableLayout: 'fixed' } },
         h("thead", null, h("tr", null, ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map((d, i) =>
           h("th", { key: d, className: "border border-slate-300 py-1 " + (i === 0 ? 'bg-rose-100 text-rose-600' : i === 6 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600') }, d)))),
@@ -13897,17 +13904,17 @@ ${question}`;
           if (prSummary) {
             const dayShift = shiftStatus(line, ds, '주간');
             const nightShift = shiftStatus(line, ds, '야간');
-            const shiftRow = (label, st) => h("div", { className: "flex items-center gap-1 mt-0.5" },
-              h("span", { className: "text-[10px] text-slate-400 font-semibold", style: { width: '1.6rem' } }, label),
-              st ? h("span", { className: "flex-1 text-center text-sm font-extrabold px-1 py-0.5 rounded border " + badgeCls(st) }, st) : h("span", { className: "flex-1 text-center text-[11px] text-slate-300" }, "—"));
-            return h("td", { key: di, className: "border border-slate-300 align-top p-1.5 " + bg, style: { height: '6rem' } },
+            const shiftRow = (label, st) => h("div", { className: "flex items-center gap-1.5 mt-1" },
+              h("span", { className: "text-sm text-slate-600 font-bold", style: { width: '2.4rem' } }, label),
+              st ? h("span", { className: "flex-1 text-center text-base font-extrabold px-1 py-0.5 rounded border " + badgeCls(st) }, st) : h("span", { className: "flex-1 text-center text-sm text-slate-300" }, "—"));
+            return h("td", { key: di, className: "border border-slate-300 align-top p-1.5 " + bg, style: { height: '7rem' } },
               inMonth && h("div", null,
                 h("div", { onClick: () => toggleHoliday(ds), className: "cursor-pointer font-extrabold text-base leading-tight " + (hol || di === 0 ? 'text-rose-600' : di === 6 ? 'text-blue-700' : 'text-slate-700'), title: "클릭 = 휴일 토글" }, pad2(d.getMonth() + 1) + '/' + pad2(d.getDate())),
                 (dayShift || nightShift) && h("div", null, shiftRow('주간', dayShift), shiftRow('야간', nightShift))));
           }
           // ===== 상세 뷰 =====
           const sum = inMonth ? daySummary(line, ds) : { items: [] };
-          const badge = sum.items.length ? (sum.over ? h("span", { className: "float-right text-sm px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-300 font-extrabold" }, "잔업") : h("span", { className: "float-right text-sm px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-300 font-extrabold" }, "정시")) : null;
+          const badge = sum.items.length ? h("span", { className: "float-right text-sm px-1.5 py-0.5 rounded border font-extrabold " + badgeCls(sum.unknown ? '?' : sum.over ? '잔업' : '정시'), title: sum.unknown ? 'CT 미등록으로 판정 불가' : '' }, sum.unknown ? '?' : sum.over ? '잔업' : '정시') : null;
           return h("td", { key: di, className: "border border-slate-300 align-top p-1.5 " + bg, style: { height: '7rem' } },
             inMonth && h("div", null,
               h("div", { onClick: () => toggleHoliday(ds), className: "cursor-pointer font-extrabold text-base leading-tight " + (hol || di === 0 ? 'text-rose-600' : di === 6 ? 'text-blue-700' : 'text-slate-700'), title: "클릭 = 휴일 토글" }, pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()), badge),
@@ -13935,14 +13942,14 @@ ${question}`;
             const bgc = hol ? 'background:#fecaca' : d.getDay() === 0 ? 'background:#fff1f2' : d.getDay() === 6 ? 'background:#eff6ff' : '';
             if (prSummary) {
               const dS = shiftStatus(line, ds, '주간'), nS = shiftStatus(line, ds, '야간');
-              const box = st => st ? '<span style="display:inline-block;padding:1px 6px;border-radius:3px;font-weight:bold;' + (st === '잔업' ? 'background:#ffedd5;color:#c2410c' : st === '특근' ? 'background:#fde68a;color:#92400e' : 'background:#dbeafe;color:#1d4ed8') + '">' + st + '</span>' : '<span style="color:#cbd5e1">—</span>';
+              const box = st => st ? '<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:12px;' + (st === '잔업' ? 'background:#ffedd5;color:#c2410c' : st === '특근' ? 'background:#fde68a;color:#92400e' : st === '?' ? 'background:#f1f5f9;color:#94a3b8' : 'background:#dbeafe;color:#1d4ed8') + '">' + st + '</span>' : '<span style="color:#cbd5e1">—</span>';
               let c = '<b' + (hol ? ' style="color:#dc2626"' : '') + '>' + ds.slice(5).replace('-', '/') + '</b>';
-              if (dS || nS) c += '<div style="margin-top:3px;font-size:9px"><span style="color:#94a3b8">주간</span> ' + box(dS) + '</div><div style="font-size:9px"><span style="color:#94a3b8">야간</span> ' + box(nS) + '</div>';
+              if (dS || nS) c += '<div style="margin-top:4px;font-size:12px"><span style="color:#475569;font-weight:bold">주간</span> ' + box(dS) + '</div><div style="margin-top:2px;font-size:12px"><span style="color:#475569;font-weight:bold">야간</span> ' + box(nS) + '</div>';
               return '<td valign=top style="height:70px;' + bgc + '">' + c + '</td>';
             }
             const s = daySummary(line, ds);
             let c = '<b' + (hol ? ' style="color:#dc2626"' : '') + '>' + ds.slice(5).replace('-', '/') + '</b>';
-            if (s.items.length) c += ' <span style="font-size:9px">' + (s.over ? '[잔업]' : '[정시]') + '</span>';
+            if (s.items.length) c += ' <span style="font-size:9px">' + (s.unknown ? '[?]' : s.over ? '[잔업]' : '[정시]') + '</span>';
             if (s.workers) c += '<div style="color:#64748b;font-size:9px">인원 ' + s.workers + '</div>';
             s.items.forEach(e => { c += '<div>' + e.name + ' <b style="float:right">' + e.qty.toLocaleString() + '</b></div>'; });
             return '<td valign=top style="height:70px;' + bgc + '">' + c + '</td>';
