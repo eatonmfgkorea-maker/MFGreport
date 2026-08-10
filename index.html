@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V077</title>
+  <title>MFG Report V080</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V077',
+  v: 'V080',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -5837,7 +5837,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V077"), React.createElement("div", {
+  }, "V080"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13873,12 +13873,12 @@ ${question}`;
           const ds = fmtYMD(d);
           const hol = isHoliday(ds);
           const sum = inMonth ? daySummary(line, ds) : { items: [] };
-          const badge = sum.items.length ? (sum.over ? h("span", { className: "float-right text-[10px] px-1 rounded bg-orange-100 text-orange-600 border border-orange-300 font-bold" }, "잔업") : h("span", { className: "float-right text-[10px] px-1 rounded bg-blue-100 text-blue-700 border border-blue-300 font-bold" }, "정시")) : null;
+          const badge = sum.items.length ? (sum.over ? h("span", { className: "float-right text-sm px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-300 font-extrabold" }, "잔업") : h("span", { className: "float-right text-sm px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 border border-blue-300 font-extrabold" }, "정시")) : null;
           const bg = hol ? 'bg-rose-200/70' : di === 0 ? 'bg-rose-50' : di === 6 ? 'bg-blue-50' : 'bg-white';
-          return h("td", { key: di, className: "border border-slate-300 align-top p-1 " + bg, style: { height: '5.6rem' } },
+          return h("td", { key: di, className: "border border-slate-300 align-top p-1.5 " + bg, style: { height: '7rem' } },
             inMonth && h("div", null,
-              h("div", { onClick: () => toggleHoliday(ds), className: "cursor-pointer font-bold " + (hol || di === 0 ? 'text-rose-600' : di === 6 ? 'text-blue-700' : 'text-slate-700'), title: "클릭 = 휴일 토글" }, pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()), badge),
-              sum.workers > 0 && h("div", { className: "text-[10px] text-slate-500 mt-0.5" }, "인원 " + sum.workers),
+              h("div", { onClick: () => toggleHoliday(ds), className: "cursor-pointer font-extrabold text-base leading-tight " + (hol || di === 0 ? 'text-rose-600' : di === 6 ? 'text-blue-700' : 'text-slate-700'), title: "클릭 = 휴일 토글" }, pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()), badge),
+              sum.workers > 0 && h("div", { className: "text-xs text-slate-500 mt-0.5 font-semibold" }, "인원 " + sum.workers),
               prShowItems && sum.items.slice(0, 4).map((e, ei) => h("div", { key: ei, className: "flex justify-between items-center mt-0.5 bg-sky-50 border-l-2 border-sky-400 px-1 rounded-sm" },
                 h("span", { className: "truncate text-slate-700", style: { maxWidth: '65%' } }, e.name),
                 h("span", { className: "text-blue-700 font-semibold" }, e.qty.toLocaleString()))),
@@ -13918,7 +13918,7 @@ ${question}`;
     const targetVal = reviewTargets[tKey] !== undefined ? reviewTargets[tKey] : 4;
     const noteVal = reviewNotes[nKey] || { action: '', support: '' };
     const yearChanges = reviewChanges.filter(c => c.section === prSection && String(c.date || '').slice(0, 4) === String(prYear));
-    const uniqCount = arr => new Set(arr.map(c => String(c.date) + '|' + String(c.reason || '').trim() + '|' + String(c.dept || '').trim())).size;
+    const uniqCount = arr => new Set(arr.map(c => String(c.date))).size; // 같은 날짜 = 1건 (사유·부서·내용 달라도)
     const monthCnt = Array.from({ length: 12 }, (_, i) => uniqCount(yearChanges.filter(c => parseInt(String(c.date).slice(5, 7)) === i + 1)));
     const selChanges = yearChanges.filter(c => parseInt(String(c.date).slice(5, 7)) === prSelMonth);
     const maxCnt = Math.max(6, targetVal + 2, ...monthCnt);
@@ -13963,7 +13963,7 @@ ${question}`;
       const w = window.open('', '_blank');
       if (!w) return;
       let body = '<h2>' + prSection + ' 생산계획 변경 현황 · ' + prYear + '년</h2>';
-      body += '<p>목표(Target): 월 ' + targetVal + '회 · 집계 기준: 같은 날짜+사유+부서 = 1건</p>';
+      body += '<p>목표(Target): 월 ' + targetVal + '회 · 집계 기준: 같은 날짜 = 1건</p>';
       body += '<table border=1 cellspacing=0 cellpadding=4 style="border-collapse:collapse;font-size:11px"><tr><th></th>' + monthCnt.map((_, i) => '<th>' + (i + 1) + '월</th>').join('') + '</tr>';
       body += '<tr><td>변경횟수</td>' + monthCnt.map(c => '<td align=center' + (c > targetVal ? ' style="color:#dc2626;font-weight:bold"' : '') + '>' + c + '</td>').join('') + '</tr></table>';
       body += '<h3>' + prSelMonth + '월 변경 내역</h3>';
@@ -14123,7 +14123,7 @@ ${question}`;
             Array.from({ length: 12 }, (_, i) => h("option", { key: i, value: i + 1 }, (i + 1) + '월'))),
           h("span", { className: "text-sm font-semibold text-slate-600 ml-2" }, "목표(Target)"),
           h("input", { type: "number", value: targetVal, min: 0, onChange: e => saveReviewTargets({ ...reviewTargets, [tKey]: parseInt(e.target.value) || 0 }), className: "w-16 px-2 py-1 border rounded text-sm" }),
-          h("span", { className: "text-xs text-slate-400" }, "같은 날짜·사유·부서는 1건 집계 · Action/Support는 월별 저장"),
+          h("span", { className: "text-xs text-slate-400" }, "같은 날짜는 1건 집계 · Action/Support는 월별 저장"),
           h("button", { onClick: printChanges, className: "ml-auto px-3 py-1.5 border border-blue-300 text-blue-700 rounded text-sm font-semibold hover:bg-blue-50" }, "🖨 인쇄 / PDF")),
         h("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4" },
           h("div", { className: "lg:col-span-2 bg-white rounded-lg border border-slate-200 p-4" },
@@ -14159,7 +14159,7 @@ ${question}`;
                 h("td", { className: "border border-slate-200 p-1", style: { width: '9rem' } }, h("input", { type: "date", value: c.date, onChange: e => updChange(c.id, 'date', e.target.value), className: "w-full px-1 py-0.5 border rounded text-sm" })),
                 h("td", { className: "border border-slate-200 p-1", style: { width: '11rem' } }, h("input", { value: c.reason, onChange: e => updChange(c.id, 'reason', e.target.value), placeholder: "변경사유", className: "w-full px-1 py-0.5 border rounded text-sm" })),
                 h("td", { className: "border border-slate-200 p-1", style: { width: '7rem' } }, h("input", { value: c.dept, onChange: e => updChange(c.id, 'dept', e.target.value), placeholder: "부서", className: "w-full px-1 py-0.5 border rounded text-sm" })),
-                h("td", { className: "border border-slate-200 p-1" }, h("input", { value: c.detail, onChange: e => updChange(c.id, 'detail', e.target.value), placeholder: "세부내용", className: "w-full px-1 py-0.5 border rounded text-sm" })),
+                h("td", { className: "border border-slate-200 p-1" }, h("textarea", { value: c.detail, onChange: e => updChange(c.id, 'detail', e.target.value), placeholder: "세부내용", rows: Math.max(1, Math.ceil(String(c.detail || '').length / 55) + (String(c.detail || '').split('\n').length - 1)), className: "w-full px-1 py-0.5 border rounded text-sm resize-y leading-snug", style: { minHeight: '1.9rem' } })),
                 h("td", { className: "border border-slate-200 p-1", style: { width: '7rem' } }, h("input", { value: c.vendor, onChange: e => updChange(c.id, 'vendor', e.target.value), placeholder: "업체", className: "w-full px-1 py-0.5 border rounded text-sm" })),
                 h("td", { className: "border border-slate-200 p-1", style: { width: '8rem' } }, h("input", { value: c.part, onChange: e => updChange(c.id, 'part', e.target.value), placeholder: "Part", className: "w-full px-1 py-0.5 border rounded text-sm" })),
                 h("td", { className: "border border-slate-200 p-1 text-center", style: { width: '3rem' } }, h("button", { onClick: () => delChange(c.id), className: "text-rose-500 hover:text-rose-700 text-sm font-bold" }, "✕")))))),
