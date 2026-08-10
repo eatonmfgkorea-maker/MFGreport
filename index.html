@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V088</title>
+  <title>MFG Report V089</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V088',
+  v: 'V089',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -5845,7 +5845,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V088"), React.createElement("div", {
+  }, "V089"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -14054,11 +14054,21 @@ ${question}`;
       if (!np) return null;
       return actLines.find(a => normLine(a) === np) || null;
     };
+    // 계획 라인 → 실적 라인 기본 별칭 (이름이 다른 경우)
+    const LINE_ALIAS = { 'AUTOMODULEFLVV': 'FLVV', 'NEWMNLGVV': 'MANUAL GVV' };
     const mappedLine = pl => {
       const k = prSection + '|' + pl;
-      if (reviewLineMap[k] !== undefined) return reviewLineMap[k] || null;
-      return autoMatch(pl);
+      if (reviewLineMap[k]) return reviewLineMap[k];
+      const auto = autoMatch(pl);
+      if (auto) return auto;
+      const al = LINE_ALIAS[normLine(pl)];
+      if (al) return actLines.find(a => normLine(a) === normLine(al)) || null;
+      return null;
     };
+    // 달성률에서 제외할 계획 라인
+    const ACH_EXCLUDE = ['FLVV(SUB)'];
+    // 달성률 통합 그룹 (계획·실적 모두 합산)
+    const ACH_MERGE = [{ label: 'ICV (Old+New)', match: l => /ICV/i.test(l) }];
     // 실적: 라인|날짜 -> 양품 합
     const actMap = {};
     (secData?.productionLogs || []).forEach(l => {
@@ -14084,31 +14094,47 @@ ${question}`;
     };
     const achieve = (() => {
       const nW = weeksR.length;
-      const rows = linesR.map(pl => {
-        const al = mappedLine(pl);
+      // 제외 라인 제거 후 통합 그룹 구성
+      const base = linesR.filter(l => !ACH_EXCLUDE.includes(l));
+      const groups = [];
+      const used = new Set();
+      base.forEach(l => {
+        if (used.has(l)) return;
+        const g = ACH_MERGE.find(g => g.match(l));
+        if (g) {
+          const members = base.filter(x => g.match(x));
+          if (members.length > 1) { members.forEach(m => used.add(m)); groups.push({ label: g.label, plans: members }); return; }
+        }
+        used.add(l);
+        groups.push({ label: l, plans: [l] });
+      });
+      const rows = groups.map(grp => {
+        const als = grp.plans.map(mappedLine).filter(Boolean);
         const weeks = Array.from({ length: nW }, () => ({ plan: 0, act: 0 }));
         Object.keys(planMap).forEach(k => {
-          const [ln, ds] = k.split('|');
-          if (ln !== pl || ds.slice(0, 7) !== curMonth) return;
+          const idx = k.lastIndexOf('|');
+          const ln = k.slice(0, idx), ds = k.slice(idx + 1);
+          if (!grp.plans.includes(ln) || ds.slice(0, 7) !== curMonth) return;
           const wi = weekOfDate(ds);
           if (wi >= 0) weeks[wi].plan += planMap[k];
         });
-        if (al) Object.keys(actMap).forEach(k => {
+        Object.keys(actMap).forEach(k => {
           const idx = k.lastIndexOf('|');
           const ln = k.slice(0, idx), ds = k.slice(idx + 1);
-          if (ln !== al) return;
+          if (!als.includes(ln)) return;
           const wi = weekOfDate(ds);
           if (wi >= 0) weeks[wi].act += actMap[k];
         });
         const tot = weeks.reduce((a, w) => ({ plan: a.plan + w.plan, act: a.act + w.act }), { plan: 0, act: 0 });
-        return { line: pl, actLine: al, weeks, tot };
+        return { line: grp.label, actLine: als.length ? als.join(', ') : null, merged: grp.plans.length > 1, weeks, tot };
       }).filter(r => r.tot.plan > 0 || r.tot.act > 0);
       const totals = Array.from({ length: nW }, (_, i) => rows.reduce((a, r) => ({ plan: a.plan + r.weeks[i].plan, act: a.act + r.weeks[i].act }), { plan: 0, act: 0 }));
       const grand = rows.reduce((a, r) => ({ plan: a.plan + r.tot.plan, act: a.act + r.tot.act }), { plan: 0, act: 0 });
       return { rows, totals, grand, nW };
     })();
     const rate = (p, a) => p > 0 ? a / p * 100 : null;
-    const rateCls = v => v === null ? 'text-slate-300' : v >= 100 ? 'text-emerald-600' : v >= 90 ? 'text-blue-600' : v >= 70 ? 'text-amber-600' : 'text-rose-600';
+    // 달성률 색: 95~105% 정상(파랑), ±5% 초과 시 빨강
+    const rateCls = v => v === null ? 'text-slate-300' : (v < 95 || v > 105) ? 'text-rose-600' : 'text-blue-700';
     const weekLabel = i => {
       const wk = weeksR[i];
       const inM = wk.filter(d => pad2(d.getMonth() + 1) === curMonth.slice(5, 7));
@@ -14486,12 +14512,8 @@ ${question}`;
                     h("tr", null,
                       h("td", { rowSpan: 3, className: "border border-slate-200 px-2 py-1 font-bold align-top" },
                         r.line,
-                        !r.actLine && h("div", { className: "text-[10px] text-rose-500 font-normal mt-0.5" }, "실적 매칭 필요"),
-                        h("select", {
-                          value: r.actLine || '',
-                          onChange: e => saveReviewLineMap({ ...reviewLineMap, [prSection + '|' + r.line]: e.target.value }),
-                          className: "mt-1 w-full px-1 py-0.5 border rounded text-[10px] " + (r.actLine ? 'text-slate-500' : 'border-rose-300 text-rose-600')
-                        }, h("option", { value: "" }, "(실적 라인 선택)"), actLines.map(a => h("option", { key: a, value: a }, a)))),
+                        r.merged && h("span", { className: "ml-1 text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold align-middle" }, "통합"),
+                        !r.actLine && h("div", { className: "text-[10px] text-rose-500 font-normal mt-0.5" }, "실적 없음")),
                       h("td", { className: "border border-slate-200 px-2 py-1 font-semibold bg-slate-50" }, "계획"),
                       ...cells(w => Math.round(w.plan).toLocaleString(), "text-slate-600")),
                     h("tr", null,
@@ -14520,9 +14542,9 @@ ${question}`;
                   (() => { const v = rate(achieve.grand.plan, achieve.grand.act);
                     return h("td", { className: "border border-slate-200 px-2 py-1 text-right font-black " + rateCls(v) }, v === null ? '-' : v.toFixed(1) + '%'); })())))),
           h("div", { className: "mt-2 text-[11px] text-slate-500" },
-            "· 라인명이 계획과 실적에서 다르면 라인 아래 드롭다운으로 지정하세요 (저장됩니다)",
+            "· ICV는 Old·New를 통합해 표시합니다 · FLVV(SUB)는 집계에서 제외됩니다",
             h("br"),
-            "· 달성률 색상: 🟢100% 이상 · 🔵90~100% · 🟠70~90% · 🔴70% 미만")),
+            "· 달성률 색상: 🔵95~105% 정상 · 🔴95% 미만 또는 105% 초과")),
         ),
       // ---------- Tool 교체 ----------
       prSubTab === 'jig' && h("div", null,
