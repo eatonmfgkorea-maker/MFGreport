@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V089</title>
+  <title>MFG Report V090</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V089',
+  v: 'V090',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -2543,6 +2543,8 @@ function App() {
   const [prShowItems, setPrShowItems] = useState(true);
   const [prSummary, setPrSummary] = useState(false);
   const [reviewLineMap, setReviewLineMap] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_linemap') || '{}'); } catch { return {}; } });
+  const [reviewAch, setReviewAch] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_ach') || '{}'); } catch { return {}; } });
+  const saveReviewAch = next => { setReviewAch(next); try { localStorage.setItem('mfg_review_ach', JSON.stringify(next)); } catch {} };
   const saveReviewLineMap = next => { setReviewLineMap(next); try { localStorage.setItem('mfg_review_linemap', JSON.stringify(next)); } catch {} };
   const [prYear, setPrYear] = useState(new Date().getFullYear());
   const [prSelMonth, setPrSelMonth] = useState(new Date().getMonth() + 1);
@@ -2819,6 +2821,7 @@ function App() {
             reviewJig,
             reviewJigNotes,
             reviewLineMap,
+          reviewAch,
             fePlanRaw: readFePlanRaw()
           }
         };
@@ -2832,7 +2835,7 @@ function App() {
       } catch {}
     }, 3000);
     return () => clearTimeout(timer);
-  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, cuOverrides, cuDataByYear, reviewChanges, reviewTargets, reviewNotes, reviewHolidays, reviewJig, reviewJigNotes, reviewLineMap]);
+  }, [prodReportNotes, moduleQuantities, dtOverrides, productionPlan, planItemMapping, lotFtfrNotes, cuOverrides, cuDataByYear, reviewChanges, reviewTargets, reviewNotes, reviewHolidays, reviewJig, reviewJigNotes, reviewLineMap, reviewAch]);
   const [expandedNotes, setExpandedNotes] = useState({});
   const toggleNote = key => setExpandedNotes(prev => ({
     ...prev,
@@ -3774,6 +3777,7 @@ ${question}`;
           reviewJig,
           reviewJigNotes,
           reviewLineMap,
+          reviewAch,
           fePlanRaw: readFePlanRaw()
         }
       };
@@ -3881,6 +3885,7 @@ ${question}`;
         if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfg_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
         if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
         if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfg_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
+        if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfg_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
         if (d.productionPlan !== undefined) {
           setProductionPlan(d.productionPlan || {});
           try {
@@ -4072,6 +4077,7 @@ ${question}`;
             if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfg_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
             if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
             if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfg_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
+            if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfg_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
             if (d.productionPlan !== undefined) {
               // 자동로드는 병합: 드라이브 값 우선, 로컬에만 있는 계획(자동저장분)은 보존
               setProductionPlan(prev => {
@@ -5845,7 +5851,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V089"), React.createElement("div", {
+  }, "V090"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -14045,88 +14051,55 @@ ${question}`;
               prShowItems && sum.items.length > 4 && h("div", { className: "text-[10px] text-slate-400" }, "+" + (sum.items.length - 4) + "건")));
         })))))); };
 
-    // ===== 달성률: 주차별 × 라인별 계획 대비 실적 =====
-    const normLine = s => String(s || '').toUpperCase().replace(/[^A-Z0-9가-힣]/g, '');
-    const actLines = Array.from(new Set((secData?.productionLogs || [])
-      .filter(l => (l.section || prSection) === prSection).map(l => l.lineName).filter(Boolean)));
-    const autoMatch = pl => {
-      const np = normLine(pl);
-      if (!np) return null;
-      return actLines.find(a => normLine(a) === np) || null;
-    };
-    // 계획 라인 → 실적 라인 기본 별칭 (이름이 다른 경우)
-    const LINE_ALIAS = { 'AUTOMODULEFLVV': 'FLVV', 'NEWMNLGVV': 'MANUAL GVV' };
-    const mappedLine = pl => {
-      const k = prSection + '|' + pl;
-      if (reviewLineMap[k]) return reviewLineMap[k];
-      const auto = autoMatch(pl);
-      if (auto) return auto;
-      const al = LINE_ALIAS[normLine(pl)];
-      if (al) return actLines.find(a => normLine(a) === normLine(al)) || null;
-      return null;
-    };
-    // 달성률에서 제외할 계획 라인
-    const ACH_EXCLUDE = ['FLVV(SUB)'];
-    // 달성률 통합 그룹 (계획·실적 모두 합산)
+    // ===== 달성률: 계획 엑셀(MPS)에서 계획·실적을 직접 읽어 주차별 집계 =====
+    // 저장 구조: reviewAch[SECTION] = { file, uploadedAt, rows: [{line, date, plan, act}] }
+    const achData = reviewAch[prSection] || null;
+    const achMonths = Array.from(new Set((achData?.rows || []).map(r => String(r.date).slice(0, 7)))).sort();
+    const achMonth = achMonths.includes(prMonth) ? prMonth : (achMonths[achMonths.length - 1] || '');
+    const ACH_EXCLUDE = ['T300 SUB1', 'T300 SUB2', 'FLVV(SUB)'];
     const ACH_MERGE = [{ label: 'ICV (Old+New)', match: l => /ICV/i.test(l) }];
-    // 실적: 라인|날짜 -> 양품 합
-    const actMap = {};
-    (secData?.productionLogs || []).forEach(l => {
-      if ((l.section || prSection) !== prSection) return;
-      const ds = String(l.productionDate || '').slice(0, 10);
-      if (ds.slice(0, 7) !== curMonth) return;
-      const k = l.lineName + '|' + ds;
-      actMap[k] = (actMap[k] || 0) + (parseFloat(l.goodQuantity) || 0);
-    });
-    // 계획: 라인|날짜 -> 수량 합 (교대 무관 전체)
-    const planMap = {};
-    Object.keys(dayMap).forEach(k => {
-      const rec = dayMap[k];
-      let q = 0;
-      Object.keys(rec).forEach(s => (rec[s] || []).forEach(e => { q += e.qty || 0; }));
-      planMap[k] = q;
-    });
-    const weekOfDate = ds => {
-      for (let i = 0; i < weeksR.length; i++) {
-        if (weeksR[i].some(d => fmtYMD(d) === ds)) return i;
+    const achWeeks = (() => {
+      if (!achMonth) return [];
+      const [Y, M] = achMonth.split('-').map(Number);
+      const first = new Date(Y, M - 1, 1);
+      const st = new Date(first); st.setDate(1 - first.getDay());
+      const out = []; let cur = new Date(st);
+      while (true) {
+        const wk = [];
+        for (let i = 0; i < 7; i++) { wk.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
+        out.push(wk);
+        if (cur.getMonth() + 1 !== M && cur.getFullYear() * 12 + cur.getMonth() >= Y * 12 + M - 1) break;
+        if (out.length > 6) break;
       }
+      return out;
+    })();
+    const achWeekOf = ds => {
+      for (let i = 0; i < achWeeks.length; i++) if (achWeeks[i].some(d => fmtYMD(d) === ds)) return i;
       return -1;
     };
     const achieve = (() => {
-      const nW = weeksR.length;
-      // 제외 라인 제거 후 통합 그룹 구성
-      const base = linesR.filter(l => !ACH_EXCLUDE.includes(l));
-      const groups = [];
-      const used = new Set();
-      base.forEach(l => {
+      const nW = achWeeks.length;
+      const src = (achData?.rows || []).filter(r => String(r.date).slice(0, 7) === achMonth && !ACH_EXCLUDE.includes(r.line));
+      const lines = Array.from(new Set(src.map(r => r.line)));
+      const groups = []; const used = new Set();
+      lines.forEach(l => {
         if (used.has(l)) return;
         const g = ACH_MERGE.find(g => g.match(l));
         if (g) {
-          const members = base.filter(x => g.match(x));
-          if (members.length > 1) { members.forEach(m => used.add(m)); groups.push({ label: g.label, plans: members }); return; }
+          const mem = lines.filter(x => g.match(x));
+          if (mem.length > 1) { mem.forEach(m => used.add(m)); groups.push({ label: g.label, lines: mem }); return; }
         }
-        used.add(l);
-        groups.push({ label: l, plans: [l] });
+        used.add(l); groups.push({ label: l, lines: [l] });
       });
       const rows = groups.map(grp => {
-        const als = grp.plans.map(mappedLine).filter(Boolean);
         const weeks = Array.from({ length: nW }, () => ({ plan: 0, act: 0 }));
-        Object.keys(planMap).forEach(k => {
-          const idx = k.lastIndexOf('|');
-          const ln = k.slice(0, idx), ds = k.slice(idx + 1);
-          if (!grp.plans.includes(ln) || ds.slice(0, 7) !== curMonth) return;
-          const wi = weekOfDate(ds);
-          if (wi >= 0) weeks[wi].plan += planMap[k];
-        });
-        Object.keys(actMap).forEach(k => {
-          const idx = k.lastIndexOf('|');
-          const ln = k.slice(0, idx), ds = k.slice(idx + 1);
-          if (!als.includes(ln)) return;
-          const wi = weekOfDate(ds);
-          if (wi >= 0) weeks[wi].act += actMap[k];
+        src.forEach(r => {
+          if (!grp.lines.includes(r.line)) return;
+          const wi = achWeekOf(String(r.date));
+          if (wi >= 0) { weeks[wi].plan += r.plan || 0; weeks[wi].act += r.act || 0; }
         });
         const tot = weeks.reduce((a, w) => ({ plan: a.plan + w.plan, act: a.act + w.act }), { plan: 0, act: 0 });
-        return { line: grp.label, actLine: als.length ? als.join(', ') : null, merged: grp.plans.length > 1, weeks, tot };
+        return { line: grp.label, merged: grp.lines.length > 1, weeks, tot };
       }).filter(r => r.tot.plan > 0 || r.tot.act > 0);
       const totals = Array.from({ length: nW }, (_, i) => rows.reduce((a, r) => ({ plan: a.plan + r.weeks[i].plan, act: a.act + r.weeks[i].act }), { plan: 0, act: 0 }));
       const grand = rows.reduce((a, r) => ({ plan: a.plan + r.tot.plan, act: a.act + r.tot.act }), { plan: 0, act: 0 });
@@ -14136,11 +14109,86 @@ ${question}`;
     // 달성률 색: 95~105% 정상(파랑), ±5% 초과 시 빨강
     const rateCls = v => v === null ? 'text-slate-300' : (v < 95 || v > 105) ? 'text-rose-600' : 'text-blue-700';
     const weekLabel = i => {
-      const wk = weeksR[i];
-      const inM = wk.filter(d => pad2(d.getMonth() + 1) === curMonth.slice(5, 7));
+      const wk = achWeeks[i]; if (!wk) return 'W' + (i + 1);
+      const inM = wk.filter(d => pad2(d.getMonth() + 1) === achMonth.slice(5, 7));
       if (!inM.length) return 'W' + (i + 1);
       const s = inM[0], e = inM[inM.length - 1];
       return 'W' + (i + 1) + ' (' + pad2(s.getMonth() + 1) + '/' + pad2(s.getDate()) + '~' + pad2(e.getMonth() + 1) + '/' + pad2(e.getDate()) + ')';
+    };
+    // ===== MPS 엑셀 파서 =====
+    const xlDate = v => {
+      if (v instanceof Date) return v.getFullYear() + '-' + pad2(v.getMonth() + 1) + '-' + pad2(v.getDate());
+      if (typeof v === 'number' && v > 20000 && v < 80000) { const d = new Date(Math.round((v - 25569) * 86400000)); return d.toISOString().slice(0, 10); }
+      return null;
+    };
+    const parseAchExcel = (wb, section) => {
+      const out = [];
+      if (section === 'FE') {
+        const ws = wb.Sheets['계획검토'];
+        if (!ws) throw new Error('«계획검토» 시트를 찾을 수 없습니다');
+        const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true });
+        const hdr = aoa[4] || []; // 5행
+        const cols = {};
+        hdr.forEach((v, i) => { const d = xlDate(v); if (d) cols[i] = d; });
+        const acc = {};
+        aoa.slice(5).forEach(row => {
+          if (!row) return;
+          const kind = row[11], mid = row[6];
+          if (!mid || (kind !== '계획합계' && kind !== '실적합계')) return;
+          Object.keys(cols).forEach(i => {
+            const v = row[i];
+            if (typeof v !== 'number' || !v) return;
+            const k = mid + '|' + cols[i];
+            if (!acc[k]) acc[k] = { line: String(mid), date: cols[i], plan: 0, act: 0 };
+            if (kind === '계획합계') acc[k].plan += v; else acc[k].act += v;
+          });
+        });
+        Object.values(acc).forEach(r => out.push(r));
+      } else {
+        // TCP: «26_07월» 형식 시트들의 요약행(4~11행) — 1pcs/2pcs × 주간/야간 × Plan/Actual
+        const sheets = wb.SheetNames.filter(n => /^\d{2}_\d{2}월$/.test(n));
+        if (!sheets.length) throw new Error('«26_07월» 형식의 시트를 찾을 수 없습니다');
+        const labels = { 3: ['1PC', 'plan'], 4: ['1PC', 'act'], 5: ['2PC', 'plan'], 6: ['2PC', 'act'],
+                         7: ['1PC', 'plan'], 8: ['1PC', 'act'], 9: ['2PC', 'plan'], 10: ['2PC', 'act'] };
+        const acc = {};
+        sheets.forEach(sn => {
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, cellDates: true });
+          const hdr = aoa[2] || []; // 3행
+          const cols = {};
+          hdr.forEach((v, i) => { const d = xlDate(v); if (d) cols[i] = d; });
+          if (!Object.keys(cols).length) return;
+          Object.keys(labels).forEach(ri => {
+            const row = aoa[ri]; if (!row) return;
+            const [line, kind] = labels[ri];
+            Object.keys(cols).forEach(i => {
+              const v = row[i];
+              if (typeof v !== 'number' || !v) return;
+              const k = line + '|' + cols[i];
+              if (!acc[k]) acc[k] = { line, date: cols[i], plan: 0, act: 0 };
+              acc[k][kind] += v;
+            });
+          });
+        });
+        Object.values(acc).forEach(r => out.push(r));
+      }
+      if (!out.length) throw new Error('계획/실적 데이터를 찾지 못했습니다');
+      return out;
+    };
+    const upAchExcel = e => {
+      const f = e.target.files[0]; if (!f) return;
+      const rd = new FileReader();
+      rd.onload = ev => {
+        try {
+          const wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array', cellDates: true });
+          const rows = parseAchExcel(wb, prSection);
+          const months = Array.from(new Set(rows.map(r => r.date.slice(0, 7)))).sort();
+          saveReviewAch({ ...reviewAch, [prSection]: { file: f.name, uploadedAt: new Date().toISOString(), rows } });
+          setPrMonth(months[months.length - 1] || '');
+          alert('✅ ' + prSection + ' 달성률 데이터 반영\n파일: ' + f.name + '\n항목 ' + rows.length + '건 · 기간 ' + months[0] + ' ~ ' + months[months.length - 1]);
+        } catch (err) { alert('엑셀 파싱 오류: ' + err.message); }
+        e.target.value = '';
+      };
+      rd.readAsArrayBuffer(f);
     };
     const dlAchieve = () => {
       const head = ['라인', '구분', ...Array.from({ length: achieve.nW }, (_, i) => weekLabel(i)), '합계'];
@@ -14156,12 +14204,12 @@ ${question}`;
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, '달성률');
-      XLSX.writeFile(wb, prSection + '_달성률_' + curMonth + '.xlsx');
+      XLSX.writeFile(wb, prSection + '_달성률_' + achMonth + '.xlsx');
     };
     const printAchieve = () => {
       const w = window.open('', '_blank');
       if (!w) return;
-      let body = '<h2>' + prSection + ' 주차별 달성률 · ' + curMonth + '</h2>';
+      let body = '<h2>' + prSection + ' 주차별 달성률 · ' + achMonth + '</h2>';
       body += '<table border=1 cellspacing=0 cellpadding=4 style="border-collapse:collapse;font-size:11px"><tr><th>라인</th><th>구분</th>';
       for (let i = 0; i < achieve.nW; i++) body += '<th>' + weekLabel(i) + '</th>';
       body += '<th>합계</th></tr>';
@@ -14176,7 +14224,7 @@ ${question}`;
       achieve.rows.forEach(r => { body += rowHtml(r.line, r.weeks, r.tot); });
       body += rowHtml('합계', achieve.totals, achieve.grand);
       body += '</table>';
-      w.document.write('<html><head><title>달성률 ' + curMonth + '</title><style>@media print{@page{size:landscape}}body{font-family:Malgun Gothic,sans-serif}</style></head><body>' + body + '</body></html>');
+      w.document.write('<html><head><title>달성률 ' + achMonth + '</title><style>@media print{@page{size:landscape}}body{font-family:Malgun Gothic,sans-serif}</style></head><body>' + body + '</body></html>');
       w.document.close();
       setTimeout(() => w.print(), 300);
     };
@@ -14475,14 +14523,19 @@ ${question}`;
       prSubTab === 'achieve' && h("div", null,
         h("div", { className: "bg-white rounded-lg border border-slate-200 p-3 mb-4 flex flex-wrap items-center gap-3" },
           h("span", { className: "text-sm font-semibold text-slate-600" }, "월 선택"),
-          h("select", { value: curMonth, onChange: e => setPrMonth(e.target.value), className: "px-2 py-1 border rounded text-sm" },
-            monthsR.map(m => h("option", { key: m, value: m }, m.slice(2, 4) + '_' + m.slice(5, 7) + '월'))),
-          h("span", { className: "text-xs text-slate-400" }, "주차 = 일~토 기준 · 계획은 생산계획, 실적은 생산일지 양품수량"),
+          h("select", { value: achMonth, onChange: e => setPrMonth(e.target.value), className: "px-2 py-1 border rounded text-sm" },
+            achMonths.map(m => h("option", { key: m, value: m }, m.slice(2, 4) + '_' + m.slice(5, 7) + '월'))),
+          h("span", { className: "text-xs text-slate-400" }, "주차 = 일~토 · 계획·실적 모두 MPS 엑셀 값"),
+          achData && h("span", { className: "text-[11px] text-slate-400" }, "📄 " + achData.file),
           h("div", { className: "ml-auto flex gap-2" },
+            h("label", { className: "px-3 py-1.5 border border-indigo-300 text-indigo-700 rounded text-sm font-semibold hover:bg-indigo-50 cursor-pointer" }, "⬆ MPS 엑셀 업로드",
+              h("input", { type: "file", accept: ".xlsx,.xls,.xlsm", className: "hidden", onChange: upAchExcel })),
             h("button", { onClick: dlAchieve, className: "px-3 py-1.5 border border-emerald-300 text-emerald-700 rounded text-sm font-semibold hover:bg-emerald-50" }, "⬇ 엑셀"),
             h("button", { onClick: printAchieve, className: "px-3 py-1.5 border border-blue-300 text-blue-700 rounded text-sm font-semibold hover:bg-blue-50" }, "🖨 인쇄 / PDF"))),
-        monthsR.length === 0 ? h("div", { className: "text-center py-10 text-slate-400" }, prSection + " 생산계획 데이터가 없습니다.")
-        : achieve.rows.length === 0 ? h("div", { className: "text-center py-10 text-slate-400" }, curMonth + " 계획/실적 데이터가 없습니다.")
+        !achData ? h("div", { className: "text-center py-10 text-slate-400" },
+            prSection + " MPS 엑셀을 업로드하세요.", h("br"),
+            h("span", { className: "text-xs" }, prSection === 'FE' ? "«02.FE Main PROD. PLAN» — «계획검토» 시트의 계획합계·실적합계를 읽습니다" : "«01.TCP Main PROD. PLAN» — «26_07월» 형식 시트의 라인별 Plan/Actual을 읽습니다"))
+        : achieve.rows.length === 0 ? h("div", { className: "text-center py-10 text-slate-400" }, achMonth + " 계획/실적 데이터가 없습니다.")
         : h("div", null,
           // 요약 카드
           h("div", { className: "grid grid-cols-3 gap-3 mb-4" },
@@ -14512,8 +14565,7 @@ ${question}`;
                     h("tr", null,
                       h("td", { rowSpan: 3, className: "border border-slate-200 px-2 py-1 font-bold align-top" },
                         r.line,
-                        r.merged && h("span", { className: "ml-1 text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold align-middle" }, "통합"),
-                        !r.actLine && h("div", { className: "text-[10px] text-rose-500 font-normal mt-0.5" }, "실적 없음")),
+                        r.merged && h("span", { className: "ml-1 text-[10px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold align-middle" }, "통합")),
                       h("td", { className: "border border-slate-200 px-2 py-1 font-semibold bg-slate-50" }, "계획"),
                       ...cells(w => Math.round(w.plan).toLocaleString(), "text-slate-600")),
                     h("tr", null,
@@ -14542,7 +14594,7 @@ ${question}`;
                   (() => { const v = rate(achieve.grand.plan, achieve.grand.act);
                     return h("td", { className: "border border-slate-200 px-2 py-1 text-right font-black " + rateCls(v) }, v === null ? '-' : v.toFixed(1) + '%'); })())))),
           h("div", { className: "mt-2 text-[11px] text-slate-500" },
-            "· ICV는 Old·New를 통합해 표시합니다 · FLVV(SUB)는 집계에서 제외됩니다",
+            "· 계획·실적 모두 MPS 엑셀에서 읽습니다 (생산일지 미사용) · ICV는 Old·New 통합 · T300 SUB1/SUB2(20690B-SUB)는 제외",
             h("br"),
             "· 달성률 색상: 🔵95~105% 정상 · 🔴95% 미만 또는 105% 초과")),
         ),
@@ -16017,6 +16069,7 @@ ${question}`;
               reviewJig,
               reviewJigNotes,
               reviewLineMap,
+          reviewAch,
               fePlanRaw: readFePlanRaw()
             }
           };
@@ -16336,6 +16389,7 @@ ${question}`;
               reviewJig,
               reviewJigNotes,
               reviewLineMap,
+          reviewAch,
               fePlanRaw: readFePlanRaw()
             }
           };
