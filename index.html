@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V083</title>
+  <title>MFG Report V085</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V083',
+  v: 'V085',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -5838,7 +5838,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V083"), React.createElement("div", {
+  }, "V085"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13801,7 +13801,24 @@ ${question}`;
     }
     const tcpOrder = ['1PC', '2PC', 'Nospin', '세척', 'Pack', 'Y9'];
     const linesR = prSection === 'TCP' ? tcpOrder.filter(l => lineSet.includes(l)).concat(lineSet.filter(l => !tcpOrder.includes(l))) : lineSet;
-    const shownLines = prLine === '전체' ? linesR : linesR.filter(l => l === prLine);
+    const shownLinesRaw = prLine === '전체' ? linesR : linesR.filter(l => l === prLine);
+    // 요약 뷰: ICV(Old/New) 통합 — 둘 중 하나라도 잔업이면 잔업, 야간 있으면 야간 표시
+    const mergeGroups = [{ label: 'ICV (Old+New)', match: l => /ICV/i.test(l) }];
+    const shownLines = (() => {
+      if (!prSummary) return shownLinesRaw.map(l => ({ label: l, lines: [l] }));
+      const out = [], used = new Set();
+      shownLinesRaw.forEach(l => {
+        if (used.has(l)) return;
+        const g = mergeGroups.find(g => g.match(l));
+        if (g) {
+          const members = shownLinesRaw.filter(x => g.match(x));
+          if (members.length > 1) { members.forEach(m => used.add(m)); out.push({ label: g.label, lines: members }); return; }
+        }
+        used.add(l);
+        out.push({ label: l, lines: [l] });
+      });
+      return out;
+    })();
     // CT 매칭: 아이템명 정확 → 정규화 매칭 폴백, workers 최대 편성
     const hasCT = i => Array.isArray(i.ct) && i.ct.length > 0;
     const ctBest = (key, dateStr) => {
@@ -13842,10 +13859,9 @@ ${question}`;
       const threshold = Math.max(1, shiftKeys.length) * 480;
       return { items, minutes, workers, noCT, over: minutes > threshold, unknown: noCT > 0 && minutes === 0 };
     };
-    // 요약 뷰용: 특정 교대(주간/야간)의 상태 반환. 토요일은 특근.
-    const shiftStatus = (line, date, shift) => {
-      const rec = dayMap[line + '|' + date] || {};
-      const list = rec[shift] || [];
+    // 요약 뷰용: 특정 교대(주간/야간)의 단일 라인 상태. 토요일은 특근.
+    const shiftStatusOne = (line, date, shift) => {
+      const list = (dayMap[line + '|' + date] || {})[shift] || [];
       if (!list.length) return null;
       let minutes = 0, noCT = 0;
       list.forEach(e => {
@@ -13855,10 +13871,19 @@ ${question}`;
         else if (bq > 0) minutes += e.qty / bq * ctBaseR;
         else noCT++;
       });
-      const isSat = new Date(date).getDay() === 6;
-      if (isSat) return '특근';
+      if (new Date(date).getDay() === 6) return '특근';
       if (noCT > 0 && minutes === 0) return '?'; // CT 미등록 — 정시로 단정하지 않음
       return minutes > 480 ? '잔업' : '정시';
+    };
+    // line에 배열을 주면 라인별로 각각 판정 후 결합 (예: Old ICV + New ICV)
+    // 시간을 합산하지 않음 — 별개 라인이므로. 하나라도 잔업이면 잔업.
+    const shiftStatus = (line, date, shift) => {
+      const arr = (Array.isArray(line) ? line : [line]).map(ln => shiftStatusOne(ln, date, shift)).filter(Boolean);
+      if (!arr.length) return null;
+      if (arr.includes('잔업')) return '잔업';
+      if (arr.includes('특근')) return '특근';
+      if (arr.includes('정시')) return '정시';
+      return '?';
     };
     const weeksOf = ym => {
       if (!ym) return [];
@@ -13886,10 +13911,11 @@ ${question}`;
     };
     const isHoliday = date => !!reviewHolidays[prSection + '|' + date];
     const badgeCls = st => st === '잔업' ? 'bg-orange-100 text-orange-600 border-orange-300' : st === '특근' ? 'bg-amber-200 text-amber-800 border-amber-400' : st === '?' ? 'bg-slate-100 text-slate-400 border-slate-300' : 'bg-blue-100 text-blue-700 border-blue-300';
-    const renderLineCal = line => h("div", { key: line, className: "bg-white rounded-lg border border-slate-200 p-4 mb-4" },
+    const renderLineCal = grp => { const line = grp.lines[0]; const lineKey = grp.lines; return h("div", { key: grp.label, className: "bg-white rounded-lg border border-slate-200 p-4 mb-4" },
       h("div", { className: "flex items-center gap-2 mb-2" },
         h("span", { className: "w-2 h-2 rounded-full bg-blue-600 inline-block" }),
-        h("span", { className: "font-bold text-slate-800" }, line, " 생산계획"),
+        h("span", { className: "font-bold text-slate-800" }, grp.label, " 생산계획"),
+        grp.lines.length > 1 && h("span", { className: "text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold" }, "통합"),
         h("span", { className: "text-xs text-slate-400" }, curMonth.replace('-', '년 ') + '월' + (prSummary ? ' · 요약' : ' · ' + prShift))),
       h("div", { className: "text-[11px] text-slate-400 mb-1" }, prSummary ? "🟦 정시 · 🟧 잔업 · 🟨 특근(토요일) · ⬜ ? = CT 미등록으로 판정 불가 · 날짜 클릭 = 휴일 토글" : "🟦 정시 · 🟧 잔업(교대당 계획수량 기준 투입 8시간 초과) · 날짜 클릭 = 휴일 표시(빨강) 토글"),
       h("table", { className: "w-full border-collapse text-xs", style: { tableLayout: 'fixed' } },
@@ -13902,8 +13928,8 @@ ${question}`;
           const bg = hol ? 'bg-rose-200/70' : di === 0 ? 'bg-rose-50' : di === 6 ? 'bg-blue-50' : 'bg-white';
           // ===== 요약 뷰 =====
           if (prSummary) {
-            const dayShift = shiftStatus(line, ds, '주간');
-            const nightShift = shiftStatus(line, ds, '야간');
+            const dayShift = shiftStatus(lineKey, ds, '주간');
+            const nightShift = shiftStatus(lineKey, ds, '야간');
             const shiftRow = (label, st) => h("div", { className: "flex items-center gap-1.5 mt-1" },
               h("span", { className: "text-sm text-slate-600 font-bold", style: { width: '2.4rem' } }, label),
               st ? h("span", { className: "flex-1 text-center text-base font-extrabold px-1 py-0.5 rounded border " + badgeCls(st) }, st) : h("span", { className: "flex-1 text-center text-sm text-slate-300" }, "—"));
@@ -13923,14 +13949,15 @@ ${question}`;
                 h("span", { className: "truncate text-slate-700", style: { maxWidth: '65%' } }, e.name),
                 h("span", { className: "text-blue-700 font-semibold" }, e.qty.toLocaleString()))),
               prShowItems && sum.items.length > 4 && h("div", { className: "text-[10px] text-slate-400" }, "+" + (sum.items.length - 4) + "건")));
-        }))))));
+        })))))); };
 
     const printCalendar = () => {
       const w = window.open('', '_blank');
       if (!w) return;
       let body = '';
-      shownLines.forEach(line => {
-        body += '<h3 style="margin:12px 0 4px">' + prSection + ' · ' + line + ' 생산계획 (' + curMonth + ' · ' + prShift + ')</h3>';
+      shownLines.forEach(grp => {
+        const line = grp.lines[0], lineKey = grp.lines;
+        body += '<h3 style="margin:12px 0 4px">' + prSection + ' · ' + grp.label + ' 생산계획 (' + curMonth + ' · ' + (prSummary ? '요약' : prShift) + ')</h3>';
         body += '<table border=1 cellspacing=0 cellpadding=3 style="border-collapse:collapse;width:100%;font-size:10px;table-layout:fixed">';
         body += '<tr>' + ['일', '월', '화', '수', '목', '금', '토'].map(d => '<th>' + d + '</th>').join('') + '</tr>';
         weeksR.forEach(wk => {
@@ -13941,7 +13968,7 @@ ${question}`;
             const hol = isHoliday(ds);
             const bgc = hol ? 'background:#fecaca' : d.getDay() === 0 ? 'background:#fff1f2' : d.getDay() === 6 ? 'background:#eff6ff' : '';
             if (prSummary) {
-              const dS = shiftStatus(line, ds, '주간'), nS = shiftStatus(line, ds, '야간');
+              const dS = shiftStatus(lineKey, ds, '주간'), nS = shiftStatus(lineKey, ds, '야간');
               const box = st => st ? '<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:12px;' + (st === '잔업' ? 'background:#ffedd5;color:#c2410c' : st === '특근' ? 'background:#fde68a;color:#92400e' : st === '?' ? 'background:#f1f5f9;color:#94a3b8' : 'background:#dbeafe;color:#1d4ed8') + '">' + st + '</span>' : '<span style="color:#cbd5e1">—</span>';
               let c = '<b' + (hol ? ' style="color:#dc2626"' : '') + '>' + ds.slice(5).replace('-', '/') + '</b>';
               if (dS || nS) c += '<div style="margin-top:4px;font-size:12px"><span style="color:#475569;font-weight:bold">주간</span> ' + box(dS) + '</div><div style="margin-top:2px;font-size:12px"><span style="color:#475569;font-weight:bold">야간</span> ' + box(nS) + '</div>';
