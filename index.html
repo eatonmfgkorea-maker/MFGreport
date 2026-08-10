@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V085</title>
+  <title>MFG Report V087</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V085',
+  v: 'V087',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -3053,6 +3053,7 @@ function App() {
   const [dtDetailMonth, setDtDetailMonth] = useState(null);
   const [dtCmpMonth, setDtCmpMonth] = useState(null);
   const [dtCmpBy, setDtCmpBy] = useState('line');
+  const [dtCmpDrill, setDtCmpDrill] = useState(null); // 비가동 비교표 행 클릭 시 세부 분석 대상
   const [dtViewMode, setDtViewMode] = useState('all');
   const [dtTypeFilter, setDtTypeFilter] = useState('ALL');
   const [dtSearch, setDtSearch] = useState('');
@@ -5838,7 +5839,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V085"), React.createElement("div", {
+  }, "V087"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -9137,7 +9138,46 @@ ${question}`;
         .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
       const curT = rows.reduce((a, r) => a + r.cur, 0);
       const prevT = rows.reduce((a, r) => a + r.prev, 0);
-      return { cur, prev, prevYear, rows, curT, prevT, diffT: curT - prevT };
+      // ===== 행 클릭 시 세부 분석: 선택 항목만 다른 축으로 분해 =====
+      let drill = null;
+      if (dtCmpDrill && rows.find(r => r.key === dtCmpDrill)) {
+        const belongs = (dt, log) => keyOf(dt, log) === dtCmpDrill;
+        const breakdown = axis => {
+          const kf = (dt, log) => axis === 'line' ? resolveLineName(dtSection, log.lineName)
+            : axis === 'item' ? (log.item || '(미지정)') : (dt.downtimeType || '(미분류)');
+          const bk = {};
+          const add = (slot, year, month) => {
+            allDts.forEach(dt => {
+              const log = logById[dt.productionLogId];
+              if (!log || !belongs(dt, log)) return;
+              const d2 = new Date(log.productionDate);
+              if (d2.getFullYear() !== year || d2.getMonth() + 1 !== month) return;
+              const k = kf(dt, log);
+              if (!bk[k]) bk[k] = { key: k, cur: 0, prev: 0 };
+              bk[k][slot] += computeDur(dt, log);
+            });
+          };
+          add('cur', dtYear, cur); add('prev', prevYear, prev);
+          return Object.values(bk).map(b => ({ ...b, diff: b.cur - b.prev }))
+            .filter(b => b.cur || b.prev).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+        };
+        const dayBk = {};
+        allDts.forEach(dt => {
+          const log = logById[dt.productionLogId];
+          if (!log || !belongs(dt, log)) return;
+          const d2 = new Date(log.productionDate);
+          if (d2.getFullYear() !== dtYear || d2.getMonth() + 1 !== cur) return;
+          const k = String(log.productionDate).slice(5, 10);
+          dayBk[k] = (dayBk[k] || 0) + computeDur(dt, log);
+        });
+        const axes = (dtCmpBy === 'item' ? [['reason', '비가동 유형별'], ['line', '라인별']]
+          : dtCmpBy === 'line' ? [['reason', '비가동 유형별'], ['item', '아이템별']]
+          : [['line', '라인별'], ['item', '아이템별']]);
+        drill = { key: dtCmpDrill, sel: rows.find(r => r.key === dtCmpDrill),
+          groups: axes.map(([a, label]) => ({ label, rows: breakdown(a) })),
+          days: Object.entries(dayBk).map(([d, v]) => ({ d, v })).sort((a, b) => a.d.localeCompare(b.d)) };
+      }
+      return { cur, prev, prevYear, rows, curT, prevT, diffT: curT - prevT, drill };
     })();
     const maxMin = Math.max(...Object.values(monthAgg).map(a => a.manMin), 1);
     const totalCount = Object.values(monthAgg).reduce((s, a) => s + a.count, 0);
@@ -9415,7 +9455,7 @@ ${question}`;
         [{ k: 'line', l: '라인별' }, { k: 'item', l: '아이템별' }, { k: 'reason', l: '유형별' }].map(o =>
           React.createElement("button", {
             key: o.k,
-            onClick: () => setDtCmpBy(o.k),
+            onClick: () => { setDtCmpBy(o.k); setDtCmpDrill(null); },
             className: `px-3 py-1 rounded text-xs font-bold transition ${dtCmpBy === o.k ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-700'}`
           }, o.l)))),
       React.createElement("div", { className: "p-4" },
@@ -9449,8 +9489,14 @@ ${question}`;
                 const share = Math.abs(r.diff) / absSum * 100;
                 const maxAbs = Math.max(...dtCmp.rows.map(x => Math.abs(x.diff)), 1);
                 const w = Math.abs(r.diff) / maxAbs * 100;
-                return React.createElement("tr", { key: r.key, className: "hover:bg-slate-50" },
-                  React.createElement("td", { className: "px-3 py-1.5 border font-medium" }, r.key),
+                const isSel = dtCmpDrill === r.key;
+                return React.createElement("tr", {
+                    key: r.key,
+                    onClick: () => setDtCmpDrill(isSel ? null : r.key),
+                    className: "cursor-pointer transition " + (isSel ? "bg-indigo-50 ring-1 ring-indigo-300" : "hover:bg-slate-50"),
+                    title: "\ud074\ub9ad\ud558\uba74 \uc774 \ud56d\ubaa9\ub9cc \uc138\ubd80 \ubd84\uc11d"
+                  },
+                  React.createElement("td", { className: "px-3 py-1.5 border font-medium " + (isSel ? "text-indigo-700 font-bold" : "text-indigo-600 underline decoration-dotted underline-offset-2") }, r.key),
                   React.createElement("td", { className: "px-3 py-1.5 border text-right text-slate-500" }, Math.round(r.prev).toLocaleString()),
                   React.createElement("td", { className: "px-3 py-1.5 border text-right font-semibold" }, Math.round(r.cur).toLocaleString()),
                   React.createElement("td", {
@@ -9467,7 +9513,46 @@ ${question}`;
         React.createElement("div", { className: "mt-3 text-[11px] text-slate-500" },
           "\u00B7 \uBCC0\uB3D9 \uBE44\uC911 = \uC804\uCCB4 \uBCC0\uB3D9\uB7C9 \uC911 \uC774 \uD56D\uBAA9\uC774 \uCC28\uC9C0\uD558\uB294 \uBE44\uC728 (\uD074\uC218\uB85D \uBCC0\uD654\uB97C \uC8FC\uB3C4\uD55C \uD56D\uBAA9)",
           React.createElement("br"),
-          "\u00B7 \uBE68\uAC15 = \uB298\uC5B4\uB09C \uD56D\uBAA9, \uD30C\uB791 = \uC904\uC5B4\uB4E0 \uD56D\uBAA9"))) : null,
+          "\u00B7 \uBE68\uAC15 = \uB298\uC5B4\uB09C \uD56D\uBAA9, \uD30C\uB791 = \uC904\uC5B4\uB4E0 \uD56D\uBAA9")
+        , dtCmp.drill ? (() => {
+          const dr = dtCmp.drill;
+          const miniTable = g => React.createElement("div", { key: g.label, className: "bg-white rounded-lg border border-slate-200 p-3" },
+            React.createElement("div", { className: "font-bold text-xs text-slate-700 mb-2" }, g.label),
+            g.rows.length === 0 ? React.createElement("div", { className: "text-center text-slate-400 py-3 text-xs" }, "\ub370\uc774\ud130 \uc5c6\uc74c")
+            : React.createElement("table", { className: "w-full text-[11px]" },
+              React.createElement("thead", { className: "bg-slate-50" }, React.createElement("tr", null,
+                React.createElement("th", { className: "px-2 py-1 border text-left" }, "\ud56d\ubaa9"),
+                React.createElement("th", { className: "px-2 py-1 border text-right w-16" }, dtCmp.prev + "\uc6d4"),
+                React.createElement("th", { className: "px-2 py-1 border text-right w-16" }, dtCmp.cur + "\uc6d4"),
+                React.createElement("th", { className: "px-2 py-1 border text-right w-16" }, "\uc99d\uac10"))),
+              React.createElement("tbody", null, g.rows.map(r => {
+                const up = r.diff > 0, down = r.diff < 0;
+                return React.createElement("tr", { key: r.key, className: "hover:bg-slate-50" },
+                  React.createElement("td", { className: "px-2 py-1 border" }, r.key),
+                  React.createElement("td", { className: "px-2 py-1 border text-right text-slate-500" }, Math.round(r.prev).toLocaleString()),
+                  React.createElement("td", { className: "px-2 py-1 border text-right font-semibold" }, Math.round(r.cur).toLocaleString()),
+                  React.createElement("td", { className: "px-2 py-1 border text-right font-bold " + (up ? 'text-rose-600' : down ? 'text-blue-600' : 'text-slate-300') },
+                    r.diff === 0 ? '-' : (up ? '+' : '') + Math.round(r.diff).toLocaleString()));
+              }))));
+          const maxDay = Math.max(...dr.days.map(d => d.v), 1);
+          return React.createElement("div", { className: "mt-4 border-t-2 border-indigo-200 pt-4" },
+            React.createElement("div", { className: "flex items-center gap-2 mb-3 flex-wrap" },
+              React.createElement("span", { className: "px-2 py-1 rounded bg-indigo-600 text-white text-sm font-bold" }, "\ud83d\udd0e " + dr.key),
+              React.createElement("span", { className: "text-xs text-slate-500" }, "\uc138\ubd80 \ubd84\uc11d"),
+              dr.sel ? React.createElement("span", { className: "text-xs text-slate-600" },
+                dtCmp.prev + "\uc6d4 " + Math.round(dr.sel.prev).toLocaleString() + " \u2192 " + dtCmp.cur + "\uc6d4 " + Math.round(dr.sel.cur).toLocaleString() + " (",
+                React.createElement("b", { className: dr.sel.diff > 0 ? 'text-rose-600' : dr.sel.diff < 0 ? 'text-blue-600' : 'text-slate-400' },
+                  (dr.sel.diff > 0 ? '+' : '') + Math.round(dr.sel.diff).toLocaleString()), " man-min)") : null,
+              React.createElement("button", { onClick: () => setDtCmpDrill(null), className: "ml-auto px-2 py-1 text-xs rounded border border-slate-300 text-slate-500 hover:bg-slate-50" }, "\u2715 \ub2eb\uae30")),
+            React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-3" }, dr.groups.map(miniTable)),
+            dr.days.length > 0 ? React.createElement("div", { className: "mt-3 bg-white rounded-lg border border-slate-200 p-3" },
+              React.createElement("div", { className: "font-bold text-xs text-slate-700 mb-2" }, dtCmp.cur + "\uc6d4 \uc77c\uc790\ubcc4 \ube44\uac00\ub3d9 (man-min)"),
+              React.createElement("div", { className: "flex items-end gap-1", style: { height: '6rem' } },
+                dr.days.map(d => React.createElement("div", { key: d.d, className: "flex-1 flex flex-col items-center justify-end", title: d.d + ' \u00b7 ' + Math.round(d.v).toLocaleString() + '\ubd84' },
+                  React.createElement("span", { className: "text-[9px] text-slate-500" }, Math.round(d.v)),
+                  React.createElement("div", { className: "w-full bg-indigo-400 rounded-t", style: { height: (d.v / maxDay * 4.5) + 'rem', minHeight: '2px' } }),
+                  React.createElement("span", { className: "text-[9px] text-slate-400 mt-0.5" }, d.d.slice(3)))))) : null);
+        })() : null)) : null,
       dtViewMode === 'all' && React.createElement(React.Fragment, null, React.createElement("div", {
       className: "grid grid-cols-2 gap-3"
     }, React.createElement("div", {
@@ -13499,11 +13584,14 @@ ${question}`;
     };
     // 섹션·기간·라인·아이템 필터된 로그
     const startD = new Date(simStart); const endD = new Date(simEnd); endD.setHours(23,59,59,999);
+    // OEE 제외 아이템(excludeFromOEE)은 다른 OEE 탭과 동일하게 시뮬에서도 제외
+    const simExItems = (simSection === 'TCP' ? tcpData : feData)?.settings?.[simSection]?.items || [];
     const secLogs = allLogs.filter(l => {
       if (l.section !== simSection) return false;
       const d = new Date(l.productionDate);
       if (d < startD || d > endD) return false;
       if (simSection === 'TCP' && !['1PC','2PC','Nospin'].includes(l.lineName)) return false;
+      if (simExItems.find(i => i.item === l.item)?.excludeFromOEE === true) return false;
       return true;
     });
     const simLines = ['ALL', ...Array.from(new Set(secLogs.map(l=>l.lineName)))];
