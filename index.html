@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V098</title>
+  <title>MFG Report V099</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V098',
+  v: 'V099',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -5702,7 +5702,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V098"), React.createElement("div", {
+  }, "V099"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -11298,6 +11298,89 @@ function App() {
       const prevNT = rows.reduce((a, r) => a + r.prevN, 0);
       return { cur, prev, prevYear, rows, curT, prevT, diffT: curT - prevT, curNT, prevNT };
     })();
+    // ===== 교체당 생산대수 (PPC: Production Per Changeover) =====
+    // 라인×아이템×월 단위로 양품수량과 Tool 교체 횟수를 집계
+    const ppcAgg = (() => {
+      const acc = {}; // key: line|item|month
+      const key = (l, it, m) => l + '||' + it + '||' + m;
+      const touch = (l, it, m) => {
+        const k = key(l, it, m);
+        if (!acc[k]) acc[k] = { line: l, item: it, month: m, qty: 0, chg: 0, min: 0 };
+        return acc[k];
+      };
+      yearLogs.forEach(l => {
+        const m = new Date(l.productionDate).getMonth() + 1;
+        const line = resolveLineName(toolSection, l.lineName);
+        const it = l.item || '(미지정)';
+        touch(line, it, m).qty += parseFloat(l.goodQuantity) || 0;
+      });
+      yearToolDowntimes.forEach(dt => {
+        const log = logById[dt.productionLogId];
+        if (!log) return;
+        const m = new Date(log.productionDate).getMonth() + 1;
+        const line = resolveLineName(toolSection, log.lineName);
+        const it = log.item || '(미지정)';
+        const b = touch(line, it, m);
+        b.chg += 1;
+        b.min += computeDuration(dt, log);
+      });
+      return Object.values(acc);
+    })();
+    const ppcMonth = toolDetailMonth || toolCmpMonth || (new Date()).getMonth() + 1;
+    // 선택 월 · 라인별 → 아이템 목록
+    const ppcByLine = (() => {
+      const out = {};
+      ppcAgg.filter(r => r.month === ppcMonth && (r.qty > 0 || r.chg > 0)).forEach(r => {
+        if (!out[r.line]) out[r.line] = [];
+        out[r.line].push(r);
+      });
+      Object.keys(out).forEach(l => out[l].sort((a, b) => b.qty - a.qty));
+      return out;
+    })();
+    // 아이템별 월별 추이 (선택 라인 전체 합산)
+    const ppcItemMonthly = (() => {
+      const items = {};
+      ppcAgg.forEach(r => {
+        if (!items[r.item]) items[r.item] = { item: r.item, months: {}, totQty: 0, totChg: 0 };
+        const mm = items[r.item].months;
+        if (!mm[r.month]) mm[r.month] = { qty: 0, chg: 0 };
+        mm[r.month].qty += r.qty; mm[r.month].chg += r.chg;
+        items[r.item].totQty += r.qty; items[r.item].totChg += r.chg;
+      });
+      return Object.values(items).filter(i => i.totChg > 0).sort((a, b) => b.totQty - a.totQty);
+    })();
+    // 전월 대비 아이템별 교체당 생산대수
+    const ppcCmp = (() => {
+      if (!toolCmpMonth) return null;
+      const cur = toolCmpMonth, prev = cur === 1 ? 12 : cur - 1;
+      const sameYear = cur !== 1;
+      const pick = (m, useYear) => {
+        const o = {};
+        ppcAgg.forEach(r => {
+          if (r.month !== m) return;
+          if (!o[r.item]) o[r.item] = { qty: 0, chg: 0 };
+          o[r.item].qty += r.qty; o[r.item].chg += r.chg;
+        });
+        return o;
+      };
+      const c = pick(cur), p = sameYear ? pick(prev) : {};
+      const keys = Array.from(new Set([...Object.keys(c), ...Object.keys(p)]));
+      const rows = keys.map(it => {
+        const a = p[it] || { qty: 0, chg: 0 }, b = c[it] || { qty: 0, chg: 0 };
+        const pv = a.chg > 0 ? a.qty / a.chg : null;
+        const cv = b.chg > 0 ? b.qty / b.chg : null;
+        return { item: it, prevQty: a.qty, prevChg: a.chg, prevPpc: pv,
+                 curQty: b.qty, curChg: b.chg, curPpc: cv,
+                 diff: (pv != null && cv != null) ? cv - pv : null };
+      }).filter(r => r.prevChg > 0 || r.curChg > 0)
+        .sort((a, b) => b.curQty - a.curQty);
+      const tp = rows.reduce((s, r) => ({ q: s.q + r.prevQty, c: s.c + r.prevChg }), { q: 0, c: 0 });
+      const tc = rows.reduce((s, r) => ({ q: s.q + r.curQty, c: s.c + r.curChg }), { q: 0, c: 0 });
+      return { cur, prev, rows,
+        prevPpc: tp.c > 0 ? tp.q / tp.c : null, curPpc: tc.c > 0 ? tc.q / tc.c : null,
+        prevQty: tp.q, prevChg: tp.c, curQty: tc.q, curChg: tc.c, sameYear };
+    })();
+    const fmtPpc = v => v == null ? '-' : Math.round(v).toLocaleString();
     const maxMin = Math.max(...Object.values(monthAgg).map(a => a.manMinutes), 1);
     const maxCount = Math.max(...Object.values(monthAgg).map(a => a.count), 1);
     let detailByLine = {};
@@ -11494,6 +11577,99 @@ function App() {
         className: "text-[11px] text-slate-500"
       }, "\uACF5\uC218 \uAE30\uC900(\uBD84\u00D7\uC778\uC6D0) \u00B7 Tool \uAD50\uCCB4\uB9CC \u00B7 \uC778\uC2DD " + changeMatrix.recognized + "\uAC74")),
          React.createElement("div", { className: "p-3 space-y-4" }, blocks));
+    };
+    // ===== 교체당 생산대수 렌더 =====
+    const renderPpc = () => {
+      const h = React.createElement;
+      const lines = Object.keys(ppcByLine);
+      const cell = (v, cls) => h("td", { className: "px-2 py-1 text-right " + (cls || "") }, v);
+      const ppcCls = v => v == null ? "text-slate-300" : "font-bold text-blue-700";
+      const lineBlocks = lines.map(line => {
+        const rows = ppcByLine[line];
+        const tq = rows.reduce((s, r) => s + r.qty, 0), tc = rows.reduce((s, r) => s + r.chg, 0);
+        return h("div", { key: line, className: "mb-4" },
+          h("div", { className: "flex items-center gap-2 mb-1" },
+            h("span", { className: "font-bold text-sm text-slate-700" }, line),
+            h("span", { className: "text-xs text-slate-500" },
+              "생산 " + Math.round(tq).toLocaleString() + " · 교체 " + tc + "회 · 교체당 ",
+              h("b", { className: "text-blue-700" }, tc > 0 ? Math.round(tq / tc).toLocaleString() : '-'), "대")),
+          h("table", { className: "w-full text-xs border-collapse" },
+            h("thead", null, h("tr", { className: "bg-slate-100 text-slate-600" },
+              h("th", { className: "px-2 py-1 text-left border border-slate-200" }, "아이템"),
+              h("th", { className: "px-2 py-1 text-right border border-slate-200", style: { width: '6rem' } }, "생산수량"),
+              h("th", { className: "px-2 py-1 text-right border border-slate-200", style: { width: '5rem' } }, "교체횟수"),
+              h("th", { className: "px-2 py-1 text-right border border-slate-200", style: { width: '6rem' } }, "교체당 생산"),
+              h("th", { className: "px-2 py-1 text-right border border-slate-200", style: { width: '6rem' } }, "교체공수(분)"))),
+            h("tbody", null, rows.map((r, i) => {
+              const v = r.chg > 0 ? r.qty / r.chg : null;
+              return h("tr", { key: i, className: "border-t border-slate-100 hover:bg-slate-50" },
+                h("td", { className: "px-2 py-1 border border-slate-200" }, r.item),
+                h("td", { className: "px-2 py-1 text-right border border-slate-200" }, Math.round(r.qty).toLocaleString()),
+                h("td", { className: "px-2 py-1 text-right border border-slate-200" }, r.chg || '-'),
+                h("td", { className: "px-2 py-1 text-right border border-slate-200 " + ppcCls(v) }, fmtPpc(v)),
+                h("td", { className: "px-2 py-1 text-right border border-slate-200 text-slate-500" }, Math.round(r.min).toLocaleString()));
+            }))));
+      });
+      const monthlyTable = h("div", { className: "overflow-x-auto" },
+        h("table", { className: "w-full text-xs border-collapse", style: { minWidth: '54rem' } },
+          h("thead", null, h("tr", { className: "bg-slate-100 text-slate-600" },
+            h("th", { className: "px-2 py-1 text-left border border-slate-200", style: { width: '8rem' } }, "아이템"),
+            Array.from({ length: 12 }, (_, i) => h("th", { key: i, className: "px-1 py-1 text-right border border-slate-200" }, (i + 1) + '월')),
+            h("th", { className: "px-2 py-1 text-right border border-slate-200 bg-slate-200", style: { width: '5rem' } }, "연간"))),
+          h("tbody", null, ppcItemMonthly.map((it, i) =>
+            h("tr", { key: i, className: "border-t border-slate-100 hover:bg-slate-50" },
+              h("td", { className: "px-2 py-1 border border-slate-200 font-medium" }, it.item),
+              Array.from({ length: 12 }, (_, mi) => {
+                const mm = it.months[mi + 1];
+                const v = mm && mm.chg > 0 ? mm.qty / mm.chg : null;
+                return h("td", { key: mi, className: "px-1 py-1 text-right border border-slate-200 " + (v == null ? "text-slate-300" : "text-slate-700"), title: mm ? ('생산 ' + Math.round(mm.qty).toLocaleString() + ' / 교체 ' + mm.chg + '회') : '' }, fmtPpc(v));
+              }),
+              h("td", { className: "px-2 py-1 text-right border border-slate-200 font-bold text-blue-700 bg-slate-50" },
+                fmtPpc(it.totChg > 0 ? it.totQty / it.totChg : null)))))));
+      const cmpBlock = ppcCmp && h("div", { className: "mt-4" },
+        h("div", { className: "flex items-center gap-3 mb-2 flex-wrap" },
+          h("span", { className: "font-bold text-sm text-slate-700" }, "🆚 " + ppcCmp.prev + "월 → " + ppcCmp.cur + "월 교체당 생산대수 비교"),
+          h("span", { className: "text-xs text-slate-500" },
+            fmtPpc(ppcCmp.prevPpc) + "대 → ", h("b", { className: "text-blue-700" }, fmtPpc(ppcCmp.curPpc) + "대"),
+            ppcCmp.prevPpc != null && ppcCmp.curPpc != null
+              ? h("b", { className: "ml-1 " + (ppcCmp.curPpc >= ppcCmp.prevPpc ? "text-emerald-600" : "text-rose-600") },
+                  "(" + (ppcCmp.curPpc >= ppcCmp.prevPpc ? '▲' : '▼') + Math.abs(Math.round(ppcCmp.curPpc - ppcCmp.prevPpc)).toLocaleString() + ")") : null),
+          !ppcCmp.sameYear && h("span", { className: "text-[11px] text-amber-600" }, "※ 전년 12월은 집계에서 제외됩니다")),
+        h("table", { className: "w-full text-xs border-collapse" },
+          h("thead", null,
+            h("tr", { className: "bg-slate-100 text-slate-600" },
+              h("th", { rowSpan: 2, className: "px-2 py-1 text-left border border-slate-200" }, "아이템"),
+              h("th", { colSpan: 3, className: "px-2 py-1 text-center border border-slate-200" }, ppcCmp.prev + "월"),
+              h("th", { colSpan: 3, className: "px-2 py-1 text-center border border-slate-200" }, ppcCmp.cur + "월"),
+              h("th", { rowSpan: 2, className: "px-2 py-1 text-right border border-slate-200 bg-slate-200", style: { width: '5rem' } }, "증감")),
+            h("tr", { className: "bg-slate-50 text-slate-500" },
+              ['생산', '교체', '교체당', '생산', '교체', '교체당'].map((c, i) =>
+                h("th", { key: i, className: "px-2 py-1 text-right border border-slate-200 font-semibold" }, c)))),
+          h("tbody", null, ppcCmp.rows.map((r, i) =>
+            h("tr", { key: i, className: "border-t border-slate-100 hover:bg-slate-50" },
+              h("td", { className: "px-2 py-1 border border-slate-200 font-medium" }, r.item),
+              cell(Math.round(r.prevQty).toLocaleString(), "border border-slate-200 text-slate-500"),
+              cell(r.prevChg || '-', "border border-slate-200 text-slate-500"),
+              cell(fmtPpc(r.prevPpc), "border border-slate-200 text-slate-600"),
+              cell(Math.round(r.curQty).toLocaleString(), "border border-slate-200"),
+              cell(r.curChg || '-', "border border-slate-200"),
+              cell(fmtPpc(r.curPpc), "border border-slate-200 font-bold text-blue-700"),
+              h("td", { className: "px-2 py-1 text-right border border-slate-200 font-bold bg-slate-50 " +
+                  (r.diff == null ? "text-slate-300" : r.diff > 0 ? "text-emerald-600" : r.diff < 0 ? "text-rose-600" : "text-slate-400") },
+                r.diff == null ? '-' : (r.diff > 0 ? '+' : '') + Math.round(r.diff).toLocaleString()))))));
+      return h("div", { className: "bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden mt-3" },
+        h("div", { className: "bg-slate-50 border-b border-slate-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2" },
+          h("div", { className: "font-bold text-sm text-slate-700" }, "⚙️ 교체당 생산대수"),
+          h("div", { className: "text-[11px] text-slate-500" }, "양품수량 ÷ Tool 교체 횟수 · " + ppcMonth + "월 기준 (월 막대 또는 비교 월 선택으로 변경)")),
+        h("div", { className: "p-3" },
+          lines.length === 0
+            ? h("div", { className: "text-center text-slate-400 py-6 text-sm" }, ppcMonth + "월 데이터가 없습니다.")
+            : h("div", null,
+                h("div", { className: "font-bold text-xs text-slate-500 mb-2" }, "📍 " + ppcMonth + "월 · 라인별 아이템 교체당 생산대수"),
+                lineBlocks),
+          h("div", { className: "font-bold text-xs text-slate-500 mt-4 mb-2" }, "📈 아이템별 월별 교체당 생산대수 (" + toolYear + "년)"),
+          monthlyTable,
+          cmpBlock));
     };
     return React.createElement("div", {
       className: "flex gap-3"
@@ -11870,7 +12046,7 @@ function App() {
       }, Math.round(it.manMinutes)), React.createElement("td", {
         className: "px-3 py-1 text-slate-600"
       }, it.content))))))));
-    })(), renderChangeMatrix()));
+    })(), renderChangeMatrix(), renderPpc()));
   })(), activeTab === 'workhour' && (tcpData || feData) && (() => {
     const whLines = (() => {
       if (whSection === 'TCP') return ['1PC', '2PC', 'Nospin'];
