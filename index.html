@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V090</title>
+  <title>MFG Report V094</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,7 +299,7 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V090',
+  v: 'V094',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
 }, {
@@ -3061,6 +3061,8 @@ function App() {
   const [dtCmpBy, setDtCmpBy] = useState('line');
   const [dtCmpDrill, setDtCmpDrill] = useState(null); // 비가동 비교표 행 클릭 시 세부 분석 대상
   const [dtViewMode, setDtViewMode] = useState('all');
+  const [dtCatFilter, setDtCatFilter] = useState('all'); // all | 계획 | 비계획
+  const [dtTypeOpen, setDtTypeOpen] = useState(null); // 유형별 표에서 펼친 유형명
   const [dtTypeFilter, setDtTypeFilter] = useState('ALL');
   const [dtSearch, setDtSearch] = useState('');
   const [dtColFilters, setDtColFilters] = useState({});
@@ -5851,7 +5853,7 @@ ${question}`;
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V090"), React.createElement("div", {
+  }, "V094"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -9201,6 +9203,10 @@ ${question}`;
         if (!log) return;
         const m = new Date(log.productionDate).getMonth() + 1;
         if (m !== dtDetailMonth) return;
+        const cat0 = dt.downtimeCategory || dt.category || '';
+        // 데이터상 계획 외 값은 '비가동' 등으로 저장됨 → 계획이 아니면 모두 비계획으로 취급
+        if (dtCatFilter === '계획' && cat0 !== '계획') return;
+        if (dtCatFilter === '비계획' && cat0 === '계획') return;
         const type = dt.downtimeType || '미분류';
         if (!typeAgg[type]) typeAgg[type] = {
           count: 0,
@@ -9654,10 +9660,21 @@ ${question}`;
       className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
       className: "bg-slate-50 px-4 py-2.5 font-semibold text-slate-700 flex items-center justify-between border-b border-slate-200"
-    }, React.createElement("span", null, dtYear, "년 ", dtDetailMonth, "월 · ", dtSection, " 유형별 비가동"), React.createElement("button", {
-      onClick: () => setDtDetailMonth(null),
-      className: "text-xs px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50"
-    }, "닫기")), React.createElement("div", {
+    }, React.createElement("span", null, dtYear, "년 ", dtDetailMonth, "월 · ", dtSection, " 유형별 비가동"),
+      React.createElement("div", { className: "flex items-center gap-2" },
+        React.createElement("div", { className: "flex gap-1 bg-white rounded-lg p-0.5 border border-slate-200" },
+          [['all', '전체'], ['계획', '계획'], ['비계획', '비계획']].map(([k, lb]) =>
+            React.createElement("button", {
+              key: k,
+              onClick: () => { setDtCatFilter(k); setDtTypeOpen(null); },
+              className: "px-3 py-1 rounded-md text-xs font-bold transition " + (dtCatFilter === k
+                ? (k === '계획' ? 'bg-emerald-600 text-white' : k === '비계획' ? 'bg-rose-600 text-white' : 'bg-indigo-600 text-white')
+                : 'text-slate-500 hover:text-slate-700')
+            }, lb))),
+        React.createElement("button", {
+          onClick: () => setDtDetailMonth(null),
+          className: "text-xs px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50"
+        }, "닫기"))), React.createElement("div", {
       className: "grid grid-cols-2 gap-4 p-4"
     }, React.createElement("div", {
       className: "flex items-center justify-center"
@@ -9766,22 +9783,45 @@ ${question}`;
       className: "px-3 py-2 text-right font-semibold"
     }, "총 공수(분)"), React.createElement("th", {
       className: "px-3 py-2 text-right font-semibold"
-    }, "비중"))), React.createElement("tbody", null, typeRows.map((r, i) => React.createElement("tr", {
-      key: i,
-      className: "border-t border-slate-100"
-    }, React.createElement("td", {
-      className: "px-3 py-1.5 font-medium"
-    }, r.type), React.createElement("td", {
-      className: "px-3 py-1.5 text-center"
-    }, React.createElement("span", {
-      className: `px-2 py-0.5 rounded text-xs ${r.category === '계획' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`
-    }, r.category)), React.createElement("td", {
-      className: "px-3 py-1.5 text-right"
-    }, r.count), React.createElement("td", {
-      className: "px-3 py-1.5 text-right font-bold text-blue-700"
-    }, Math.round(r.manMin).toLocaleString()), React.createElement("td", {
-      className: "px-3 py-1.5 text-right text-slate-600"
-    }, monthSelectedTotal > 0 ? (r.manMin / monthSelectedTotal * 100).toFixed(1) : '-', "%"))), React.createElement("tr", {
+    }, "비중"))), React.createElement("tbody", null, typeRows.map((r, i) => {
+      const open = dtTypeOpen === r.type;
+      return React.createElement(React.Fragment, { key: i },
+        React.createElement("tr", {
+          onClick: () => setDtTypeOpen(open ? null : r.type),
+          className: "border-t border-slate-100 cursor-pointer " + (open ? "bg-indigo-50" : "hover:bg-slate-50"),
+          title: "클릭하면 세부내용 표시"
+        }, React.createElement("td", {
+          className: "px-3 py-1.5 font-medium " + (open ? "text-indigo-700 font-bold" : "text-indigo-600")
+        }, React.createElement("span", { className: "inline-block w-3 text-[10px] text-slate-400" }, open ? '▼' : '▶'), r.type),
+          React.createElement("td", {
+            className: "px-3 py-1.5 text-center"
+          }, React.createElement("span", {
+            className: `px-2 py-0.5 rounded text-xs ${r.category === '계획' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`
+          }, r.category === '계획' ? '계획' : '비계획')), React.createElement("td", {
+            className: "px-3 py-1.5 text-right"
+          }, r.count), React.createElement("td", {
+            className: "px-3 py-1.5 text-right font-bold text-blue-700"
+          }, Math.round(r.manMin).toLocaleString()), React.createElement("td", {
+            className: "px-3 py-1.5 text-right text-slate-600"
+          }, monthSelectedTotal > 0 ? (r.manMin / monthSelectedTotal * 100).toFixed(1) : '-', "%")),
+        open && React.createElement("tr", null, React.createElement("td", { colSpan: 5, className: "p-0 bg-slate-50" },
+          React.createElement("div", { className: "max-h-72 overflow-y-auto" },
+            React.createElement("table", { className: "w-full text-xs" },
+              React.createElement("thead", { className: "bg-slate-100 text-slate-500 sticky top-0" }, React.createElement("tr", null,
+                ['일자', '주야', '라인', '아이템', '시간', '인원', '공수(분)', '내용'].map((c, ci) =>
+                  React.createElement("th", { key: ci, className: "px-2 py-1 " + (ci === 7 ? "text-left" : ci >= 5 ? "text-right" : "text-left") + " font-semibold whitespace-nowrap" }, c)))),
+              React.createElement("tbody", null,
+                (r.items || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.startTime || '').localeCompare(String(b.startTime || ''))).map((it, ii) =>
+                  React.createElement("tr", { key: ii, className: "border-t border-slate-200 hover:bg-white" },
+                    React.createElement("td", { className: "px-2 py-1 whitespace-nowrap" }, String(it.date).slice(5)),
+                    React.createElement("td", { className: "px-2 py-1" }, it.shift),
+                    React.createElement("td", { className: "px-2 py-1" }, it.line),
+                    React.createElement("td", { className: "px-2 py-1" }, it.item || '-'),
+                    React.createElement("td", { className: "px-2 py-1 whitespace-nowrap text-slate-500" }, (it.startTime || '') + (it.endTime ? '~' + it.endTime : '')),
+                    React.createElement("td", { className: "px-2 py-1 text-right" }, it.workers),
+                    React.createElement("td", { className: "px-2 py-1 text-right font-semibold text-blue-700" }, Math.round(it.manMin).toLocaleString()),
+                    React.createElement("td", { className: "px-2 py-1 text-slate-600" }, it.content || '-')))))))));
+    }), React.createElement("tr", {
       className: "border-t-2 border-slate-300 bg-slate-50 font-bold"
     }, React.createElement("td", {
       className: "px-3 py-2",
@@ -14057,7 +14097,14 @@ ${question}`;
     const achMonths = Array.from(new Set((achData?.rows || []).map(r => String(r.date).slice(0, 7)))).sort();
     const achMonth = achMonths.includes(prMonth) ? prMonth : (achMonths[achMonths.length - 1] || '');
     const ACH_EXCLUDE = ['T300 SUB1', 'T300 SUB2', 'FLVV(SUB)'];
-    const ACH_MERGE = [{ label: 'ICV (Old+New)', match: l => /ICV/i.test(l) }];
+    // 라인명 표준화 + 통합 그룹
+    const ACH_MERGE = [
+      { label: 'ICV (Old+New)', match: l => /ICV/i.test(l) },
+      { label: 'A/FLVV', match: l => l === 'Auto Module FLVV' || l === 'Auto Module / Manual Module FLVV' },
+      { label: 'A/GVV', match: l => l === 'Auto GVV' || l === 'Auto GVV / New(MNL) GVV' },
+      { label: 'M/FLVV', match: l => l === 'Manual FLVV' },
+      { label: 'M/GVV', match: l => l === 'New(MNL) GVV' }
+    ];
     const achWeeks = (() => {
       if (!achMonth) return [];
       const [Y, M] = achMonth.split('-').map(Number);
@@ -14087,7 +14134,9 @@ ${question}`;
         const g = ACH_MERGE.find(g => g.match(l));
         if (g) {
           const mem = lines.filter(x => g.match(x));
-          if (mem.length > 1) { mem.forEach(m => used.add(m)); groups.push({ label: g.label, lines: mem }); return; }
+          mem.forEach(m => used.add(m));
+          groups.push({ label: g.label, lines: mem });
+          return;
         }
         used.add(l); groups.push({ label: l, lines: [l] });
       });
@@ -14099,7 +14148,7 @@ ${question}`;
           if (wi >= 0) { weeks[wi].plan += r.plan || 0; weeks[wi].act += r.act || 0; }
         });
         const tot = weeks.reduce((a, w) => ({ plan: a.plan + w.plan, act: a.act + w.act }), { plan: 0, act: 0 });
-        return { line: grp.label, merged: grp.lines.length > 1, weeks, tot };
+        return { line: grp.label, merged: /ICV/i.test(grp.label) && grp.lines.length > 1, weeks, tot };
       }).filter(r => r.tot.plan > 0 || r.tot.act > 0);
       const totals = Array.from({ length: nW }, (_, i) => rows.reduce((a, r) => ({ plan: a.plan + r.weeks[i].plan, act: a.act + r.weeks[i].act }), { plan: 0, act: 0 }));
       const grand = rows.reduce((a, r) => ({ plan: a.plan + r.tot.plan, act: a.act + r.tot.act }), { plan: 0, act: 0 });
