@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V099</title>
+  <title>MFG Report V100</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,6 +299,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V100',
+  d: '2026-08-12',
+  items: ['생산계획 자동 불러오기 속도 개선 — 계획 파일이 지난번과 동일하면 다운로드·파싱을 생략(약 19MB 절약, 즉시 표시)', '파일이 같아도 «🔗 매칭»에서 수동 불러오기는 항상 새로 받음', 'TCP·FE 계획 파일 다운로드를 동시에 진행(파싱은 기존처럼 순차 처리로 메모리 안전 유지)', '접속 시 받은 파일 목록을 계획 자동로드에 재사용 — 목록 중복 조회 제거', '불필요한 대기 시간(약 2초) 제거', 'Production Review 탭으로 바로 들어가도 생산계획 자동 불러오기 실행', '상태줄에 «동일·생략» 표시 추가 — 생략 여부를 눈으로 확인 가능']
+}, {
   v: 'V099',
   d: '2026-08-04',
   items: ['Capacity Utilization 탭 추가 — 라인별 월간 가동률 대시보드', '근무일 설정: 12개월 달력에서 날짜를 클릭해 평일·공휴일·토요일·근무불가 지정', '2026~2032년 공휴일(대체공휴일 포함) 기본 반영, 8월 첫째 주 휴무 기본 적용', '공정별 가동률·수량·필요시간·가용시간 표시, 공정 클릭 시 아이템별 수량 펼침', 'CT 템플릿을 연도별로 관리 — 연도를 선택하고 올리면 그 연도에만 반영', '«템플릿 내려받기»로 해당 연도 CT·수량을 그대로 받아 수정 후 올리는 방식', '데이터가 없는 연도는 직전 연도를 복사해 시작 가능', '«5년» 보기 추가 — 내년부터 5년간 라인별 연 단위 가동률·수량·필요/가용시간만 표시', '불량·재작업·비가동·Tool 교체에 «비교(전월 대비)» 추가 — 라인별·아이템별·유형별로 무엇 때문에 늘고 줄었는지 분해', 'Tool 교체 비교는 «교체 조합별»(A → B)과 교체 횟수 변화도 함께 표시', '달성률·Working Hour 탭 제거', '«연평균» 표기를 «Total»로 변경', 'CT 템플릿과 근무일 설정은 공유저장소에 저장되어 모든 사용자가 함께 사용']
@@ -3486,9 +3490,17 @@ function App() {
     return tax;
   }, [tcpData, feData]);
   const GAS_URL = 'https://script.google.com/macros/s/AKfycbxLFrxbAaBt1bBa3SUdDY9wY48tvt85mEDaj3tiKhyw_R7oJCC9GbOWLfWbdSohnQtB/exec';
+  // V100: 계획 파일 파싱 전역 잠금 — TCP·FE를 동시에 불러와도 7~9MB 워크북 파싱은 한 번에 하나만(메모리 보호)
+  const planParseLockRef = React.useRef(Promise.resolve());
+  const withPlanParseLock = fn => {
+    const p = planParseLockRef.current.then(fn);
+    planParseLockRef.current = p.then(() => {}, () => {});
+    return p;
+  };
   const loadPlanFromDrive = async (type, silent, preList) => {
     planErrRef.current[type] = '';
     planSavedRef.current[type] = 0;
+    planSkipRef.current[type] = false;
     try {
       const prefix = type === 'tcp' ? 'plan-xlsx-01.TCP' : 'plan-xlsx-02.FE';
       const list = preList || await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json();
@@ -3497,29 +3509,59 @@ function App() {
       if (files.length === 0) { planErrRef.current[type] = '파일없음'; if(!silent) alert('드라이브에 백업된 ' + (type === 'tcp' ? 'TCP' : 'FE') + ' 엑셀이 없습니다.'); return false; }
       // FE는 월별 파일이 따로 올라오므로 최근 2개월치를 모두 읽어야 한다(8월 파일만 읽으면 7월 계획이 갱신 안 됨)
       const targets = type === 'fe' ? files.slice(0, 2).reverse() : [files[0]];
-      let savedSum = 0, okCount = 0, lastMod = null, lastErr = '';
-      for (const target of targets) {
-        let j = null;
-        for (let attempt = 0; attempt < 3 && !j; attempt++) {
+      // V100: 파일 미변경 스킵(자동로드 전용) — 마지막 적용한 파일들의 modified와 동일하고
+      // 로컬에 계획 데이터가 실제로 존재할 때만 다운로드·파싱을 생략. 수동(🔗 매칭)은 항상 새로 받음.
+      const modSig = targets.map(t => (t.modified || '') + '#' + (t.name || '')).join('|');
+      if (silent && modSig) {
+        try {
+          const sigStore = JSON.parse(localStorage.getItem('mfg_plan_file_mod') || '{}');
+          let hasLocal = false;
+          if (type === 'tcp') {
+            const pp = JSON.parse(localStorage.getItem('mfg_production_plan') || '{}');
+            hasLocal = Object.keys(pp).some(k => k.indexOf('TCP|') === 0);
+          } else {
+            const fr = JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || 'null');
+            hasLocal = !!(fr && Array.isArray(fr.rows) && fr.rows.length > 0);
+          }
+          if (sigStore[type] === modSig && hasLocal) {
+            planSkipRef.current[type] = true;
+            return targets[targets.length - 1].modified || true;
+          }
+        } catch {}
+      }
+      // V100: 다운로드는 대상 파일 병렬 요청(파일당 3회 재시도), 대기 시간 제거
+      let lastErr = '';
+      const downloadOne = async target => {
+        for (let attempt = 0; attempt < 3; attempt++) {
           if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
           try {
             const lr = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(target.id) + '&_=' + Date.now());
             if (!lr.ok) { lastErr = 'HTTP' + lr.status; continue; }
-            j = await lr.json();
+            return await lr.json();
           } catch (le) { lastErr = String(le.message || '').slice(0, 20); }
         }
+        return null;
+      };
+      const downloads = await Promise.all(targets.map(downloadOne));
+      let savedSum = 0, okCount = 0, lastMod = null;
+      for (let ti = 0; ti < targets.length; ti++) {
+        const target = targets[ti];
+        const j = downloads[ti];
         if (!j) { lastErr = lastErr || '로드실패'; continue; }
         const d = j.data || {};
         const b64 = d.xlsxB64 || (d.data && d.data.xlsxB64);
         const origName = d.origName || (d.data && d.data.origName) || target.name;
         if (!b64) { lastErr = 'B64없음'; continue; }
-        const bin = atob(b64);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        let wb;
-        try { wb = readPlanWb(bytes, type); }
-        catch (pe) { lastErr = '엑셀읽기:' + String(pe.message || '').slice(0, 20); continue; }
-        const r = type === 'tcp' ? applyTcpPlanWb(wb, silent) : applyFePlanWb(wb, origName, silent);
+        // 파싱·적용은 전역 잠금으로 순차 처리
+        const r = await withPlanParseLock(() => {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          let wb;
+          try { wb = readPlanWb(bytes, type); }
+          catch (pe) { return { ok: false, reason: '엑셀읽기:' + String(pe.message || '').slice(0, 20) }; }
+          return type === 'tcp' ? applyTcpPlanWb(wb, silent) : applyFePlanWb(wb, origName, silent);
+        });
         if (r && r.ok) {
           okCount++;
           savedSum += (r.saved || 0);
@@ -3527,10 +3569,17 @@ function App() {
         } else {
           lastErr = (r && r.reason) || '적용실패';
         }
-        if (targets.length > 1) await new Promise(r => setTimeout(r, 600));
       }
       planSavedRef.current[type] = savedSum;
       if (okCount === 0) { planErrRef.current[type] = lastErr || '적용실패'; if(!silent) alert('생산계획 불러오기 실패: ' + (lastErr || '')); return false; }
+      // V100: 대상 파일 전부 적용 성공 시에만 서명 저장 → 다음 자동로드부터 미변경 시 생략
+      if (okCount === targets.length) {
+        try {
+          const s = JSON.parse(localStorage.getItem('mfg_plan_file_mod') || '{}');
+          s[type] = modSig;
+          localStorage.setItem('mfg_plan_file_mod', JSON.stringify(s));
+        } catch {}
+      }
       return lastMod || true;
     } catch (e) {
       planErrRef.current[type] = '예외:' + String(e.message || '').slice(0, 25);
@@ -3538,13 +3587,15 @@ function App() {
       return false;
     }
   };
-  // Production 보고 탭 진입 시 생산계획 자동 로드 (1회, 조용히)
+  // Production 보고/리뷰 탭 진입 시 생산계획 자동 로드 (1회, 조용히)
   const planAutoLoadedRef = React.useRef(false);
+  const planSkipRef = React.useRef({ tcp: false, fe: false }); // V100: 파일 미변경으로 생략됐는지 표시용
+  const gasListRef = React.useRef(null); // V100: 초기 자동로드에서 받은 GAS 파일 목록(계획 자동로드와 공유)
   const [planDataReady, setPlanDataReady] = useState(false); // TCP/FE 데이터·설정 자동로드 완료 신호
   const [planLoadStatus, setPlanLoadStatus] = useState(''); // '', 'loading', 'done', 'fail'
   const [planLoadMsg, setPlanLoadMsg] = useState('');
   React.useEffect(() => {
-    if (activeTab !== 'prodreport') return;
+    if (activeTab !== 'prodreport' && activeTab !== 'prodreview') return;
     if (planAutoLoadedRef.current) return;
     // 데이터·설정 자동로드가 끝나야 Part 자동매칭이 가능하다.
     // 아직이면 중단하고, 로드 완료(planDataReady) 시 이 effect가 재실행된다.
@@ -3566,12 +3617,16 @@ function App() {
       check(tries);
     });
     const t = setTimeout(async () => {
-      await new Promise(r => setTimeout(r, 300)); // 데이터 반영 렌더 대기
-      let sharedList = null;
-      try { sharedList = await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json(); } catch (e) {}
-      const okTcp = await loadPlanFromDrive('tcp', true, sharedList);
-      await new Promise(r => setTimeout(r, 800)); // TCP 워크북 메모리 회수 여유
-      const okFe = await loadPlanFromDrive('fe', true, sharedList);
+      // V100: 초기 자동로드에서 받은 파일 목록 재사용(목록 중복 조회 제거) — 없을 때만 새로 조회
+      let sharedList = gasListRef.current;
+      if (!sharedList) {
+        try { sharedList = await (await fetch(GAS_URL + '?action=list&_=' + Date.now())).json(); } catch (e) {}
+      }
+      // V100: TCP·FE 동시 로드 — 다운로드는 병렬, 파싱은 함수 내부 잠금으로 순차(메모리 안전)
+      const [okTcp, okFe] = await Promise.all([
+        loadPlanFromDrive('tcp', true, sharedList),
+        loadPlanFromDrive('fe', true, sharedList)
+      ]);
       // 이미 저장된 계획이 있으면(화면에 데이터 있음) 그것도 성공으로 간주
       const hasPlan = Object.keys(productionPlan || {}).length > 0;
       if (okTcp || okFe || hasPlan) {
@@ -3585,8 +3640,10 @@ function App() {
           return `${M}/${D} ${h}:${m}`;
         };
         const tcpT = fmtFileTime(okTcp), feT = fmtFileTime(okFe);
-        const tcpMark = tcpT ? `파일 ${tcpT}(${planSavedRef.current.tcp}건)` : (planErrRef.current.tcp ? `실패(${planErrRef.current.tcp})` : (hasPlan ? '(저장됨)' : '−'));
-        const feMark = feT ? `파일 ${feT}(${planSavedRef.current.fe}건)` : (planErrRef.current.fe ? `실패(${planErrRef.current.fe})` : (hasPlan ? '(저장됨)' : '−'));
+        const tcpMark = planSkipRef.current.tcp ? (tcpT ? `파일 ${tcpT} 동일·생략` : '동일·생략')
+          : (tcpT ? `파일 ${tcpT}(${planSavedRef.current.tcp}건)` : (planErrRef.current.tcp ? `실패(${planErrRef.current.tcp})` : (hasPlan ? '(저장됨)' : '−')));
+        const feMark = planSkipRef.current.fe ? (feT ? `파일 ${feT} 동일·생략` : '동일·생략')
+          : (feT ? `파일 ${feT}(${planSavedRef.current.fe}건)` : (planErrRef.current.fe ? `실패(${planErrRef.current.fe})` : (hasPlan ? '(저장됨)' : '−')));
         setPlanLoadMsg(`생산계획 준비됨 · TCP ${tcpMark} / FE ${feMark}`);
       } else {
         setPlanLoadStatus('fail');
@@ -3802,6 +3859,7 @@ function App() {
       try {
         const listRes = await fetch(GAS_URL + '?action=list');
         const listResult = await listRes.json();
+        if (listResult && listResult.ok) gasListRef.current = listResult; // V100: 계획 자동로드와 목록 공유
         if (cancelled) return;
         if (!listResult.ok || !listResult.files || listResult.files.length === 0) {
           setAutoLoadStatus('failed');
@@ -5702,7 +5760,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V099"), React.createElement("div", {
+  }, "V100"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
