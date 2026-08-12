@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V100</title>
+  <title>MFG Report V101</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,6 +299,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V101',
+  d: '2026-08-12',
+  items: ['OEE 시뮬레이터: 비가동을 제외·이동하면 기대생산량(P 분모)도 조정된 가동시간으로 함께 재계산 — 가동시간이 늘면 P가 그만큼 내려가도록 수정', '조정을 로그 단위로 반영해 아이템별 CT 차이·CT 미등록 로그를 정확히 구분', '계산 내역에 «기대생산량 기준→시뮬» 표시 추가 — P 분모 변화를 눈으로 확인 가능', '조정이 없을 때는 기존 계산과 완전히 동일(기준값 불변)']
+}, {
   v: 'V100',
   d: '2026-08-12',
   items: ['생산계획 자동 불러오기 속도 개선 — 계획 파일이 지난번과 동일하면 다운로드·파싱을 생략(약 19MB 절약, 즉시 표시)', '파일이 같아도 «🔗 매칭»에서 수동 불러오기는 항상 새로 받음', 'TCP·FE 계획 파일 다운로드를 동시에 진행(파싱은 기존처럼 순차 처리로 메모리 안전 유지)', '접속 시 받은 파일 목록을 계획 자동로드에 재사용 — 목록 중복 조회 제거', '불필요한 대기 시간(약 2초) 제거', 'Production Review 탭으로 바로 들어가도 생산계획 자동 불러오기 실행', '상태줄에 «동일·생략» 표시 추가 — 생략 여부를 눈으로 확인 가능']
@@ -5760,7 +5764,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V100"), React.createElement("div", {
+  }, "V101"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13762,10 +13766,14 @@ function App() {
     const filtered = lineFilteredLogs.filter(l => simSelItems.includes('ALL') || simSelItems.includes(l.item));
     // 비가동/불량/재작업 종류 목록 + 종류별 합계 (실제 로그에서)
     const dtByType = {};
+    // V101: P 분모 재계산용 — 로그별 비가동 레코드 보관(조정을 로그 단위로 반영하기 위함)
+    const simLogRecs = [];
     // 불량/재작업: 스테이션/대분류/세부 각각 독립 집계 + 원시 로그 보관(계산용)
     const defSt={}, defTy={}, defSub={}, defLogs=[];
     const rwSt={}, rwTy={}, rwSub={}, rwLogs=[];
     filtered.forEach(l => {
+      const __rec = { log: l, dts: [] };
+      simLogRecs.push(__rec);
       allDowntimeLogs.filter(dt=>dt.productionLogId===l.id).forEach(dt=>{
         const type = dt.downtimeType || '(미분류)';
         const cat = (dt.downtimeCategory||dt.category)==='계획' ? '계획' : '비계획';
@@ -13778,6 +13786,7 @@ function App() {
         }
         if (!dtByType[type]) dtByType[type]={cat, dur:0};
         dtByType[type].dur += dur;
+        __rec.dts.push({ type, cat, dur });
       });
       allDefectLogs.filter(d=>d.productionLogId===l.id).forEach(d=>{
         const st=d.station||'(미지정)', ty=d.defectType||d.type||'(미지정)', sub=d.defectSubType||d.subType||'(미지정)';
@@ -13793,20 +13802,33 @@ function App() {
       });
     });
     // 계산 (조정 반영). base=조정없음, sim=조정있음
+    // V101: 비가동 제외/이동을 로그 단위로 반영해 기대생산량(P 분모)도 함께 재계산.
+    //  - 로그별 조정 가동시간 = 생산시간 − 조정후 계획비가동 − 조정후 비계획비가동
+    //  - 기대생산량은 기존값 × (조정 가동시간 / 기준 가동시간) 비례 스케일 → 조정이 없으면 기존과 완전 동일
+    //  - 기준 가동시간이 0인데 시간이 회수되면 idealCT로 절대 계산(60/idealCT = 분당 기대수량)
     const compute = (adj) => {
       let productionTime=0, plannedDt=0, unplannedDt=0, goodQty=0, expectedOutput=0, defects=0, rework=0;
-      filtered.forEach(l => {
-        const c = computeLogContribution(l);
+      simLogRecs.forEach(rec => {
+        const c = computeLogContribution(rec.log);
         if (!c) return;
         productionTime += c.productionTime||0;
         goodQty += c.goodQty||0;
-        expectedOutput += c.expectedOutput||0;
-      });
-      // 비가동: 종류별로 조정 적용
-      Object.entries(dtByType).forEach(([type,info])=>{
-        if (adj.exclDt.has(type)) return;
-        const cat = adj.moved[type] || info.cat;
-        if (cat==='계획') plannedDt += info.dur; else unplannedDt += info.dur;
+        // 이 로그의 비가동에 조정(제외/계획↔비계획 이동) 반영
+        let pDt=0, uDt=0, pDt0=0, uDt0=0;
+        rec.dts.forEach(dt=>{
+          if (dt.cat==='계획') pDt0+=dt.dur; else uDt0+=dt.dur;
+          if (adj.exclDt.has(dt.type)) return;
+          const cat = adj.moved[dt.type] || dt.cat;
+          if (cat==='계획') pDt+=dt.dur; else uDt+=dt.dur;
+        });
+        plannedDt+=pDt; unplannedDt+=uDt;
+        // 기대생산량 재계산 (CT 미등록 로그는 기준과 동일하게 P 분모 기여 0)
+        const otBase = Math.max(0, (c.productionTime||0) - pDt0 - uDt0);
+        const otAdj = Math.max(0, (c.productionTime||0) - pDt - uDt);
+        const eo = c.expectedOutput||0;
+        if (otBase>0 && eo>0) expectedOutput += eo * (otAdj/otBase);
+        else if (otAdj>otBase && (c.idealCT||0)>0) expectedOutput += eo + (otAdj-otBase) * 60 / c.idealCT;
+        else expectedOutput += eo;
       });
       // 불량: 스테이션/대분류/세부 중 하나라도 제외되면 그 불량 제외
       defLogs.forEach(d=>{ if(adj.exDefSt.has(d.st)||adj.exDefTy.has(d.ty)||adj.exDefSub.has(d.sub))return; defects+=d.q; });
@@ -14001,9 +14023,10 @@ function App() {
       // 계산 내역
       simView==='sim' && React.createElement("div",{className:"bg-white rounded-lg border border-slate-200 p-3"},
         React.createElement("div",{className:"font-bold text-slate-700 mb-2 text-sm"},"📊 계산 내역 (기준 → 시뮬)"),
-        React.createElement("div",{className:"grid grid-cols-4 gap-2 text-xs"},
+        React.createElement("div",{className:"grid grid-cols-5 gap-2 text-xs"},
           React.createElement("div",{className:"bg-slate-50 rounded p-2"},"계획비가동 ",React.createElement("b",null,Math.round(base.plannedDt)),"→",React.createElement("b",{className:"text-violet-700"},Math.round(sim.plannedDt)),"분"),
           React.createElement("div",{className:"bg-slate-50 rounded p-2"},"비계획비가동 ",React.createElement("b",null,Math.round(base.unplannedDt)),"→",React.createElement("b",{className:"text-violet-700"},Math.round(sim.unplannedDt)),"분"),
+          React.createElement("div",{className:"bg-slate-50 rounded p-2"},"기대생산량 ",React.createElement("b",null,Math.round(base.expectedOutput)),"→",React.createElement("b",{className:"text-violet-700"},Math.round(sim.expectedOutput)),"개"),
           React.createElement("div",{className:"bg-slate-50 rounded p-2"},"불량 ",React.createElement("b",null,Math.round(base.defects)),"→",React.createElement("b",{className:"text-violet-700"},Math.round(sim.defects)),"개"),
           React.createElement("div",{className:"bg-slate-50 rounded p-2"},"재작업 ",React.createElement("b",null,Math.round(base.rework)),"→",React.createElement("b",{className:"text-violet-700"},Math.round(sim.rework)),"개"))),
       filtered.length===0 && React.createElement("div",{className:"text-center py-6 text-slate-400 text-sm"},"선택한 조건에 데이터가 없습니다"));
