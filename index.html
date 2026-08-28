@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V102</title>
+  <title>MFG Report V103</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,6 +299,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V103',
+  d: '2026-08-28',
+  items: ['OEE 시뮬 수식 조정 대폭 확장 — 괄호 ( ) 와 숫자 상수를 넣어 자유롭게 조합 가능', '시간 기반 필드 추가: Q손실비가동 · 가동시간+Q손실 · 가치가동시간 · 순가동시간 · 불량시간 · 폐기시간 · 재작업시간 · 총생산시간', '수량 필드 추가: 폐기(불량−재작업), 기준 필드 추가: 개당CT(분/초)', '산식 프리셋 3종 — 현재 산식 / 시간 기반(회사 표준) / 시간 기반(불량만)', '«Q손실로 볼 비가동 종류» 직접 지정 — Rework·Retest 등을 골라 A에서 빼고 Q로 반영', '수식 편집 시 각 항의 실제 계산값을 즉시 표시, 토큰 1개 되돌리기(⌫) 추가', '재작업 시간은 비가동 기록 우선, 기록이 없으면 재작업수량×CT로 자동 환산']
+}, {
   v: 'V102',
   d: '2026-08-24',
   items: ['OEE 시뮬레이터에 «CT 조정» 추가 — 라인·아이템·인원별 기준수량을 직접 바꿔 P 변화를 확인', '조합별 기준수량·개당 CT(초)·실적·기여 기대량을 한 표에서 확인, 기여도 큰 순서로 정렬', '전체 일괄 조정 슬라이더(−30% ~ +30%)로 CT 전반을 한 번에 실험', '조정은 시뮬 화면에서만 적용되며 실제 설정값은 변경되지 않음']
@@ -3121,6 +3125,7 @@ function App() {
   const [simCtOv, setSimCtOv] = useState({});      // V102: CT 조정 { 'line|item|workers': baseQty }
   const [simCtBulk, setSimCtBulk] = useState(0);   // V102: 전체 일괄 조정 %
   const [simShowCt, setSimShowCt] = useState(false);
+  const [simQDt, setSimQDt] = useState(() => new Set(['Rework','Retest','재작업','재검사']));  // V103: Q손실로 볼 비가동 종류
   const [simEditMetric, setSimEditMetric] = useState('A');
   const [ftfrYear, setFtfrYear] = useState(now0.getFullYear());
   const [ftfrMonth, setFtfrMonth] = useState(now0.getMonth() + 1);
@@ -5771,7 +5776,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V102"), React.createElement("div", {
+  }, "V103"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13737,23 +13742,57 @@ function App() {
   })(), activeTab === 'oeesim' && (tcpData || feData) && (() => {
     // ===== OEE 시뮬레이터 (완전 격리: 로컬 state만, 전역 formulaConfig 안 건드림) =====
     const SIM_FIELDS = [
-      {id:'operatingTime',label:'가동시간'},{id:'loadTime',label:'부하시간'},
-      {id:'productionTime',label:'생산시간'},{id:'plannedDt',label:'계획비가동'},{id:'unplannedDt',label:'비계획비가동'},
-      {id:'goodQty',label:'양품'},{id:'expectedOutput',label:'기대생산량'},
-      {id:'defects',label:'불량'},{id:'rework',label:'재작업'},{id:'totalQty',label:'총생산량'}
+      // 시간 (기본)
+      {id:'productionTime',label:'생산시간',g:'시간'},{id:'loadTime',label:'부하시간',g:'시간'},
+      {id:'operatingTime',label:'가동시간',g:'시간'},
+      {id:'plannedDt',label:'계획비가동',g:'시간'},{id:'unplannedDt',label:'비계획비가동',g:'시간'},
+      // 시간 (V103 신규 — 시간 기반 산식용)
+      {id:'qLossDt',label:'Q손실비가동',g:'시간+'},{id:'unplannedDtExQ',label:'비계획−Q손실',g:'시간+'},
+      {id:'opTimeIncQ',label:'가동시간+Q손실',g:'시간+'},
+      {id:'valueTime',label:'가치가동시간',g:'시간+'},{id:'netOpTime',label:'순가동시간',g:'시간+'},
+      {id:'defectTime',label:'불량시간',g:'시간+'},{id:'scrapTime',label:'폐기시간',g:'시간+'},
+      {id:'reworkTime',label:'재작업시간',g:'시간+'},{id:'totalQtyTime',label:'총생산시간',g:'시간+'},
+      // 수량
+      {id:'goodQty',label:'양품',g:'수량'},{id:'defects',label:'불량',g:'수량'},
+      {id:'rework',label:'재작업',g:'수량'},{id:'scrapQty',label:'폐기(불량−재작업)',g:'수량'},
+      {id:'totalQty',label:'총생산량',g:'수량'},{id:'expectedOutput',label:'기대생산량',g:'수량'},
+      // 기준
+      {id:'ctMin',label:'개당CT(분)',g:'기준'},{id:'ctSec',label:'개당CT(초)',g:'기준'}
     ];
     const SIM_DEFAULT = {
       A:{num:['operatingTime'],den:['loadTime']},
       P:{num:['goodQty'],den:['expectedOutput']},
       Q:{num:['goodQty','+','defects','-','rework'],den:['goodQty','+','defects']}
     };
+    // V103: 산식 프리셋
+    const SIM_PRESETS = {
+      '현재 산식': SIM_DEFAULT,
+      '시간 기반 (회사 표준)': {
+        A:{num:['opTimeIncQ'],den:['loadTime']},
+        P:{num:['netOpTime'],den:['opTimeIncQ']},
+        Q:{num:['valueTime'],den:['netOpTime']}
+      },
+      '시간 기반 (불량만)': {
+        A:{num:['operatingTime'],den:['loadTime']},
+        P:{num:['totalQtyTime'],den:['operatingTime']},
+        Q:{num:['valueTime'],den:['totalQtyTime']}
+      }
+    };
+    // V103: 괄호·숫자 상수 지원 (shunting-yard)
     const evalF = (tokens, v) => {
       const ops={'+':1,'-':1,'*':2,'/':2};
       const out=[],st=[];
-      tokens.forEach(t=>{ if(ops[t]){ while(st.length&&ops[st[st.length-1]]>=ops[t])out.push(st.pop()); st.push(t);} else out.push(v[t]!==undefined?v[t]:0); });
-      while(st.length)out.push(st.pop());
-      const s=[]; out.forEach(t=>{ if(ops[t]){const b=s.pop(),a=s.pop();s.push(t==='+'?a+b:t==='-'?a-b:t==='*'?a*b:b?a/b:0);} else s.push(t); });
-      return s[0]||0;
+      for(const t of tokens){
+        if(t==='('){ st.push(t); }
+        else if(t===')'){ while(st.length&&st[st.length-1]!=='(')out.push(st.pop()); st.pop(); }
+        else if(ops[t]){ while(st.length&&st[st.length-1]!=='('&&ops[st[st.length-1]]>=ops[t])out.push(st.pop()); st.push(t); }
+        else if(typeof t==='string'&&t.charAt(0)==='#'){ out.push(parseFloat(t.slice(1))||0); }
+        else out.push(v[t]!==undefined?v[t]:0);
+      }
+      while(st.length){ const o=st.pop(); if(o!=='(')out.push(o); }
+      const s=[];
+      out.forEach(t=>{ if(ops[t]){const b=s.pop()||0,a=s.pop()||0;s.push(t==='+'?a+b:t==='-'?a-b:t==='*'?a*b:b?a/b:0);} else s.push(t); });
+      return s.length?s[s.length-1]:0;
     };
     // 섹션·기간·라인·아이템 필터된 로그
     const startD = new Date(simStart); const endD = new Date(simEnd); endD.setHours(23,59,59,999);
@@ -13834,20 +13873,24 @@ function App() {
     //  - 기준 가동시간이 0인데 시간이 회수되면 idealCT로 절대 계산(60/idealCT = 분당 기대수량)
     const compute = (adj) => {
       let productionTime=0, plannedDt=0, unplannedDt=0, goodQty=0, expectedOutput=0, defects=0, rework=0;
+      // V103: 시간 기반 산식용 누적값 (로그 단위로 CT를 곱해 합산)
+      let qLossDt=0, valueTime=0, defectTime=0, scrapTime=0, reworkQtyTime=0, scrapQty=0, ctMinSum=0, ctMinN=0;
       simLogRecs.forEach(rec => {
         const c = computeLogContribution(rec.log);
         if (!c) return;
         productionTime += c.productionTime||0;
         goodQty += c.goodQty||0;
         // 이 로그의 비가동에 조정(제외/계획↔비계획 이동) 반영
-        let pDt=0, uDt=0, pDt0=0, uDt0=0;
+        let pDt=0, uDt=0, pDt0=0, uDt0=0, qDt=0;
         rec.dts.forEach(dt=>{
           if (dt.cat==='계획') pDt0+=dt.dur; else uDt0+=dt.dur;
           if (adj.exclDt.has(dt.type)) return;
           const cat = adj.moved[dt.type] || dt.cat;
           if (cat==='계획') pDt+=dt.dur; else uDt+=dt.dur;
+          // V103: Q손실로 지정된 비가동 시간 별도 집계(비계획으로 남아있는 것만)
+          if (cat!=='계획' && adj.qDt && adj.qDt.has(dt.type)) qDt+=dt.dur;
         });
-        plannedDt+=pDt; unplannedDt+=uDt;
+        plannedDt+=pDt; unplannedDt+=uDt; qLossDt+=qDt;
         // 기대생산량 재계산 (CT 미등록 로그는 기준과 동일하게 P 분모 기여 0)
         const otBase = Math.max(0, (c.productionTime||0) - pDt0 - uDt0);
         const otAdj = Math.max(0, (c.productionTime||0) - pDt - uDt);
@@ -13862,22 +13905,40 @@ function App() {
         if (otBase>0 && eo>0) expectedOutput += eo * (otAdj/otBase) * ctR;
         else if (otAdj>otBase && (c.idealCT||0)>0) expectedOutput += (eo + (otAdj-otBase) * 60 / c.idealCT) * ctR;
         else expectedOutput += eo * ctR;
+        // V103: 수량×CT 시간 환산 (CT 조정 반영 — 기준수량이 커지면 개당 CT는 짧아짐)
+        if ((c.idealCT||0) > 0) {
+          const cpu = (c.idealCT/60) / (ctR||1);   // 개당 CT(분)
+          const lg = c.goodQty||0, ld = c.defects||0, lr = c.rework||0;
+          const lsc = Math.max(0, ld - lr);
+          valueTime += lg*cpu; defectTime += ld*cpu; scrapTime += lsc*cpu; reworkQtyTime += lr*cpu;
+          scrapQty += lsc; ctMinSum += cpu*(lg+ld); ctMinN += (lg+ld);
+        }
       });
       // 불량: 스테이션/대분류/세부 중 하나라도 제외되면 그 불량 제외
       defLogs.forEach(d=>{ if(adj.exDefSt.has(d.st)||adj.exDefTy.has(d.ty)||adj.exDefSub.has(d.sub))return; defects+=d.q; });
       rwLogs.forEach(r=>{ if(adj.exRwSt.has(r.st)||adj.exRwTy.has(r.ty)||adj.exRwSub.has(r.sub))return; rework+=r.q; });
       const loadTime = productionTime - plannedDt;
       const operatingTime = loadTime - unplannedDt;
-      const v = {operatingTime,loadTime,productionTime,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,totalQty:goodQty+defects};
+      // V103: 시간 기반 파생값
+      const unplannedDtExQ = Math.max(0, unplannedDt - qLossDt);
+      const opTimeIncQ = loadTime - unplannedDtExQ;            // Q손실을 가동시간에 포함
+      const reworkTime = qLossDt > 0 ? qLossDt : reworkQtyTime; // 기록 우선, 없으면 수량×CT 환산
+      const totalQtyTime = valueTime + defectTime;
+      const netOpTime = valueTime + scrapTime + reworkTime;     // 순가동시간
+      const ctMin = ctMinN > 0 ? ctMinSum/ctMinN : 0;
+      const v = {operatingTime,loadTime,productionTime,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,totalQty:goodQty+defects,
+        qLossDt,unplannedDtExQ,opTimeIncQ,valueTime,netOpTime,defectTime,scrapTime,reworkTime,totalQtyTime,
+        scrapQty,ctMin,ctSec:ctMin*60};
       const f = adj.formula;
       const m = (k)=>{ const num=evalF(f[k].num,v); const den=evalF(f[k].den,v); return den?num/den*100:0; };
       let A=Math.min(100,Math.max(0,m('A'))), P=Math.max(0,m('P')), Q=Math.min(100,Math.max(0,m('Q')));
       const OEE=A/100*P/100*Q/100*100;
-      return {A,P,Q,OEE,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,loadTime,operatingTime};
+      return {A,P,Q,OEE,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,loadTime,operatingTime,
+        qLossDt,opTimeIncQ,valueTime,netOpTime,reworkTime,scrapQty,totalQtyTime,ctMin};
     };
     const EMPTY = new Set();
-    const base = compute({moved:{},exclDt:EMPTY,exDefSt:EMPTY,exDefTy:EMPTY,exDefSub:EMPTY,exRwSt:EMPTY,exRwTy:EMPTY,exRwSub:EMPTY,formula:SIM_DEFAULT,ctOv:null,ctBulk:0});
-    const sim = compute({moved:simMoved,exclDt:simExclDt,exDefSt:simExclDefSt,exDefTy:simExclDefTy,exDefSub:simExclDefSub,exRwSt:simExclRwSt,exRwTy:simExclRwTy,exRwSub:simExclRwSub,formula:simFormula,ctOv:simCtOv,ctBulk:simCtBulk});
+    const base = compute({moved:{},exclDt:EMPTY,exDefSt:EMPTY,exDefTy:EMPTY,exDefSub:EMPTY,exRwSt:EMPTY,exRwTy:EMPTY,exRwSub:EMPTY,formula:SIM_DEFAULT,ctOv:null,ctBulk:0,qDt:simQDt});
+    const sim = compute({moved:simMoved,exclDt:simExclDt,exDefSt:simExclDefSt,exDefTy:simExclDefTy,exDefSub:simExclDefSub,exRwSt:simExclRwSt,exRwTy:simExclRwTy,exRwSub:simExclRwSub,formula:simFormula,ctOv:simCtOv,ctBulk:simCtBulk,qDt:simQDt});
     // ===== Ideal 계산: A=시뮬(비가동 조정 반영), P 분자=계획수량 기대치, Q=100 =====
     const ideal = (()=>{
       const idata = simSection==='TCP'?tcpData:feData;
@@ -13928,21 +13989,66 @@ function App() {
           React.createElement("div",{className:"text-[10px] font-semibold "+color},simView==='ideal'?'Ideal':'시뮬'),
           React.createElement("div",{className:"text-2xl font-black "+color},s.toFixed(1),React.createElement("span",{className:"text-sm"},"%")))),
       React.createElement("div",{className:"text-xs mt-1"},dlt(b,s)));
-    const tokLabel=t=>['+','-','*','/'].includes(t)?t:(SIM_FIELDS.find(x=>x.id===t)?.label||t);
+    // V103: 필드 실측값 (수식 편집기 미리보기용) — sim 결과에서 추출
+    const simVals = {
+      operatingTime:sim.operatingTime||0, loadTime:sim.loadTime||0, productionTime:(sim.loadTime||0)+(sim.plannedDt||0),
+      plannedDt:sim.plannedDt||0, unplannedDt:sim.unplannedDt||0,
+      qLossDt:sim.qLossDt||0, unplannedDtExQ:Math.max(0,(sim.unplannedDt||0)-(sim.qLossDt||0)),
+      opTimeIncQ:sim.opTimeIncQ||0, valueTime:sim.valueTime||0, netOpTime:sim.netOpTime||0,
+      defectTime:(sim.totalQtyTime||0)-(sim.valueTime||0), scrapTime:Math.max(0,(sim.netOpTime||0)-(sim.valueTime||0)-(sim.reworkTime||0)),
+      reworkTime:sim.reworkTime||0, totalQtyTime:sim.totalQtyTime||0,
+      goodQty:sim.goodQty||0, defects:sim.defects||0, rework:sim.rework||0, scrapQty:sim.scrapQty||0,
+      totalQty:(sim.goodQty||0)+(sim.defects||0), expectedOutput:sim.expectedOutput||0,
+      ctMin:sim.ctMin||0, ctSec:(sim.ctMin||0)*60
+    };
+    const tokLabel=t=>{
+      if(['+','-','*','/','(',')'].includes(t))return t;
+      if(typeof t==='string'&&t.charAt(0)==='#')return t.slice(1);
+      return (SIM_FIELDS.find(x=>x.id===t)||{}).label||t;
+    };
     const addTok=(part,tok)=>setSimFormula(p=>({...p,[simEditMetric]:{...p[simEditMetric],[part]:[...p[simEditMetric][part],tok]}}));
     const clearPart=(part)=>setSimFormula(p=>({...p,[simEditMetric]:{...p[simEditMetric],[part]:[]}}));
+    // V103: 토큰 1개 되돌리기 / 숫자 상수 / 괄호 / 그룹별 필드
+    const popTok=(part)=>setSimFormula(p=>({...p,[simEditMetric]:{...p[simEditMetric],[part]:p[simEditMetric][part].slice(0,-1)}}));
+    const tokStyle=t=>{
+      if(['+','-','*','/'].includes(t)) return 'bg-slate-200 text-slate-600 font-bold';
+      if(t==='('||t===')') return 'bg-amber-100 text-amber-700 font-bold';
+      if(typeof t==='string'&&t.charAt(0)==='#') return 'bg-emerald-100 text-emerald-700 font-semibold';
+      const fl=SIM_FIELDS.find(x=>x.id===t);
+      if(fl&&fl.g==='시간+') return 'bg-sky-100 text-sky-700';
+      if(fl&&fl.g==='수량') return 'bg-violet-100 text-violet-700';
+      if(fl&&fl.g==='기준') return 'bg-orange-100 text-orange-700';
+      return 'bg-blue-100 text-blue-700';
+    };
+    const GRP=['시간','시간+','수량','기준'];
+    const GRPC={'시간':'text-slate-500','시간+':'text-sky-600','수량':'text-violet-600','기준':'text-orange-600'};
     const fpart=(part,label)=>{ const f=simFormula[simEditMetric];
-      return React.createElement("div",{className:"mb-2"},
-        React.createElement("div",{className:"text-xs font-bold text-slate-500 mb-1"},label),
+      const val=evalF(f[part],simVals);
+      return React.createElement("div",{className:"mb-3"},
+        React.createElement("div",{className:"flex items-center gap-2 mb-1"},
+          React.createElement("span",{className:"text-xs font-bold text-slate-500"},label),
+          React.createElement("span",{className:"text-xs text-slate-400"},"= ",React.createElement("b",{className:"text-slate-600"},Math.round(val).toLocaleString()))),
         React.createElement("div",{className:"min-h-[36px] bg-slate-50 border border-slate-200 rounded p-1.5 flex flex-wrap gap-1 items-center"},
           f[part].length===0&&React.createElement("span",{className:"text-xs text-slate-300"},"(비어있음)"),
-          f[part].map((t,i)=>React.createElement("span",{key:i,className:"px-1.5 py-0.5 rounded text-xs "+(['+','-','*','/'].includes(t)?'bg-slate-200 text-slate-600 font-bold':'bg-blue-100 text-blue-700')},tokLabel(t))),
-          React.createElement("button",{onClick:()=>clearPart(part),className:"ml-auto text-xs text-rose-500 px-1"},"비우기")),
-        React.createElement("div",{className:"flex flex-wrap gap-1 mt-1"},
-          SIM_FIELDS.map(fl=>React.createElement("button",{key:fl.id,onClick:()=>addTok(part,fl.id),className:"px-1.5 py-0.5 bg-white border border-slate-200 rounded text-xs hover:bg-blue-50"},fl.label)),
-          ['+','-','*','/'].map(o=>React.createElement("button",{key:o,onClick:()=>addTok(part,o),className:"px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs font-bold"},o))));
+          f[part].map((t,i)=>React.createElement("span",{key:i,className:"px-1.5 py-0.5 rounded text-xs "+tokStyle(t)},tokLabel(t))),
+          React.createElement("button",{onClick:()=>popTok(part),className:"ml-auto text-xs text-slate-500 px-1"},"⌫"),
+          React.createElement("button",{onClick:()=>clearPart(part),className:"text-xs text-rose-500 px-1"},"비우기")),
+        React.createElement("div",{className:"mt-1.5 space-y-1"},
+          GRP.map(g=>React.createElement("div",{key:g,className:"flex flex-wrap gap-1 items-center"},
+            React.createElement("span",{className:"text-[10px] font-bold w-10 "+GRPC[g]},g),
+            SIM_FIELDS.filter(fl=>fl.g===g).map(fl=>React.createElement("button",{key:fl.id,onClick:()=>addTok(part,fl.id),
+              title:Math.round(simVals[fl.id]||0).toLocaleString(),
+              className:"px-1.5 py-0.5 bg-white border border-slate-200 rounded text-xs hover:bg-blue-50"},fl.label)))),
+          React.createElement("div",{className:"flex flex-wrap gap-1 items-center pt-1"},
+            React.createElement("span",{className:"text-[10px] font-bold w-10 text-slate-400"},"연산"),
+            ['+','-','*','/'].map(o=>React.createElement("button",{key:o,onClick:()=>addTok(part,o),className:"px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs font-bold"},o)),
+            ['(',')'].map(o=>React.createElement("button",{key:o,onClick:()=>addTok(part,o),className:"px-2 py-0.5 bg-amber-100 border border-amber-200 rounded text-xs font-bold text-amber-700"},o)),
+            React.createElement("input",{type:"number",placeholder:"숫자",id:"simNumIn_"+part,step:"any",
+              className:"w-16 px-1.5 py-0.5 border border-slate-200 rounded text-xs"}),
+            React.createElement("button",{onClick:()=>{const el=document.getElementById("simNumIn_"+part); const nv=parseFloat(el&&el.value); if(!isNaN(nv)){addTok(part,'#'+nv); if(el)el.value='';}},
+              className:"px-2 py-0.5 bg-emerald-100 border border-emerald-200 rounded text-xs font-bold text-emerald-700"},"+상수"))));
     };
-    const resetSim=()=>{setSimMoved({});setSimExclDt(new Set());setSimExclDefSt(new Set());setSimExclDefTy(new Set());setSimExclDefSub(new Set());setSimExclRwSt(new Set());setSimExclRwTy(new Set());setSimExclRwSub(new Set());setSimFormula(JSON.parse(JSON.stringify(SIM_DEFAULT)));};
+    const resetSim=()=>{setSimMoved({});setSimExclDt(new Set());setSimExclDefSt(new Set());setSimExclDefTy(new Set());setSimExclDefSub(new Set());setSimExclRwSt(new Set());setSimExclRwTy(new Set());setSimExclRwSub(new Set());setSimFormula(JSON.parse(JSON.stringify(SIM_DEFAULT)));setSimCtOv({});setSimCtBulk(0);setSimQDt(new Set(['Rework','Retest','재작업','재검사']));};
 
     return React.createElement("div",{className:"space-y-3"},
       // 헤더
@@ -14061,6 +14167,20 @@ function App() {
       // 수식 조정 토글
       simView==='sim' && React.createElement("button",{onClick:()=>setSimShowFormula(v=>!v),className:"text-sm font-semibold text-violet-700"},(simShowFormula?'▼':'▶')+" 🧮 수식 전체 조정 (A·P·Q 공식)"),
       simView==='sim' && simShowFormula && React.createElement("div",{className:"bg-white rounded-lg border border-violet-200 p-3"},
+        // V103: 프리셋
+        React.createElement("div",{className:"flex flex-wrap items-center gap-1.5 mb-2 pb-2 border-b border-slate-100"},
+          React.createElement("span",{className:"text-xs font-bold text-slate-500"},"프리셋"),
+          Object.keys(SIM_PRESETS).map(k=>React.createElement("button",{key:k,
+            onClick:()=>setSimFormula(JSON.parse(JSON.stringify(SIM_PRESETS[k]))),
+            className:"px-2 py-0.5 rounded text-xs font-semibold bg-violet-50 border border-violet-200 text-violet-700 hover:bg-violet-100"},k))),
+        // V103: Q손실로 볼 비가동 종류 지정
+        React.createElement("div",{className:"mb-2 pb-2 border-b border-slate-100"},
+          React.createElement("div",{className:"text-xs font-bold text-slate-500 mb-1"},"Q손실로 볼 비가동 종류 ",
+            React.createElement("span",{className:"font-normal text-slate-400"},"— «Q손실비가동 / 가동시간+Q손실 / 순가동시간» 필드에 반영")),
+          React.createElement("div",{className:"flex flex-wrap gap-1"},
+            Object.keys(dtByType).map(t=>React.createElement("button",{key:t,
+              onClick:()=>setSimQDt(p=>{const n=new Set(p); n.has(t)?n.delete(t):n.add(t); return n;}),
+              className:"px-1.5 py-0.5 rounded text-xs border "+(simQDt.has(t)?'bg-sky-500 text-white border-sky-500 font-semibold':'bg-white text-slate-500 border-slate-200')},t)))),
         React.createElement("div",{className:"flex items-center gap-2 mb-2"},
           React.createElement("div",{className:"flex gap-1"},['A','P','Q'].map(m=>React.createElement("button",{key:m,onClick:()=>setSimEditMetric(m),className:"px-2 py-0.5 rounded text-xs font-bold "+(simEditMetric===m?'bg-violet-600 text-white':'bg-slate-100 text-slate-600')},m))),
           React.createElement("span",{className:"text-xs text-slate-400 ml-auto"},"이 수식은 시뮬 탭에서만 적용")),
