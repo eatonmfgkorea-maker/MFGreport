@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V103</title>
+  <title>MFG Report V104</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -299,6 +299,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V104',
+  d: '2026-08-28',
+  items: ['수식 조정에 «계획 CT(planQty)» 기준 필드 추가 — Ideal CT와 계획 CT를 골라서 조합 가능', '계획 그룹: 가치가동(양품×계획CT) · 총생산시간(계획) · 순가동시간(계획) · 계획 기대생산량', '환산 그룹 추가: 가동시간÷IdealCT, 가동시간÷계획CT, (가동+Q손실)÷CT, 부하시간÷CT — 시간을 수량으로 직접 환산', '기준 그룹에 Ideal CT(분/초) · 계획 CT(분/초) · 계획/Ideal 비율 추가', '프리셋 2종 추가: «계획CT 기준», «P만 계획CT (Ideal 대비)»', '계획수량 미설정 일지가 있으면 수식 패널에 건수 경고 표시']
+}, {
   v: 'V103',
   d: '2026-08-28',
   items: ['OEE 시뮬 수식 조정 대폭 확장 — 괄호 ( ) 와 숫자 상수를 넣어 자유롭게 조합 가능', '시간 기반 필드 추가: Q손실비가동 · 가동시간+Q손실 · 가치가동시간 · 순가동시간 · 불량시간 · 폐기시간 · 재작업시간 · 총생산시간', '수량 필드 추가: 폐기(불량−재작업), 기준 필드 추가: 개당CT(분/초)', '산식 프리셋 3종 — 현재 산식 / 시간 기반(회사 표준) / 시간 기반(불량만)', '«Q손실로 볼 비가동 종류» 직접 지정 — Rework·Retest 등을 골라 A에서 빼고 Q로 반영', '수식 편집 시 각 항의 실제 계산값을 즉시 표시, 토큰 1개 되돌리기(⌫) 추가', '재작업 시간은 비가동 기록 우선, 기록이 없으면 재작업수량×CT로 자동 환산']
@@ -5776,7 +5780,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V103"), React.createElement("div", {
+  }, "V104"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13749,15 +13753,24 @@ function App() {
       // 시간 (V103 신규 — 시간 기반 산식용)
       {id:'qLossDt',label:'Q손실비가동',g:'시간+'},{id:'unplannedDtExQ',label:'비계획−Q손실',g:'시간+'},
       {id:'opTimeIncQ',label:'가동시간+Q손실',g:'시간+'},
-      {id:'valueTime',label:'가치가동시간',g:'시간+'},{id:'netOpTime',label:'순가동시간',g:'시간+'},
+      {id:'valueTime',label:'가치가동(양품×IdealCT)',g:'시간+'},{id:'netOpTime',label:'순가동시간(Ideal)',g:'시간+'},
       {id:'defectTime',label:'불량시간',g:'시간+'},{id:'scrapTime',label:'폐기시간',g:'시간+'},
-      {id:'reworkTime',label:'재작업시간',g:'시간+'},{id:'totalQtyTime',label:'총생산시간',g:'시간+'},
+      {id:'reworkTime',label:'재작업시간',g:'시간+'},{id:'totalQtyTime',label:'총생산시간(Ideal)',g:'시간+'},
+      // V104: 계획 CT(planQty) 기준 시간
+      {id:'planValueTime',label:'가치가동(양품×계획CT)',g:'계획'},{id:'planTotalTime',label:'총생산시간(계획)',g:'계획'},
+      {id:'planNetOpTime',label:'순가동시간(계획)',g:'계획'},{id:'planExpOut',label:'계획 기대생산량',g:'계획'},
       // 수량
       {id:'goodQty',label:'양품',g:'수량'},{id:'defects',label:'불량',g:'수량'},
       {id:'rework',label:'재작업',g:'수량'},{id:'scrapQty',label:'폐기(불량−재작업)',g:'수량'},
       {id:'totalQty',label:'총생산량',g:'수량'},{id:'expectedOutput',label:'기대생산량',g:'수량'},
-      // 기준
-      {id:'ctMin',label:'개당CT(분)',g:'기준'},{id:'ctSec',label:'개당CT(초)',g:'기준'}
+      // 기준 CT
+      {id:'ctMin',label:'Ideal CT(분)',g:'기준'},{id:'ctSec',label:'Ideal CT(초)',g:'기준'},
+      {id:'planCtMin',label:'계획 CT(분)',g:'기준'},{id:'planCtSec',label:'계획 CT(초)',g:'기준'},
+      {id:'planRatio',label:'계획/Ideal 비율',g:'기준'},
+      // V104: 시간 ÷ CT = 수량 환산 (직접 조합용)
+      {id:'opTimeDivCt',label:'가동시간÷IdealCT',g:'환산'},{id:'opTimeDivPlanCt',label:'가동시간÷계획CT',g:'환산'},
+      {id:'opTimeIncQDivCt',label:'(가동+Q손실)÷IdealCT',g:'환산'},{id:'opTimeIncQDivPlanCt',label:'(가동+Q손실)÷계획CT',g:'환산'},
+      {id:'loadTimeDivCt',label:'부하시간÷IdealCT',g:'환산'},{id:'loadTimeDivPlanCt',label:'부하시간÷계획CT',g:'환산'}
     ];
     const SIM_DEFAULT = {
       A:{num:['operatingTime'],den:['loadTime']},
@@ -13776,6 +13789,16 @@ function App() {
         A:{num:['operatingTime'],den:['loadTime']},
         P:{num:['totalQtyTime'],den:['operatingTime']},
         Q:{num:['valueTime'],den:['totalQtyTime']}
+      },
+      '계획CT 기준': {
+        A:{num:['opTimeIncQ'],den:['loadTime']},
+        P:{num:['planNetOpTime'],den:['opTimeIncQ']},
+        Q:{num:['planValueTime'],den:['planNetOpTime']}
+      },
+      'P만 계획CT (Ideal 대비)': {
+        A:{num:['operatingTime'],den:['loadTime']},
+        P:{num:['goodQty'],den:['opTimeDivPlanCt']},
+        Q:{num:['goodQty','+','defects','-','rework'],den:['goodQty','+','defects']}
       }
     };
     // V103: 괄호·숫자 상수 지원 (shunting-yard)
@@ -13819,10 +13842,23 @@ function App() {
     const rwSt={}, rwTy={}, rwSub={}, rwLogs=[];
     // V102: CT 조합 집계 (라인|아이템|인원 단위)
     const ctGroups = {};
+    const __simItemsDef = (simSection === 'TCP' ? tcpData : feData)?.settings?.[simSection]?.items || [];
     filtered.forEach(l => {
       const __wk = parseFloat(l.workers) || (Array.isArray(l.selectedWorkers) ? l.selectedWorkers.length : 1);
       const __ck = `${l.lineName}|${l.item}|${__wk}`;
-      const __rec = { log: l, dts: [], ctKey: __ck };
+      // V104: 이 로그에 적용되는 CT 항목(기준수량·계획수량) 확보
+      let __planQty = null, __baseQty = null;
+      const __idef = __simItemsDef.find(i => i.item === l.item && i.lineName === l.lineName) || __simItemsDef.find(i => i.item === l.item);
+      if (__idef && Array.isArray(__idef.ct)) {
+        const __td = new Date(l.productionDate);
+        const __ce = __idef.ct.find(cc => {
+          if (cc.workers !== __wk) return false;
+          const sd = new Date(cc.startDate), ed = cc.endDate ? new Date(cc.endDate) : new Date('9999-12-31');
+          return __td >= sd && __td <= ed;
+        });
+        if (__ce) { __planQty = parseFloat(__ce.planQty) || null; __baseQty = parseFloat(__ce.baseQty) || null; }
+      }
+      const __rec = { log: l, dts: [], ctKey: __ck, planQty: __planQty, baseQty: __baseQty };
       simLogRecs.push(__rec);
       allDowntimeLogs.filter(dt=>dt.productionLogId===l.id).forEach(dt=>{
         const type = dt.downtimeType || '(미분류)';
@@ -13875,6 +13911,8 @@ function App() {
       let productionTime=0, plannedDt=0, unplannedDt=0, goodQty=0, expectedOutput=0, defects=0, rework=0;
       // V103: 시간 기반 산식용 누적값 (로그 단위로 CT를 곱해 합산)
       let qLossDt=0, valueTime=0, defectTime=0, scrapTime=0, reworkQtyTime=0, scrapQty=0, ctMinSum=0, ctMinN=0;
+      // V104: 계획 CT(planQty) 기준 누적
+      let planExpOut=0, planValueTime=0, planTotalTime=0, planCtSum=0, planCtN=0, noPlanQty=0;
       simLogRecs.forEach(rec => {
         const c = computeLogContribution(rec.log);
         if (!c) return;
@@ -13906,13 +13944,21 @@ function App() {
         else if (otAdj>otBase && (c.idealCT||0)>0) expectedOutput += (eo + (otAdj-otBase) * 60 / c.idealCT) * ctR;
         else expectedOutput += eo * ctR;
         // V103: 수량×CT 시간 환산 (CT 조정 반영 — 기준수량이 커지면 개당 CT는 짧아짐)
+        const lg = c.goodQty||0, ld = c.defects||0, lr = c.rework||0;
+        const lsc = Math.max(0, ld - lr);
         if ((c.idealCT||0) > 0) {
-          const cpu = (c.idealCT/60) / (ctR||1);   // 개당 CT(분)
-          const lg = c.goodQty||0, ld = c.defects||0, lr = c.rework||0;
-          const lsc = Math.max(0, ld - lr);
+          const cpu = (c.idealCT/60) / (ctR||1);   // Ideal 개당 CT(분)
           valueTime += lg*cpu; defectTime += ld*cpu; scrapTime += lsc*cpu; reworkQtyTime += lr*cpu;
           scrapQty += lsc; ctMinSum += cpu*(lg+ld); ctMinN += (lg+ld);
         }
+        // V104: 계획 CT(planQty) 기준 — 개당 계획CT = ctBaseMin / planQty
+        const pq = (rec.planQty||0) * (ctR||1);   // CT 조정은 계획수량에도 동일 배율 적용
+        if (pq > 0 && ctBaseMin > 0) {
+          const pcpu = ctBaseMin / pq;             // 개당 계획CT(분)
+          planExpOut += otAdj / ctBaseMin * pq;    // 가동시간 ÷ 계획CT = 계획 기대생산량
+          planValueTime += lg*pcpu; planTotalTime += (lg+ld)*pcpu;
+          planCtSum += pcpu*(lg+ld); planCtN += (lg+ld);
+        } else if ((c.expectedOutput||0) > 0) noPlanQty++;
       });
       // 불량: 스테이션/대분류/세부 중 하나라도 제외되면 그 불량 제외
       defLogs.forEach(d=>{ if(adj.exDefSt.has(d.st)||adj.exDefTy.has(d.ty)||adj.exDefSub.has(d.sub))return; defects+=d.q; });
@@ -13926,15 +13972,27 @@ function App() {
       const totalQtyTime = valueTime + defectTime;
       const netOpTime = valueTime + scrapTime + reworkTime;     // 순가동시간
       const ctMin = ctMinN > 0 ? ctMinSum/ctMinN : 0;
+      // V104: 계획 CT 기준 파생값
+      const planCtMin = planCtN > 0 ? planCtSum/planCtN : 0;
+      const planNetOpTime = planValueTime + Math.max(0, planTotalTime - planValueTime) + reworkTime;
       const v = {operatingTime,loadTime,productionTime,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,totalQty:goodQty+defects,
         qLossDt,unplannedDtExQ,opTimeIncQ,valueTime,netOpTime,defectTime,scrapTime,reworkTime,totalQtyTime,
-        scrapQty,ctMin,ctSec:ctMin*60};
+        scrapQty,ctMin,ctSec:ctMin*60,
+        planExpOut,planValueTime,planTotalTime,planNetOpTime,planCtMin,planCtSec:planCtMin*60,
+        opTimeDivCt: ctMin>0 ? operatingTime/ctMin : 0,
+        opTimeDivPlanCt: planCtMin>0 ? operatingTime/planCtMin : 0,
+        opTimeIncQDivCt: ctMin>0 ? opTimeIncQ/ctMin : 0,
+        opTimeIncQDivPlanCt: planCtMin>0 ? opTimeIncQ/planCtMin : 0,
+        loadTimeDivCt: ctMin>0 ? loadTime/ctMin : 0,
+        loadTimeDivPlanCt: planCtMin>0 ? loadTime/planCtMin : 0,
+        planRatio: (ctMin>0&&planCtMin>0) ? ctMin/planCtMin : 0};
       const f = adj.formula;
       const m = (k)=>{ const num=evalF(f[k].num,v); const den=evalF(f[k].den,v); return den?num/den*100:0; };
       let A=Math.min(100,Math.max(0,m('A'))), P=Math.max(0,m('P')), Q=Math.min(100,Math.max(0,m('Q')));
       const OEE=A/100*P/100*Q/100*100;
       return {A,P,Q,OEE,plannedDt,unplannedDt,goodQty,expectedOutput,defects,rework,loadTime,operatingTime,
-        qLossDt,opTimeIncQ,valueTime,netOpTime,reworkTime,scrapQty,totalQtyTime,ctMin};
+        qLossDt,opTimeIncQ,valueTime,netOpTime,reworkTime,scrapQty,totalQtyTime,ctMin,
+        planExpOut,planValueTime,planTotalTime,planNetOpTime,planCtMin,noPlanQty};
     };
     const EMPTY = new Set();
     const base = compute({moved:{},exclDt:EMPTY,exDefSt:EMPTY,exDefTy:EMPTY,exDefSub:EMPTY,exRwSt:EMPTY,exRwTy:EMPTY,exRwSub:EMPTY,formula:SIM_DEFAULT,ctOv:null,ctBulk:0,qDt:simQDt});
@@ -13999,7 +14057,16 @@ function App() {
       reworkTime:sim.reworkTime||0, totalQtyTime:sim.totalQtyTime||0,
       goodQty:sim.goodQty||0, defects:sim.defects||0, rework:sim.rework||0, scrapQty:sim.scrapQty||0,
       totalQty:(sim.goodQty||0)+(sim.defects||0), expectedOutput:sim.expectedOutput||0,
-      ctMin:sim.ctMin||0, ctSec:(sim.ctMin||0)*60
+      ctMin:sim.ctMin||0, ctSec:(sim.ctMin||0)*60,
+      planValueTime:sim.planValueTime||0, planTotalTime:sim.planTotalTime||0, planNetOpTime:sim.planNetOpTime||0,
+      planExpOut:sim.planExpOut||0, planCtMin:sim.planCtMin||0, planCtSec:(sim.planCtMin||0)*60,
+      planRatio:(sim.ctMin&&sim.planCtMin)?sim.ctMin/sim.planCtMin:0,
+      opTimeDivCt:sim.ctMin?(sim.operatingTime||0)/sim.ctMin:0,
+      opTimeDivPlanCt:sim.planCtMin?(sim.operatingTime||0)/sim.planCtMin:0,
+      opTimeIncQDivCt:sim.ctMin?(sim.opTimeIncQ||0)/sim.ctMin:0,
+      opTimeIncQDivPlanCt:sim.planCtMin?(sim.opTimeIncQ||0)/sim.planCtMin:0,
+      loadTimeDivCt:sim.ctMin?(sim.loadTime||0)/sim.ctMin:0,
+      loadTimeDivPlanCt:sim.planCtMin?(sim.loadTime||0)/sim.planCtMin:0
     };
     const tokLabel=t=>{
       if(['+','-','*','/','(',')'].includes(t))return t;
@@ -14016,12 +14083,14 @@ function App() {
       if(typeof t==='string'&&t.charAt(0)==='#') return 'bg-emerald-100 text-emerald-700 font-semibold';
       const fl=SIM_FIELDS.find(x=>x.id===t);
       if(fl&&fl.g==='시간+') return 'bg-sky-100 text-sky-700';
+      if(fl&&fl.g==='계획') return 'bg-teal-100 text-teal-700';
       if(fl&&fl.g==='수량') return 'bg-violet-100 text-violet-700';
+      if(fl&&fl.g==='환산') return 'bg-rose-100 text-rose-600';
       if(fl&&fl.g==='기준') return 'bg-orange-100 text-orange-700';
       return 'bg-blue-100 text-blue-700';
     };
-    const GRP=['시간','시간+','수량','기준'];
-    const GRPC={'시간':'text-slate-500','시간+':'text-sky-600','수량':'text-violet-600','기준':'text-orange-600'};
+    const GRP=['시간','시간+','계획','수량','환산','기준'];
+    const GRPC={'시간':'text-slate-500','시간+':'text-sky-600','계획':'text-teal-600','수량':'text-violet-600','환산':'text-rose-500','기준':'text-orange-600'};
     const fpart=(part,label)=>{ const f=simFormula[simEditMetric];
       const val=evalF(f[part],simVals);
       return React.createElement("div",{className:"mb-3"},
@@ -14181,6 +14250,8 @@ function App() {
             Object.keys(dtByType).map(t=>React.createElement("button",{key:t,
               onClick:()=>setSimQDt(p=>{const n=new Set(p); n.has(t)?n.delete(t):n.add(t); return n;}),
               className:"px-1.5 py-0.5 rounded text-xs border "+(simQDt.has(t)?'bg-sky-500 text-white border-sky-500 font-semibold':'bg-white text-slate-500 border-slate-200')},t)))),
+        (sim.noPlanQty||0)>0 && React.createElement("div",{className:"mb-2 text-xs text-rose-500 bg-rose-50 border border-rose-200 rounded p-1.5"},
+          "⚠️ 계획수량(planQty) 미설정 일지 "+sim.noPlanQty+"건 — «계획» 그룹 필드에서 제외됩니다. 설정에서 CT별 계획수량을 입력하면 정확해집니다"),
         React.createElement("div",{className:"flex items-center gap-2 mb-2"},
           React.createElement("div",{className:"flex gap-1"},['A','P','Q'].map(m=>React.createElement("button",{key:m,onClick:()=>setSimEditMetric(m),className:"px-2 py-0.5 rounded text-xs font-bold "+(simEditMetric===m?'bg-violet-600 text-white':'bg-slate-100 text-slate-600')},m))),
           React.createElement("span",{className:"text-xs text-slate-400 ml-auto"},"이 수식은 시뮬 탭에서만 적용")),
