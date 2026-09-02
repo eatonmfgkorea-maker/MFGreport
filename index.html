@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V106</title>
+  <title>MFG Report V107</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V107',
+  d: '2026-09-02',
+  items: ['Production Review의 TCP 인원·정시/잔업을 계획파일 «_순번» 시트에서 직접 읽도록 변경', '기존에는 계획수량÷CT로 잔업을 «추정»하고 인원은 CT 중 최대값을 썼기 때문에 실제와 달랐음 (예: 9/1 1PC 3명·잔업 → 4명·정시로 표시)', '야간 인원 2.5명 같은 소수 인원도 그대로 표시', '순번 시트에 값이 없는 날짜는 기존 추정 방식으로 자동 대체', 'FE는 계획파일 형식이 달라 기존 로직 유지']
+}, {
   v: 'V106',
   d: '2026-08-31',
   items: ['조직도 탭이 화면 전체 폭을 사용하도록 수정 — 기존 1400px 제한 해제', '조직도 화면 높이 확대 및 제목 여백 축소로 표시 영역 확보']
@@ -2648,6 +2652,50 @@ function App() {
     })];
     return cell ? cell.v : null;
   };
+  // V107: TCP «_순번» 시트에서 일자·라인별 인원 / 정시·잔업 을 직접 읽는다
+  //  구조: 5행 날짜(블록 시작 열), 8행 라인(1PC/2PC), 9행 주간인원(라벨 다음 열), 10행 주간 정시/잔업,
+  //        27행 야간인원, 28행 야간 정시/잔업. 날짜당 4열(1PC 2열 + 2PC 2열) 블록.
+  const parseTcpSeq = wb => {
+    const out = {};   // { 'YYYY-MM-DD|1PC': { dayWorkers, dayStatus, nightWorkers, nightStatus } }
+    try {
+      (wb.SheetNames || []).forEach(sheetName => {
+        if (!/^\d{2}_\d{2}월_순번$/.test(sheetName)) return;
+        const ws = wb.Sheets[sheetName];
+        if (!ws || !ws['!ref']) return;
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        const R = { date: 4, line: 7, dayW: 8, dayS: 9, ntW: 26, ntS: 27 };
+        // 날짜 열 목록
+        const dateCols = [];
+        for (let c = 0; c <= range.e.c; c++) {
+          const v = getCell(ws, R.date, c);
+          if (typeof v === 'number' && v > 40000) {
+            const ds = excelSerialToDate(v);
+            if (ds) dateCols.push({ c, ds });
+          }
+        }
+        dateCols.forEach(({ c: start, ds }) => {
+          for (let off = 0; off < 6; off++) {
+            const c = start + off;
+            if (c > range.e.c) break;
+            const ln = String(getCell(ws, R.line, c) ?? '').trim();
+            if (ln !== '1PC' && ln !== '2PC' && ln !== 'Nospin') continue;
+            const numOf = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+            const strOf = v => { const t = String(v ?? '').trim(); return (t === '정시' || t === '잔업' || t === '특근') ? t : ''; };
+            const rec = {
+              dayWorkers: numOf(getCell(ws, R.dayW, c + 1)),
+              dayStatus: strOf(getCell(ws, R.dayS, c)),
+              nightWorkers: numOf(getCell(ws, R.ntW, c + 1)),
+              nightStatus: strOf(getCell(ws, R.ntS, c))
+            };
+            if (rec.dayWorkers != null || rec.dayStatus || rec.nightWorkers != null || rec.nightStatus) {
+              out[`${ds}|${ln}`] = rec;
+            }
+          }
+        });
+      });
+    } catch (e) { try { console.warn('[TCP seq] parse fail', e); } catch (e2) {} }
+    return out;
+  };
   const parseTcpPlan = wb => {
     const plan = {};
     const partsSet = new Set();
@@ -2851,6 +2899,10 @@ function App() {
   };
   // V105: 조직도 데이터 (MFG Report 설정 백업에 함께 저장)
   const [orgData, setOrgData] = useState(null);
+  // V107: TCP 순번 시트 기반 인원/잔업 정보
+  const [tcpSeqInfo, setTcpSeqInfo] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mfg_tcp_seq') || '{}') || {}; } catch { return {}; }
+  });
   const readFePlanRaw = () => {
     try {
       return JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || 'null');
@@ -4179,6 +4231,15 @@ function App() {
   const applyTcpPlanWb = (wb, __silent) => {
     try {
       const { plan, parts: __rawParts } = parseTcpPlan(wb);
+      // V107: 순번 시트에서 인원/잔업 정보 추출
+      try {
+        const seq = parseTcpSeq(wb);
+        if (seq && Object.keys(seq).length) {
+          setTcpSeqInfo(seq);
+          try { localStorage.setItem('mfg_tcp_seq', JSON.stringify(seq)); } catch {}
+          try { console.log('[TCP seq]', Object.keys(seq).length + '건'); } catch {}
+        }
+      } catch (e) {}
       const parts = __rawParts.filter(p => p !== '주간' && p !== '야간');
       const cnt = Object.keys(plan).length;
       if (cnt === 0) {
@@ -5841,7 +5902,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V106"), React.createElement("div", {
+  }, "V107"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -14446,6 +14507,14 @@ function App() {
     };
     // 계획 항목 → CT: 매핑아이템 → 품목명 → Part No 순으로 시도
     const ctResolve = (e, dateStr) => ctBest(e.sysItem, dateStr) || ctBest(e.name, dateStr) || ctBest(e.pno, dateStr);
+    // V107: TCP는 계획파일 «_순번» 시트의 인원·정시/잔업을 그대로 사용
+    const seqOf = (line, date) => (prSection === 'TCP' && tcpSeqInfo) ? tcpSeqInfo[date + '|' + line] : null;
+    const seqShift = (line, date, shift) => {
+      const q = seqOf(line, date);
+      if (!q) return null;
+      if (shift === '야간') return { w: q.nightWorkers, st: q.nightStatus };
+      return { w: q.dayWorkers, st: q.dayStatus };
+    };
     const daySummary = (line, date) => {
       const rec = dayMap[line + '|' + date] || {};
       const shiftKeys = (prShift === '전체' ? Object.keys(rec) : [prShift]).filter(s => (rec[s] || []).length);
@@ -14461,7 +14530,22 @@ function App() {
         if (c) workers = Math.max(workers, c.workers || 0);
       }));
       const threshold = Math.max(1, shiftKeys.length) * 480;
-      return { items, minutes, workers, noCT, over: minutes > threshold, unknown: noCT > 0 && minutes === 0 };
+      let over = minutes > threshold, unknown = noCT > 0 && minutes === 0, fromSeq = false;
+      // V107: 순번 시트 값이 있으면 인원·잔업을 그것으로 대체 (해당 교대 기준)
+      const sq = seqOf(line, date);
+      if (sq) {
+        const use = shiftKeys.length === 1 ? [shiftKeys[0]] : ['주간', '야간'];
+        let wSum = 0, anyOt = false, anyVal = false;
+        use.forEach(sh => {
+          const v = seqShift(line, date, sh);
+          if (!v) return;
+          if (v.w != null) { wSum = Math.max(wSum, v.w); anyVal = true; }
+          if (v.st === '잔업' || v.st === '특근') anyOt = true;
+          if (v.st) anyVal = true;
+        });
+        if (anyVal) { if (wSum) workers = wSum; over = anyOt; unknown = false; fromSeq = true; }
+      }
+      return { items, minutes, workers, noCT, over, unknown, fromSeq };
     };
     // 요약 뷰용: 특정 교대(주간/야간)의 단일 라인 상태. 토요일은 특근.
     const shiftStatusOne = (line, date, shift) => {
@@ -14475,6 +14559,9 @@ function App() {
         else if (bq > 0) minutes += e.qty / bq * ctBaseR;
         else noCT++;
       });
+      // V107: 순번 시트에 값이 있으면 우선 사용
+      const v = seqShift(line, date, shift);
+      if (v && v.st) return v.st;
       if (new Date(date).getDay() === 6) return '특근';
       if (noCT > 0 && minutes === 0) return '?'; // CT 미등록 — 정시로 단정하지 않음
       return minutes > 480 ? '잔업' : '정시';
