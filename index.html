@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V107</title>
+  <title>MFG Report V109</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,14 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V109',
+  d: '2026-09-04',
+  items: ['현황판 대조에 «계획엑셀 실적 대조» 추가 — 생산계획의 «(조장님_실적체크)» 시트 실적과 생산일지 양품수량을 자동 비교', '사진 판독이 필요 없어 계획을 불러온 즉시 대조 결과가 나옴', '날짜별로 «전부 일치» 또는 «차이 N건»을 표시하고 라인·주야별 수량을 나란히 비교', '계획엑셀에 실적이 있는데 생산일지가 없는 경우도 검출', '계획엑셀·현황판·생산일지 3중 대조로 어느 쪽이 잘못됐는지 판단 가능']
+}, {
+  v: 'V108',
+  d: '2026-09-04',
+  items: ['유효성검사에 «현황판 대조» 추가 — 현장점검표에 올라온 FE 현황판 사진을 읽어 생산관리시스템 입력과 자동 비교', '비교 항목 3가지만 사용: 총 실적 수량 / 비가동 시각·항목 / Rework·Retest 수량 (불량 상세·분수 인원은 집계 기준이 달라 제외)', '날짜별로 «전부 일치» 또는 «차이 N건»을 한눈에 표시하고, 라인·주야별 상세 사유를 함께 표기', '판독 검산 내장 — 구간 실적 합계와 Total이 다르면 «판독 불가»로 처리해 오독을 불일치로 오해하지 않음', 'Rework·Retest는 «A → B» 표기를 읽어 수량과 양품(A−B)까지 대조', '어느 쪽이 맞는지 단정하지 않고 현황판 값과 시스템 값을 나란히 표시']
+}, {
   v: 'V107',
   d: '2026-09-02',
   items: ['Production Review의 TCP 인원·정시/잔업을 계획파일 «_순번» 시트에서 직접 읽도록 변경', '기존에는 계획수량÷CT로 잔업을 «추정»하고 인원은 CT 중 최대값을 썼기 때문에 실제와 달랐음 (예: 9/1 1PC 3명·잔업 → 4명·정시로 표시)', '야간 인원 2.5명 같은 소수 인원도 그대로 표시', '순번 시트에 값이 없는 날짜는 기존 추정 방식으로 자동 대체', 'FE는 계획파일 형식이 달라 기존 로직 유지']
@@ -456,7 +464,8 @@ function ValidationPanel({
   tcpData,
   feData,
   allLogs,
-  computeLogContribution
+  computeLogContribution,
+  feActual
 }) {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
@@ -465,6 +474,12 @@ function ValidationPanel({
   const [sortBy, setSortBy] = useState(null);
   const [colFilters, setColFilters] = useState({});
   const [openDropdown, setOpenDropdown] = useState(null);
+  // V108: 현황판 대조
+  const [boardRes, setBoardRes] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mfg_board_check') || '{}') || {}; } catch { return {}; }
+  });
+  const [boardBusy, setBoardBusy] = useState('');
+  const [boardDate, setBoardDate] = useState('');
   const parseHm = hm => {
     if (!hm || typeof hm !== 'string' || !hm.includes(':')) return null;
     const [h, m] = hm.split(':').map(Number);
@@ -999,9 +1014,274 @@ function ValidationPanel({
     });
     return issues;
   }, [filteredLogs, tcpData, feData]);
+  // ===== V108: 현황판 대조 (FE 전용) =====
+  const BOARD_GAS = 'https://script.google.com/macros/s/AKfycbx5PYLCxncWe33YZZJ8I9Xar8AHNncQxMZdoxolR0JR28DU7chKZHGWxXfmsYCjv5jF/exec';
+  const GEMINI_GAS = 'https://script.google.com/macros/s/AKfycbzNsVJqkqnQEARVwZhQDn8vgeOPsL0m2Xgiv_xwOLT8j2-BNExOm6AwrHI8tHpqQpGiow/exec';
+  // 현황판 라인명 → 생산관리시스템 라인명
+  const BOARD_LINE_MAP = {
+    'FTIV': 'FTIV', 'UCC': 'UCC', 'Membrane': 'MEMBRANE', 'LVS': 'LVS', 'ATV': 'ATV',
+    'New ICV': 'NEW ICV', 'Old ICV': 'OLD ICV', 'Auto GVV': 'Auto GVV',
+    'New(MNL) GVV': 'Manual GVV', 'Auto Module FLVV': 'FLVV', 'Manual FLVV': 'Manual FLVV'
+  };
+  const hm2min = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim()); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const normDtName = n => {
+    const t = String(n || '').toLowerCase().replace(/[\s\/._-]/g, '');
+    if (t.includes('체조')) return '체조';
+    if (t.includes('조회')) return '조회';
+    if (t.includes('mcheck') || t.includes('master') || t.includes('마스터')) return 'M/Check';
+    if (t.includes('rework') || t.includes('재작업')) return 'Rework';
+    if (t.includes('retest') || t.includes('재검사')) return 'Retest';
+    if (t.includes('5s') || t.includes('마감')) return '라인5S';
+    if (t.includes('점심') || t.includes('휴식') || t.includes('쉬는')) return '휴식';
+    if (t.includes('저녁')) return '저녁';
+    return String(n || '').trim();
+  };
+  const BOARD_PROMPT = `이 사진은 제조 현장의 «생산 현황 Board» 화이트보드입니다. 손글씨로 적혀 있습니다.
+아래 항목만 정확히 읽어 JSON으로만 답하세요. 설명·마크다운·코드블록 없이 JSON 객체 하나만 출력합니다.
+
+{
+ "date": "YYYY-MM-DD (생산일자, 없으면 null)",
+ "shift": "주간 또는 야간 (생산일자 뒤 A=주간, B=야간)",
+ "rows": [{"plan": 숫자 또는 null, "actual": 숫자, "cum": 숫자 또는 null}],
+ "total": 총 실적 수량(Total 행의 실적, 숫자),
+ "downtimes": [{"start":"HH:MM","end":"HH:MM 또는 null","name":"항목명","a":숫자 또는 null,"b":숫자 또는 null}]
+}
+
+규칙:
+- rows 는 시간대별 행의 «계획/실적» 칸에서 실적(아래쪽·보통 초록색) 숫자만.
+- total 은 Total 행의 실적 숫자. 누적수량 마지막 값과 같아야 합니다.
+- downtimes 는 «비가동요인» 칸의 시작시각+항목명, «조치사항» 칸의 종료시각.
+- 항목명에 Rework 또는 Retest 가 있고 «(98 → 18)» 처럼 화살표 표기가 있으면 a=98, b=18 로 넣으세요. 없으면 a,b 는 null.
+- 빨간색으로 적힌 불량 상세(OPR/OVR/퍼센트 등)는 무시하세요.
+- 읽을 수 없는 값은 null. 추측하지 마세요.`;
+
+  const boardFetchList = async () => {
+    const r = await (await fetch(BOARD_GAS + '?action=photolist')).json();
+    return (r && r.files) || [];
+  };
+  const boardFetchPhoto = async id => {
+    const r = await (await fetch(BOARD_GAS + '?action=photoget&id=' + encodeURIComponent(id))).json();
+    return (r && (r.data || r.b64)) || null;
+  };
+  const shrinkB64 = async (b64, mime, maxW) => {
+    try {
+      const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = 'data:' + (mime || 'image/jpeg') + ';base64,' + b64; });
+      const sc = Math.min(1, maxW / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', 0.9).split(',')[1];
+    } catch (e) { return b64; }
+  };
+  const askGemini = async (b64) => {
+    const body = { prompt: BOARD_PROMPT, imageB64: b64, mimeType: 'image/jpeg' };
+    const r = await fetch(GEMINI_GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (j && j.ok === false) throw new Error(j.error || '프록시 오류');
+    let txt = j.answer || j.text || j.result || j.output || (j.candidates && j.candidates[0]?.content?.parts?.[0]?.text) || '';
+    txt = String(txt).replace(/```json|```/g, '').trim();
+    // 이미지 미지원 프록시가 «이미지를 볼 수 없습니다» 로 답하는 경우 감지
+    if (/이미지를\s*(직접\s*)?(볼|확인할)\s*수\s*없/.test(txt) || (!txt.includes('{') && txt.length < 200 && !/^\s*\{/.test(txt))) {
+      throw new Error('판독 서버가 사진을 처리하지 못했습니다 (Gemini GAS 이미지 지원 필요)');
+    }
+    const s0 = txt.indexOf('{'), e0 = txt.lastIndexOf('}');
+    if (s0 < 0 || e0 < 0) throw new Error('판독 응답 형식 오류');
+    return JSON.parse(txt.slice(s0, e0 + 1));
+  };
+
+  // 판독값 ↔ 시스템값 대조
+  const compareBoard = (read, logs, dtsByLog) => {
+    const F = [];
+    // ── ① 총 실적 수량
+    const sysGood = logs.reduce((a, l) => a + (parseFloat(l.goodQuantity) || 0), 0);
+    const rowSum = Array.isArray(read.rows) ? read.rows.reduce((a, r) => a + (parseFloat(r && r.actual) || 0), 0) : null;
+    const total = parseFloat(read.total);
+    if (!isFinite(total)) {
+      F.push({ level: 'unread', field: '총 실적 수량', text: '총 실적 수량을 읽지 못했습니다 — 사진 확인 필요' });
+    } else if (rowSum && Math.abs(rowSum - total) > 0.5) {
+      F.push({ level: 'unread', field: '총 실적 수량', text: `판독 검산 실패 (구간합 ${rowSum} ≠ Total ${total}) — 대조 생략` });
+    } else if (Math.abs(total - sysGood) > 0.5) {
+      F.push({ level: 'diff', field: '총 실적 수량', text: `현황판 ${total.toLocaleString()} ≠ 시스템 ${sysGood.toLocaleString()} (차이 ${(total - sysGood).toLocaleString()})` });
+    }
+    // ── ② 비가동 시각·항목  ── ③ Rework/Retest
+    const sysDts = [];
+    logs.forEach(l => (dtsByLog[l.id] || []).forEach(d => sysDts.push(d)));
+    const used = new Set();
+    (read.downtimes || []).forEach(bd => {
+      const bs = hm2min(bd.start), nm = normDtName(bd.name);
+      if (bs == null || !nm) return;
+      let hit = null;
+      sysDts.forEach((d, i) => {
+        if (used.has(i) || hit) return;
+        if (normDtName(d.downtimeType) !== nm) return;
+        const ds = hm2min(d.startTime);
+        if (ds == null) return;
+        let gap = Math.abs(ds - bs); if (gap > 720) gap = 1440 - gap;
+        if (gap <= 10) { hit = { d, i, gap }; }
+      });
+      if (!hit) {
+        F.push({ level: 'diff', field: '비가동 누락', text: `현황판 ${bd.start}${bd.end ? '~' + bd.end : ''} «${bd.name}» — 시스템에 해당 비가동 없음` });
+        return;
+      }
+      used.add(hit.i);
+      if (hit.gap > 2) {
+        F.push({ level: 'diff', field: '비가동 시각', text: `«${bd.name}» 시작 현황판 ${bd.start} ≠ 시스템 ${hit.d.startTime} (${hit.gap}분 차)` });
+      }
+      // Rework/Retest 수량
+      if ((nm === 'Rework' || nm === 'Retest') && bd.a != null) {
+        const a = parseFloat(bd.a), b = parseFloat(bd.b);
+        const cont = String(hit.d.content || '');
+        const m = /(\d+)\s*[-–—>→]\s*(\d+)/.exec(cont);
+        const sysA = m ? parseFloat(m[1]) : null, sysB = m ? parseFloat(m[2]) : null;
+        const gq = hit.d.dtGoodQty != null && String(hit.d.dtGoodQty).trim() !== '' ? parseFloat(hit.d.dtGoodQty) : null;
+        if (sysA != null && Math.abs(a - sysA) > 0.5) {
+          F.push({ level: 'diff', field: nm + ' 수량', text: `${bd.start} ${nm} 현황판 ${a} ≠ 시스템 ${sysA}` + (isFinite(b) ? ` (잔여 ${b} / ${sysB})` : '') });
+        }
+        if (gq != null && isFinite(a) && isFinite(b) && Math.abs((a - b) - gq) > 0.5) {
+          F.push({ level: 'diff', field: nm + ' 양품', text: `${bd.start} ${nm} 양품 현황판 ${a}−${b}=${a - b} ≠ 시스템 ${gq}` });
+        }
+      }
+    });
+    return F;
+  };
+  // 대조 실행 (선택 날짜의 FE 현황판 전부)
+  const runBoardCheck = async (date) => {
+    if (!date) { alert('날짜를 선택하세요.'); return; }
+    if (!feData) { alert('FE 데이터가 아직 로드되지 않았습니다.'); return; }
+    try {
+      setBoardBusy('현황판 목록 조회 중…');
+      const files = await boardFetchList();
+      const day = files.filter(f => f.date === date && BOARD_LINE_MAP[f.line]);
+      if (day.length === 0) { setBoardBusy(''); alert(date + ' 에 업로드된 FE 현황판 사진이 없습니다.'); return; }
+      // 같은 라인·주야 중복이면 최신 1장만
+      const pick = {};
+      day.forEach(f => { const k = f.line + '|' + f.shift; if (!pick[k] || (f.createdAt || '') > (pick[k].createdAt || '')) pick[k] = f; });
+      const targets = Object.values(pick);
+      const dtsByLog = {};
+      (feData.downtimeLogs || []).forEach(d => { (dtsByLog[d.productionLogId] = dtsByLog[d.productionLogId] || []).push(d); });
+      const next = { ...boardRes };
+      let n = 0;
+      for (const f of targets) {
+        n++;
+        setBoardBusy(`판독 중 ${n}/${targets.length} — ${f.line} ${f.shift}`);
+        const sysLine = BOARD_LINE_MAP[f.line];
+        const logs = (feData.productionLogs || []).filter(l => l.section === 'FE' && l.productionDate === date && l.lineName === sysLine && (l.shift || '') === f.shift);
+        const key = `${date}|${f.line}|${f.shift}`;
+        if (logs.length === 0) {
+          next[key] = { date, line: f.line, shift: f.shift, photoId: f.id, logIds: [], at: new Date().toISOString(),
+            findings: [{ level: 'diff', field: '생산일지', text: `현황판은 있으나 시스템에 «${sysLine} ${f.shift}» 생산일지가 없습니다` }] };
+          setBoardRes({ ...next });
+          continue;
+        }
+        try {
+          const raw = await boardFetchPhoto(f.id);
+          if (!raw) throw new Error('사진 로드 실패');
+          const small = await shrinkB64(raw, 'image/jpeg', 1600);
+          const read = await askGemini(small);
+          const findings = compareBoard(read, logs, dtsByLog);
+          next[key] = { date, line: f.line, shift: f.shift, photoId: f.id, logIds: logs.map(l => l.id),
+            at: new Date().toISOString(), read, findings };
+        } catch (e) {
+          next[key] = { date, line: f.line, shift: f.shift, photoId: f.id, logIds: logs.map(l => l.id), at: new Date().toISOString(),
+            findings: [{ level: 'unread', field: '판독', text: '사진 판독 실패: ' + String(e.message || e).slice(0, 60) }] };
+        }
+        setBoardRes({ ...next });
+        try { localStorage.setItem('mfg_board_check', JSON.stringify(next)); } catch {}
+      }
+      setBoardBusy('');
+    } catch (e) {
+      setBoardBusy('');
+      alert('현황판 대조 실패: ' + (e.message || e));
+    }
+  };
+  const boardSummary = useMemo(() => {
+    const byDate = {};
+    Object.values(boardRes || {}).forEach(r => {
+      if (!r || !r.date) return;
+      const d = (byDate[r.date] = byDate[r.date] || { date: r.date, ok: 0, diff: 0, unread: 0, lines: [] });
+      const nd = (r.findings || []).filter(f => f.level === 'diff').length;
+      const nu = (r.findings || []).filter(f => f.level === 'unread').length;
+      if (nd) d.diff += nd; if (nu) d.unread += nu;
+      if (!nd && !nu) d.ok += 1;
+      d.lines.push({ line: r.line, shift: r.shift, nd, nu, findings: r.findings || [] });
+    });
+    return Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
+  }, [boardRes]);
+  // ===== V109: 계획엑셀 실적 ↔ 생산일지 대조 =====
+  const ACT_LINE_MAP = {
+    'FTIV': 'FTIV', 'UCC': 'UCC', 'Auto Module FLVV': 'FLVV', 'Manual Module FLVV': 'Manual FLVV',
+    'New(MNL) GVV': 'Manual GVV', 'Auto GVV': 'Auto GVV', 'New ICV': 'NEW ICV', 'Old ICV': 'OLD ICV',
+    'LVS': 'LVS', 'Membrane': 'MEMBRANE', 'ATV': 'ATV'
+  };
+  const planActRows = useMemo(() => {
+    const rows = [];
+    if (!feData || !feActual) return rows;
+    const sys = {};
+    (feData.productionLogs || []).forEach(l => {
+      if (l.section !== 'FE') return;
+      const k = l.productionDate + '|' + (l.shift || '') + '|' + l.lineName;
+      sys[k] = (sys[k] || 0) + (parseFloat(l.goodQuantity) || 0);
+    });
+    const pl = {};
+    Object.keys(feActual).forEach(k => {
+      const p = k.split('|');
+      const line = ACT_LINE_MAP[p[2]];
+      if (!line) return;
+      const kk = p[0] + '|' + p[1] + '|' + line;
+      pl[kk] = (pl[kk] || 0) + (parseFloat(feActual[k]) || 0);
+    });
+    Object.keys(pl).forEach(k => {
+      const p = k.split('|');
+      const pv = pl[k], sv = sys[k];
+      rows.push({ date: p[0], shift: p[1], line: p[2], pv: pv, sv: sv,
+        bad: (sv === undefined) || Math.abs(pv - sv) > 0.5 });
+    });
+    return rows.sort((a, b) => b.date.localeCompare(a.date) || a.line.localeCompare(b.line));
+  }, [feData, feActual]);
+  const planActIssues = useMemo(() => {
+    return planActRows.filter(r => r.bad).filter(r => {
+      if (dateFrom && r.date < dateFrom) return false;
+      if (dateTo && r.date > dateTo) return false;
+      return true;
+    }).map(r => ({
+      category: 'board', severity: 'high', date: r.date, shift: r.shift, section: 'FE', line: r.line,
+      item: '계획엑셀 대조',
+      issueText: r.sv === undefined
+        ? '계획엑셀 실적 ' + Math.round(r.pv).toLocaleString() + '개 — 생산일지에 해당 라인·주야 기록 없음'
+        : '총 실적 수량 — 계획엑셀 ' + Math.round(r.pv).toLocaleString() + ' ≠ 생산일지 ' + Math.round(r.sv).toLocaleString() + ' (차이 ' + (r.pv - r.sv > 0 ? '+' : '') + Math.round(r.pv - r.sv).toLocaleString() + ')'
+    }));
+  }, [planActRows, dateFrom, dateTo]);
+  const planActSummary = useMemo(() => {
+    const byDate = {};
+    planActRows.forEach(r => {
+      const d = byDate[r.date] || (byDate[r.date] = { date: r.date, ok: 0, diff: 0, rows: [] });
+      if (r.bad) d.diff++; else d.ok++;
+      d.rows.push(r);
+    });
+    return Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
+  }, [planActRows]);
+  // V108: 현황판 대조 결과 → issue 목록으로 변환
+  const boardIssues = useMemo(() => {
+    const out = [];
+    Object.keys(boardRes || {}).forEach(k => {
+      const r = boardRes[k];
+      if (!r || !Array.isArray(r.findings)) return;
+      r.findings.forEach(f => {
+        out.push({
+          category: 'board',
+          severity: f.level === 'diff' ? 'high' : 'low',
+          date: r.date, shift: r.shift, section: 'FE', line: r.line,
+          item: f.field || '',
+          issueText: f.text,
+          logs: r.logIds || []
+        });
+      });
+    });
+    return out;
+  }, [boardRes]);
   const allIssues = useMemo(() => {
-    return [...planIssues, ...oeeIssues, ...workerIssues, ...timeIssues, ...ratioIssues];
-  }, [planIssues, oeeIssues, workerIssues, timeIssues, ratioIssues]);
+    return [...planIssues, ...oeeIssues, ...workerIssues, ...timeIssues, ...ratioIssues, ...boardIssues, ...planActIssues];
+  }, [planIssues, oeeIssues, workerIssues, timeIssues, ratioIssues, boardIssues, planActIssues]);
   const filteredIssues = useMemo(() => {
     let arr = allIssues.filter(i => {
       if (selectedCategory !== 'all' && i.category !== selectedCategory) return false;
@@ -1099,6 +1379,11 @@ function ValidationPanel({
     label: '수량 비율 이상',
     icon: '⚖️',
     color: 'rose'
+  }, {
+    id: 'board',
+    label: '현황판 대조',
+    icon: '📋',
+    color: 'sky'
   }];
   const uniqueValuesByCol = useMemo(() => {
     const cols = ['severity', 'category', 'date', 'shift', 'section', 'line', 'item'];
@@ -1350,7 +1635,77 @@ function ValidationPanel({
     }, count.toLocaleString())), React.createElement("div", {
       className: "text-xs font-medium text-slate-600"
     }, cat.label));
-  })), React.createElement("div", {
+  })), selectedCategory === 'board' && React.createElement("div", {
+    className: "bg-white border border-teal-200 rounded-xl overflow-hidden mb-4"
+  }, React.createElement("div", {
+    className: "px-5 py-3 border-b border-teal-200 bg-teal-50 flex flex-wrap items-center gap-3"
+  }, React.createElement("span", { className: "font-semibold text-teal-900" }, "\uD83D\uDCD7 \uACC4\uD68D\uC5D1\uC140 \uC2E4\uC801 \uB300\uC870"),
+     React.createElement("span", { className: "text-xs text-teal-700" }, "\uC0DD\uC0B0\uACC4\uD68D \u00AB(\uC870\uC7A5\uB2D8_\uC2E4\uC801\uCCB4\uD06C)\u00BB \uC2DC\uD2B8 \u2194 \uC0DD\uC0B0\uC77C\uC9C0 \uC591\uD488\uC218\uB7C9 \u00B7 \uC0AC\uC9C4 \uD310\uB3C5 \uBD88\uD544\uC694"),
+     React.createElement("span", { className: "ml-auto text-xs text-slate-500" },
+       Object.keys(feActual || {}).length > 0
+         ? "\uC2E4\uC801 " + Object.keys(feActual).length.toLocaleString() + "\uAC74 \uB85C\uB4DC\uB428"
+         : "\uC2E4\uC801 \uC5C6\uC74C \u2014 Production \uBCF4\uACE0 \uD0ED\uC5D0\uC11C \uACC4\uD68D\uC744 \uBA3C\uC800 \uBD88\uB7EC\uC624\uC138\uC694")),
+     planActSummary.length === 0
+       ? React.createElement("div", { className: "py-8 text-center text-slate-400 text-sm" }, "\uACC4\uD68D\uC5D1\uC140\uC5D0 \uC2E4\uC801\uC774 \uC785\uB825\uB41C \uB0A0\uC9DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.")
+       : React.createElement("div", { className: "divide-y divide-slate-100 max-h-96 overflow-y-auto" },
+           planActSummary.map(function (d) {
+             return React.createElement("div", { key: d.date, className: "px-5 py-2.5" },
+               React.createElement("div", { className: "flex items-center gap-2 mb-1.5" },
+                 React.createElement("span", { className: "font-bold text-slate-800 text-sm" }, d.date),
+                 d.diff === 0
+                   ? React.createElement("span", { className: "px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700" }, "\u2705 \uC804\uBD80 \uC77C\uCE58 (" + d.ok + ")")
+                   : React.createElement("span", { className: "px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700" }, "\u26A0\uFE0F \uCC28\uC774 " + d.diff + "\uAC74 / \uC77C\uCE58 " + d.ok),
+                 React.createElement("span", { className: "text-xs text-slate-400 ml-auto" }, d.rows.length + "\uAC1C")),
+               React.createElement("div", { className: "flex flex-wrap gap-1.5" }, d.rows.map(function (r, i) {
+                 return React.createElement("span", { key: i,
+                   className: "px-2 py-1 rounded-md text-xs border " + (r.bad ? "bg-rose-50 border-rose-200 text-rose-700 font-semibold" : "bg-slate-50 border-slate-200 text-slate-500") },
+                   r.line + " " + r.shift + " \u00B7 " + (r.bad
+                     ? (r.sv === undefined ? "\uACC4\uD68D " + Math.round(r.pv).toLocaleString() + " / \uC77C\uC9C0\uC5C6\uC74C"
+                        : "\uACC4\uD68D " + Math.round(r.pv).toLocaleString() + " \u2260 \uC77C\uC9C0 " + Math.round(r.sv).toLocaleString())
+                     : Math.round(r.pv).toLocaleString()));
+               })));
+           }))
+  ), selectedCategory === 'board' && React.createElement("div", {
+    className: "bg-white border border-sky-200 rounded-xl overflow-hidden mb-4"
+  },
+    React.createElement("div", { className: "px-5 py-3 border-b border-sky-200 bg-sky-50 flex flex-wrap items-center gap-3" },
+      React.createElement("span", { className: "font-semibold text-sky-900" }, "📋 현황판 대조"),
+      React.createElement("span", { className: "text-xs text-sky-700" }, "FE 라인 · 총 실적 수량 / 비가동 시각 / Rework·Retest 수량만 비교"),
+      React.createElement("input", { type: "date", value: boardDate, onChange: e => setBoardDate(e.target.value),
+        className: "ml-auto px-3 py-1.5 text-sm border border-slate-300 rounded-lg" }),
+      React.createElement("button", { onClick: () => runBoardCheck(boardDate), disabled: !!boardBusy,
+        className: "px-3 py-1.5 text-sm rounded-lg font-semibold " + (boardBusy ? 'bg-slate-200 text-slate-500' : 'bg-sky-600 text-white hover:bg-sky-700') },
+        boardBusy ? '진행 중…' : '대조 시작'),
+      Object.keys(boardRes || {}).length > 0 && React.createElement("button", {
+        onClick: () => { if (confirm('저장된 대조 결과를 모두 지울까요?')) { setBoardRes({}); try { localStorage.removeItem('mfg_board_check'); } catch {} } },
+        className: "px-2 py-1.5 text-xs rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" }, "결과 지우기")),
+    boardBusy && React.createElement("div", { className: "px-5 py-2 text-xs text-sky-700 bg-sky-50 border-b border-sky-100" }, "⏳ ", boardBusy),
+    boardSummary.length === 0 ? React.createElement("div", { className: "py-10 text-center text-slate-400 text-sm" },
+      "날짜를 선택하고 «대조 시작»을 누르면 그날 FE 현황판 사진을 읽어 시스템 입력과 비교합니다.") :
+      React.createElement("div", { className: "divide-y divide-slate-100" },
+        boardSummary.map(d => React.createElement("div", { key: d.date, className: "px-5 py-3" },
+          React.createElement("div", { className: "flex items-center gap-2 mb-2" },
+            React.createElement("span", { className: "font-bold text-slate-800" }, d.date),
+            d.diff === 0 && d.unread === 0
+              ? React.createElement("span", { className: "px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700" }, "✅ 전부 일치")
+              : React.createElement(React.Fragment, null,
+                  d.diff > 0 && React.createElement("span", { className: "px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700" }, "⚠️ 차이 " + d.diff + "건"),
+                  d.unread > 0 && React.createElement("span", { className: "px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700" }, "❔ 판독불가 " + d.unread + "건")),
+            React.createElement("span", { className: "text-xs text-slate-400 ml-auto" }, d.lines.length + "개 현황판")),
+          React.createElement("div", { className: "space-y-1.5" }, d.lines.map((L, i) =>
+            React.createElement("div", { key: i, className: "text-xs rounded-lg border " + (L.nd ? 'border-rose-200 bg-rose-50' : L.nu ? 'border-amber-200 bg-amber-50' : 'border-slate-150 bg-slate-50') },
+              React.createElement("div", { className: "px-3 py-1.5 flex items-center gap-2" },
+                React.createElement("span", { className: "font-semibold text-slate-700" }, L.line, " / ", L.shift),
+                L.nd === 0 && L.nu === 0
+                  ? React.createElement("span", { className: "text-emerald-600 font-semibold" }, "일치")
+                  : React.createElement("span", { className: "text-slate-500" }, (L.nd ? "차이 " + L.nd + "건 " : "") + (L.nu ? "판독불가 " + L.nu + "건" : ""))),
+              L.findings.length > 0 && React.createElement("div", { className: "px-3 pb-2 space-y-1" },
+                L.findings.map((f, j) => React.createElement("div", { key: j, className: "flex gap-2" },
+                  React.createElement("span", null, f.level === 'diff' ? '⚠️' : '❔'),
+                  React.createElement("span", { className: "font-semibold " + (f.level === 'diff' ? 'text-rose-700' : 'text-amber-700') }, f.field),
+                  React.createElement("span", { className: "text-slate-600" }, f.text)))))))
+        )))),
+    React.createElement("div", {
     className: "bg-white border border-slate-200 rounded-xl overflow-hidden"
   }, React.createElement("div", {
     className: "px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between"
@@ -2788,6 +3143,48 @@ function App() {
       items
     };
   };
+  // V109: FE 계획엑셀 «(조장님_실적체크)» 시트에서 일자·주야·중분류별 실적 추출
+  const parseFeActual = wb => {
+    const out = {};
+    try {
+      const name = (wb.SheetNames || []).find(n => n.indexOf('실적체크') >= 0);
+      if (!name) return out;
+      const ws = wb.Sheets[name];
+      if (!ws || !ws['!ref']) return out;
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      let hdrRow = -1;
+      for (let r = 0; r <= 12 && hdrRow < 0; r++) {
+        for (let c = 0; c <= range.e.c; c++) {
+          const v = getCell(ws, r, c);
+          if (typeof v === 'number' && v > 40000) { hdrRow = r; break; }
+        }
+      }
+      if (hdrRow < 0) return out;
+      const dateAt = {};
+      for (let c = 0; c <= range.e.c; c++) {
+        const v = getCell(ws, hdrRow, c);
+        if (typeof v === 'number' && v > 40000) {
+          const ds = excelSerialToDate(v);
+          if (ds) dateAt[c] = ds;
+        }
+      }
+      for (let r = hdrRow + 1; r <= range.e.r; r++) {
+        const kind = String(getCell(ws, r, 12) || '').trim();
+        if (kind.indexOf('실적') < 0) continue;
+        const shift = kind.indexOf('주간') === 0 ? '주간' : '야간';
+        const mid = String(getCell(ws, r, 6) || '').trim();
+        if (!mid) continue;
+        Object.entries(dateAt).forEach(([cStr, ds]) => {
+          const q = getCell(ws, r, parseInt(cStr));
+          if (typeof q === 'number' && q > 0) {
+            const k = ds + '|' + shift + '|' + mid;
+            out[k] = (out[k] || 0) + q;
+          }
+        });
+      }
+    } catch (e) {}
+    return out;
+  };
   const parseFePlanRaw = wb => {
     const ws = wb.Sheets['생산순서'];
     if (!ws || !ws['!ref']) return [];
@@ -2899,6 +3296,10 @@ function App() {
   };
   // V105: 조직도 데이터 (MFG Report 설정 백업에 함께 저장)
   const [orgData, setOrgData] = useState(null);
+  // V109: FE 계획엑셀 실적
+  const [feActual, setFeActual] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mfg_fe_actual') || '{}') || {}; } catch { return {}; }
+  });
   // V107: TCP 순번 시트 기반 인원/잔업 정보
   const [tcpSeqInfo, setTcpSeqInfo] = useState(() => {
     try { return JSON.parse(localStorage.getItem('mfg_tcp_seq') || '{}') || {}; } catch { return {}; }
@@ -4223,7 +4624,7 @@ function App() {
   const planErrRef = React.useRef({ tcp: '', fe: '' });
   const planSavedRef = React.useRef({ tcp: 0, fe: 0 });
   // FE 계획 xlsx는 수식 무거운 시트 18개라 필요한 5개만 파싱(+수식스킵)해야 브라우저에서 안 터짐
-  const FE_PLAN_SHEETS = ['계획검토', '생산순서', '모품목', '오라클 바코드출력용', '인원편성'];
+  const FE_PLAN_SHEETS = ['계획검토', '생산순서', '모품목', '오라클 바코드출력용', '인원편성', '(조장님_실적체크)'];
   const readPlanWb = (bytes, type) => type === 'tcp'
     ? XLSX.read(bytes, { cellDates: false })
     : XLSX.read(bytes, { cellDates: false, cellFormula: false, bookVBA: false, sheets: FE_PLAN_SHEETS });
@@ -4299,6 +4700,16 @@ function App() {
   const applyFePlanWb = (wb, fileName, __silent) => {
     try {
       const { plan, items } = parseFePlan(wb);
+      try {
+        const act = parseFeActual(wb);
+        if (act && Object.keys(act).length) {
+          let prev = {};
+          try { prev = JSON.parse(localStorage.getItem('mfg_fe_actual') || '{}') || {}; } catch {}
+          const merged = Object.assign({}, prev, act);
+          localStorage.setItem('mfg_fe_actual', JSON.stringify(merged));
+          setFeActual(merged);
+        }
+      } catch (e) {}
       const cnt = Object.keys(plan).length;
       if (cnt === 0) {
         if (!__silent) alert('FE 계획 데이터를 찾지 못했습니다. (계획검토 시트 확인)');
@@ -5902,7 +6313,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V107"), React.createElement("div", {
+  }, "V109"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -21612,7 +22023,8 @@ function App() {
     tcpData: tcpData,
     feData: feData,
     allLogs: allLogs,
-    computeLogContribution: computeLogContribution
+    computeLogContribution: computeLogContribution,
+    feActual: feActual
   }), activeTab === 'formula' && React.createElement(FormulaPanel, {
     formulaConfig: formulaConfig,
     saveFormulaConfig: saveFormulaConfig,
