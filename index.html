@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V116</title>
+  <title>MFG Report V117</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V117',
+  d: '2026-09-10',
+  items: ['New OEE 의 «OEE 시뮬» 이 새 산식으로 계산되도록 수정 — 기존에는 시뮬만 옛 수식이 그대로 적용되어 Q 값이 달랐음', '시뮬의 불량 집계를 기능불량만으로 제한, 재작업은 2차양품(재작업−기능불량)으로 환산', 'New OEE ↔ 기존 탭을 오갈 때 시뮬 수식이 해당 산식의 기본값으로 자동 초기화', 'OEE 상세 분석 팝업의 표현을 New 산식에 맞게 변경 — «비계획 비가동(Rework·Retest 제외)», «실제 생산량(양품+기능불량)», «기능불량(OEE 반영)», «2차양품(재작업−기능불량)»']
+}, {
   v: 'V116',
   d: '2026-09-09',
   items: ['New OEE 하위 5개 메뉴가 기존 대시보드·OEE·OEE(상세)·OEE(비교)·OEE(시뮬) 화면을 그대로 사용하고 계산식만 새 산식으로 적용되도록 변경', '별도로 만들었던 New OEE 전용 화면은 제거 — 기존 화면과 완전히 동일한 구성·기능', '계산 전환은 computeLogContribution 한 곳에서 처리 (A: Rework·Retest 를 비가동에서 제외해 가동시간에 포함 / P: (양품+기능불량)×CT ÷ 가동시간 / Q: (양품−2차양품) ÷ (양품+기능불량))', 'New OEE 화면 상단에 적용 중인 산식을 배너로 표시']
@@ -2155,6 +2159,11 @@ function App() {
   const setTcpDataMerged = data => setTcpData(mergeProcessDefects(data));
   const setFeDataMerged = data => setFeData(mergeProcessDefects(data));
   const [activeTab, setActiveTab] = useState('dashboard');
+  // V116: New OEE — 기존 5개 화면을 그대로 쓰되 계산만 새 산식으로
+  const NEWOEE_MAP = { newoee: 'dashboard', newoee_dash: 'dashboard', newoee_oee: 'oee', newoee_detail: 'oeedetail', newoee_cmp: 'oeecompare', newoee_sim: 'oeesim' };
+  const isNewOee = !!NEWOEE_MAP[activeTab];
+  const effTab = NEWOEE_MAP[activeTab] || activeTab;
+
   const [h52Data, setH52Data] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('mfg_52h_data') || '{}');
@@ -3704,14 +3713,26 @@ function App() {
     P:{num:['goodQty'],den:['expectedOutput']},
     Q:{num:['goodQty','+','defects','-','rework'],den:['goodQty','+','defects']}
   });
+  const simModeRef = React.useRef(null);
+  // V117: New OEE ↔ 기존 전환 시 시뮬 기본 수식을 해당 산식으로 초기화
+  React.useEffect(() => {
+    const mode = isNewOee ? 'new' : 'old';
+    if (simModeRef.current === mode) return;
+    simModeRef.current = mode;
+    setSimFormula(isNewOee ? {
+      A:{num:['operatingTime'],den:['loadTime']},
+      P:{num:['goodQty','+','defects'],den:['expectedOutput']},
+      Q:{num:['goodQty','-','rework'],den:['goodQty','+','defects']}
+    } : {
+      A:{num:['operatingTime'],den:['loadTime']},
+      P:{num:['goodQty'],den:['expectedOutput']},
+      Q:{num:['goodQty','+','defects','-','rework'],den:['goodQty','+','defects']}
+    });
+  }, [isNewOee]);
   const [simShowFormula, setSimShowFormula] = useState(false);
   const [simCtOv, setSimCtOv] = useState({});      // V102: CT 조정 { 'line|item|workers': baseQty }
   const [simCtBulk, setSimCtBulk] = useState(0);   // V102: 전체 일괄 조정 %
   const [simShowCt, setSimShowCt] = useState(false);
-  // V116: New OEE — 기존 5개 화면을 그대로 쓰되 계산만 새 산식으로
-  const NEWOEE_MAP = { newoee: 'dashboard', newoee_dash: 'dashboard', newoee_oee: 'oee', newoee_detail: 'oeedetail', newoee_cmp: 'oeecompare', newoee_sim: 'oeesim' };
-  const isNewOee = !!NEWOEE_MAP[activeTab];
-  const effTab = NEWOEE_MAP[activeTab] || activeTab;
   // V111: New OEE
   const [nSec, setNSec] = useState('TCP');
   const [nFrom, setNFrom] = useState('');
@@ -6552,7 +6573,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V116"), React.createElement("div", {
+  }, "V117"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -8454,7 +8475,7 @@ function App() {
           className: "flex justify-between"
         }, React.createElement("span", {
           className: "text-slate-600"
-        }, "비계획 비가동:"), React.createElement("span", {
+        }, isNewOee ? "비계획 비가동 (Rework·Retest 제외):" : "비계획 비가동:"), React.createElement("span", {
           className: "text-rose-600 font-medium"
         }, unplanSum.toFixed(0), "분")), unplanDts.map((d, i) => React.createElement("div", {
           key: i,
@@ -8534,16 +8555,18 @@ function App() {
         className: "text-slate-600"
       }, React.createElement(Info, {
         term: "기대 생산량",
-        label: "기대 생산량"
+        label: isNewOee ? "작업시간 ÷ CT (기준 생산 가능량)" : "기대 생산량"
       }), ":"), React.createElement("span", null, Math.round(agg.exp).toLocaleString(), "개")), React.createElement("div", {
         className: "flex justify-between"
       }, React.createElement("span", {
         className: "text-slate-600"
-      }, "실제 생산량 (양품):"), React.createElement("span", {
+      }, isNewOee ? "실제 생산량 (양품+기능불량):" : "실제 생산량 (양품):"), React.createElement("span", {
         className: "text-emerald-600 font-medium"
       }, Math.round(agg.gqP !== undefined ? agg.gqP : agg.gq).toLocaleString(), "개")), React.createElement("div", {
         className: "bg-slate-50 mt-2 px-3 py-1.5 rounded text-xs text-slate-500"
-      }, "계산식: ", Math.round(agg.gqP !== undefined ? agg.gqP : agg.gq).toLocaleString(), "개 ÷ ", Math.round(agg.exp).toLocaleString(), "개 × 100 = ", agg.P.toFixed(1), "%"), agg.excludedP > 0 && React.createElement("div", {
+      }, isNewOee
+        ? "계산식: (양품+기능불량) " + Math.round(agg.gqP !== undefined ? agg.gqP : agg.gq).toLocaleString() + "개 × CT ÷ 작업시간 " + Math.round(agg.ot).toLocaleString() + "분 = " + agg.P.toFixed(1) + "%"
+        : "계산식: " + Math.round(agg.gqP !== undefined ? agg.gqP : agg.gq).toLocaleString() + "개 ÷ " + Math.round(agg.exp).toLocaleString() + "개 × 100 = " + agg.P.toFixed(1) + "%"), agg.excludedP > 0 && React.createElement("div", {
         className: "bg-amber-50 border border-amber-200 mt-1 px-3 py-1.5 rounded text-xs text-amber-700"
       }, "⚠ 기준 CT(기대 생산량) 미설정 작업 ", agg.excludedP, "건은 P 계산에서 제외됨 (해당 일자 P 0.0% 표시)"), m.focus === 'P' && Object.keys(focusItems).length > 0 && React.createElement("div", {
         className: "mt-4 border-t border-slate-200 pt-3"
@@ -8596,7 +8619,7 @@ function App() {
         className: "flex justify-between"
       }, React.createElement("span", {
         className: "text-slate-600"
-      }, "총 생산량:"), React.createElement("span", null, Math.round(agg.totalQ).toLocaleString(), "개 (양품 + 불량)")), React.createElement("div", {
+      }, "총 생산량:"), React.createElement("span", null, Math.round(agg.totalQ).toLocaleString(), isNewOee ? "개 (양품 + 기능불량)" : "개 (양품 + 불량)")), React.createElement("div", {
         className: "flex justify-between"
       }, React.createElement("span", {
         className: "text-slate-600"
@@ -8606,13 +8629,13 @@ function App() {
         className: "flex justify-between"
       }, React.createElement("span", {
         className: "text-slate-600"
-      }, "불량 (OEE 반영):"), React.createElement("span", {
+      }, isNewOee ? "기능불량 (OEE 반영):" : "불량 (OEE 반영):"), React.createElement("span", {
         className: "text-rose-600 font-medium"
       }, Math.round(agg.df).toLocaleString(), "개")), React.createElement("div", {
         className: "flex justify-between"
       }, React.createElement("span", {
         className: "text-slate-600"
-      }, "재작업:"), React.createElement("span", {
+      }, isNewOee ? "2차양품 (재작업−기능불량):" : "재작업:"), React.createElement("span", {
         className: "text-amber-600 font-medium"
       }, Math.round(agg.rw).toLocaleString(), "개")), React.createElement("div", {
         className: "bg-slate-50 mt-2 px-3 py-1.5 rounded text-xs text-slate-500"
@@ -14576,7 +14599,12 @@ function App() {
       {id:'opTimeIncQDivCt',label:'(가동+Q손실)÷IdealCT',g:'환산'},{id:'opTimeIncQDivPlanCt',label:'(가동+Q손실)÷계획CT',g:'환산'},
       {id:'loadTimeDivCt',label:'부하시간÷IdealCT',g:'환산'},{id:'loadTimeDivPlanCt',label:'부하시간÷계획CT',g:'환산'}
     ];
-    const SIM_DEFAULT = {
+    const SIM_DEFAULT = isNewOee ? {
+      // V117: New OEE 산식
+      A:{num:['operatingTime'],den:['loadTime']},
+      P:{num:['goodQty','+','defects'],den:['expectedOutput']},
+      Q:{num:['goodQty','-','rework'],den:['goodQty','+','defects']}
+    } : {
       A:{num:['operatingTime'],den:['loadTime']},
       P:{num:['goodQty'],den:['expectedOutput']},
       Q:{num:['goodQty','+','defects','-','rework'],den:['goodQty','+','defects']}
@@ -14765,8 +14793,11 @@ function App() {
         } else if ((c.expectedOutput||0) > 0) noPlanQty++;
       });
       // 불량: 스테이션/대분류/세부 중 하나라도 제외되면 그 불량 제외
-      defLogs.forEach(d=>{ if(adj.exDefSt.has(d.st)||adj.exDefTy.has(d.ty)||adj.exDefSub.has(d.sub))return; defects+=d.q; });
+      defLogs.forEach(d=>{ if(adj.exDefSt.has(d.st)||adj.exDefTy.has(d.ty)||adj.exDefSub.has(d.sub))return;
+        if(isNewOee && String(d.ty||'').trim()!=='기능불량') return;   // V117: New 는 기능불량만
+        defects+=d.q; });
       rwLogs.forEach(r=>{ if(adj.exRwSt.has(r.st)||adj.exRwTy.has(r.ty)||adj.exRwSub.has(r.sub))return; rework+=r.q; });
+      if (isNewOee) rework = Math.max(0, rework - defects);            // V117: 2차양품 = 재작업 − 기능불량
       const loadTime = productionTime - plannedDt;
       const operatingTime = loadTime - unplannedDt;
       // V103: 시간 기반 파생값
