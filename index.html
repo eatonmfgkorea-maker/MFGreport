@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V114</title>
+  <title>MFG Report V115</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V115',
+  d: '2026-09-09',
+  items: ['New OEE 를 왼쪽 메뉴에서 펼쳐지는 구조로 변경 — 클릭하면 아래에 대시보드 / OEE / OEE 상세 / OEE 비교 / OEE 시뮬 5개 하위 메뉴가 나옴', '각 하위 메뉴가 독립된 화면으로 동작 (기존에는 화면 안 버튼으로 전환)', '기존 대시보드·OEE·상세·비교·시뮬 탭은 그대로 유지']
+}, {
   v: 'V114',
   d: '2026-09-09',
   items: ['New OEE 의 Rework·Retest 처리 수정 — 부하시간에서 빼지 않고, 비가동에서만 제외해 가동시간에 그대로 포함', '기존에는 부하시간에서까지 빼서 가동시간이 줄어드는 바람에 P 가 최대 344% 까지 나오는 오류가 있었음', '수정 후 P>100% 일지가 15% → 8.3% 로 감소 (남은 건은 CT 기준값이 실제보다 느리게 설정된 경우)', '대시보드 시간 구성에 «Rework·Retest (비가동 제외 → 가동에 포함)» 로 표기 변경']
@@ -3701,7 +3705,6 @@ function App() {
   const [simCtBulk, setSimCtBulk] = useState(0);   // V102: 전체 일괄 조정 %
   const [simShowCt, setSimShowCt] = useState(false);
   // V111: New OEE
-  const [nSub, setNSub] = useState('dash');        // dash|oee|detail|cmp|sim
   const [nSec, setNSec] = useState('TCP');
   const [nFrom, setNFrom] = useState('');
   const [nTo, setNTo] = useState('');
@@ -6364,7 +6367,14 @@ function App() {
   }, {
     id: 'newoee',
     icon: '🆕',
-    label: 'New OEE'
+    label: 'New OEE',
+    children: [
+      { id: 'newoee_dash', icon: '📈', label: '대시보드' },
+      { id: 'newoee_oee', icon: '⚙️', label: 'OEE' },
+      { id: 'newoee_detail', icon: '🔍', label: 'OEE 상세' },
+      { id: 'newoee_cmp', icon: '🆚', label: 'OEE 비교' },
+      { id: 'newoee_sim', icon: '🧪', label: 'OEE 시뮬' }
+    ]
   }, {
     id: 'prodreport',
     icon: '📧',
@@ -6448,7 +6458,7 @@ function App() {
   }];
   const isGuest = typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1';
   const GUEST_TABS = ['dashboard', 'oee', 'oeedetail', 'quantity', 'defect', 'rework', 'downtime', 'tool', 'lotftfr', 'export'];
-  const visibleTabs = isGuest ? TABS.filter(t => GUEST_TABS.includes(t.id)) : TABS;
+  const visibleTabs = isGuest ? TABS.filter(t => GUEST_TABS.includes(t.id) && !t.children) : TABS;
   React.useEffect(() => {
     if (isGuest && !GUEST_TABS.includes(activeTab)) {
       setActiveTab(visibleTabs[0]?.id || 'dashboard');
@@ -6477,7 +6487,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V114"), React.createElement("div", {
+  }, "V115"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -6524,6 +6534,31 @@ function App() {
       });
     } catch {}
     return visibleTabs.map(tab => {
+      // V115: 하위 메뉴가 있는 탭 (New OEE) — 클릭 시 아래로 펼쳐짐
+      if (tab.children) {
+        const kids = tab.children;
+        const openNow = kids.some(k => k.id === activeTab) || activeTab === tab.id;
+        return React.createElement("div", { key: tab.id },
+          React.createElement("button", {
+            onClick: () => setActiveTab(openNow ? tab.id : kids[0].id),
+            className: `w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all relative ${openNow ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`,
+            style: openNow ? { background: 'linear-gradient(90deg, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.08) 100%)', boxShadow: 'inset 0 0 0 1px rgba(99,102,241,0.25)' } : {}
+          },
+            React.createElement("span", { className: "text-xl leading-none w-6 flex-shrink-0 flex items-center justify-center" }, tab.icon),
+            React.createElement("span", { className: "text-[15px] font-semibold" }, tab.label),
+            React.createElement("span", { className: "ml-auto text-xs text-slate-400" }, openNow ? '▾' : '▸')),
+          openNow && React.createElement("div", { className: "mt-1 mb-1 ml-4 pl-3 border-l border-white/10 space-y-0.5" },
+            kids.map(k => {
+              const on = activeTab === k.id;
+              return React.createElement("button", {
+                key: k.id,
+                onClick: () => setActiveTab(k.id),
+                className: `w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${on ? 'text-white bg-indigo-500/25 font-semibold' : 'text-slate-400 hover:text-white hover:bg-white/5'}`
+              },
+                React.createElement("span", { className: "text-sm w-5 flex-shrink-0" }, k.icon),
+                React.createElement("span", { className: "text-[13px]" }, k.label));
+            })));
+      }
       const isActive = activeTab === tab.id;
       const hasAlert = tab.id === 'defect' && alerts.defect || tab.id === 'oee' && alerts.oee;
       return React.createElement("button", {
@@ -6590,7 +6625,7 @@ function App() {
     className: "text-xs px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-100 font-semibold"
   }, "로그인하기")), React.createElement("h1", {
     className: "text-2xl font-bold text-slate-900 tracking-tight"
-  }, TABS.find(t => t.id === activeTab)?.label || 'Dashboard'), React.createElement("div", {
+  }, (function(){ var f=TABS.find(t=>t.id===activeTab); if(f) return f.label; for(var i=0;i<TABS.length;i++){ var c=TABS[i].children; if(c){ var k=c.find(x=>x.id===activeTab); if(k) return TABS[i].label+' · '+k.label; } } return 'Dashboard'; })()), React.createElement("div", {
     className: "text-xs text-slate-500 mt-0.5"
   }, new Date().toLocaleDateString('ko-KR', {
     year: 'numeric',
@@ -15788,7 +15823,9 @@ function App() {
         h("div", { className: "bg-white rounded-lg border border-slate-200 p-4" },
           h("div", { className: "font-bold text-slate-700 mb-3" }, "데이터 입력 — 월별 값 (Goal / MPS / Act.)"),
           jigLines.map(renderJigTable))));
-  })(), activeTab === 'newoee' && (tcpData || feData) && (() => {
+  })(), ['newoee','newoee_dash','newoee_oee','newoee_detail','newoee_cmp','newoee_sim'].includes(activeTab) && (tcpData || feData) && (() => {
+    const SUBMAP = { newoee: 'dash', newoee_dash: 'dash', newoee_oee: 'oee', newoee_detail: 'detail', newoee_cmp: 'cmp', newoee_sim: 'sim' };
+    const nSub = SUBMAP[activeTab] || 'dash';
     const D = nSec === 'TCP' ? tcpData : feData;
     const base = allLogs.filter(l => l.source === nSec);
     const dates = base.map(l => l.productionDate).filter(Boolean).sort();
@@ -15859,9 +15896,8 @@ function App() {
         React.createElement("div", { className: "flex flex-wrap gap-1" }, ['전체', ...lines].map(ln =>
           React.createElement("button", { key: ln, onClick: () => setNLine(ln),
             className: `px-2 py-1 text-xs rounded-md font-medium ${nLine === ln ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}` }, ln))),
-        React.createElement("div", { className: "ml-auto flex gap-1" }, SUBS.map(([id, lb, ic]) =>
-          React.createElement("button", { key: id, onClick: () => setNSub(id),
-            className: `px-2.5 py-1.5 text-xs rounded-lg font-semibold ${nSub === id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}` }, ic + ' ' + lb)))),
+        React.createElement("span", { className: "ml-auto text-xs font-semibold text-indigo-600" },
+          (SUBS.find(x => x[0] === nSub) || [,''])[2] + ' ' + (SUBS.find(x => x[0] === nSub) || [,''])[1])),
       R.n === 0 ? React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400 text-sm" }, "선택한 조건에 데이터가 없습니다.") :
       React.createElement(React.Fragment, null,
         // ── 대시보드 ──
