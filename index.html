@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V110</title>
+  <title>MFG Report V114</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,22 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V114',
+  d: '2026-09-09',
+  items: ['New OEE 의 Rework·Retest 처리 수정 — 부하시간에서 빼지 않고, 비가동에서만 제외해 가동시간에 그대로 포함', '기존에는 부하시간에서까지 빼서 가동시간이 줄어드는 바람에 P 가 최대 344% 까지 나오는 오류가 있었음', '수정 후 P>100% 일지가 15% → 8.3% 로 감소 (남은 건은 CT 기준값이 실제보다 느리게 설정된 경우)', '대시보드 시간 구성에 «Rework·Retest (비가동 제외 → 가동에 포함)» 로 표기 변경']
+}, {
+  v: 'V113',
+  d: '2026-09-09',
+  items: ['New OEE 를 «기능불량»만 대상으로 계산 — 조립·외관·치수 불량은 재작업 대상이 아니므로 OEE에서 제외', 'P = (양품+기능불량)×CT ÷ 가동시간,  Q = (양품−2차양품) ÷ (양품+기능불량)', '2차양품 = 재작업 − 기능불량', '대시보드에 기능불량(OEE 대상)과 전체불량(참고)을 함께 표시', '실데이터 확인 결과 재작업의 99.5%가 기능불량에 발생 — 전체불량 기준일 때 재작업<불량 역전이 34%였으나 기능불량 기준에서는 5%로 감소']
+}, {
+  v: 'V112',
+  d: '2026-09-09',
+  items: ['New OEE 의 Q 산식 수정 — 분자를 (양품−불량)에서 (양품−2차양품)으로 변경', '2차양품 = 재작업 − 불량 (재작업해서 양품으로 살린 수량, 이미 양품에 포함되어 있어 차감)', 'Q = (양품−2차양품) ÷ (양품+불량),  OEE = (양품−2차양품)×CT ÷ 부하시간', '대시보드 수량표에 재작업·2차양품 표시, 라인별·일지별 표에 2차양품 열 추가']
+}, {
+  v: 'V111',
+  d: '2026-09-09',
+  items: ['«New OEE» 탭 신설 — 새 산식을 적용한 대시보드·OEE·상세·비교·시뮬을 한 탭 안에서 전환', 'A = 가동 ÷ 부하 (Rework·Retest 시간은 부하·가동 양쪽에서 완전히 제외)', 'P = (양품+불량)×CT ÷ 가동시간 — A의 분자가 그대로 P의 분모', 'Q = (양품−불량) ÷ (양품+불량)', 'OEE = A×P×Q = (양품−불량)×CT ÷ 부하시간', '시뮬에서 비가동 계획↔비계획 이동·제외와 CT ±30% 조정 가능', '기존 대시보드·OEE·상세·비교·시뮬 탭은 전혀 건드리지 않음']
+}, {
   v: 'V110',
   d: '2026-09-07',
   items: ['현황판 대조에 «라인 선택» 추가 — 전체를 한 번에 돌리지 않고 라인 하나씩 확인 가능 (요청 한도 회피)', '판독 요청 사이에 간격을 두고, 분당 한도(429)·서버 혼잡(503)은 자동으로 기다렸다 재시도', '오류 메시지를 «분당 요청 한도 초과», «판독 서버 혼잡» 으로 구분 표시 (기존 no answer)', '오독이 잦던 일반 비가동 비교는 제외하고 Rework·Retest 만 대조', '교차검증 추가 — 계획엑셀과 시스템이 서로 같은데 현황판만 다르면 «판독 오류»로 표시해 허위 경고 차단', 'Total 과 누적수량이 다르면 판독 실패로 처리하는 검산 추가', '판독 이미지 크기를 1400px 로 조정']
@@ -3684,6 +3700,15 @@ function App() {
   const [simCtOv, setSimCtOv] = useState({});      // V102: CT 조정 { 'line|item|workers': baseQty }
   const [simCtBulk, setSimCtBulk] = useState(0);   // V102: 전체 일괄 조정 %
   const [simShowCt, setSimShowCt] = useState(false);
+  // V111: New OEE
+  const [nSub, setNSub] = useState('dash');        // dash|oee|detail|cmp|sim
+  const [nSec, setNSec] = useState('TCP');
+  const [nFrom, setNFrom] = useState('');
+  const [nTo, setNTo] = useState('');
+  const [nLine, setNLine] = useState('전체');
+  const [nExcl, setNExcl] = useState(() => new Set());
+  const [nMoved, setNMoved] = useState({});
+  const [nCtPct, setNCtPct] = useState(0);
   const [simQDt, setSimQDt] = useState(() => new Set(['Rework','Retest','재작업','재검사']));  // V103: Q손실로 볼 비가동 종류
   const [simEditMetric, setSimEditMetric] = useState('A');
   const [ftfrYear, setFtfrYear] = useState(now0.getFullYear());
@@ -4842,6 +4867,7 @@ function App() {
     if (feData?.reworkLogs) arr.push(...feData.reworkLogs);
     return arr;
   }, [tcpData, feData]);
+
   const getLogsForMonth = (year, month, sectionType) => {
     return allLogs.filter(log => {
       const logDate = new Date(log.productionDate);
@@ -5146,6 +5172,92 @@ function App() {
       idealCT
     };
   };
+  // ===== V111: New OEE 계산 엔진 =====
+  //  A = 가동 ÷ 부하   (Rework/Retest 시간은 부하·가동 양쪽에서 완전히 제거)
+  //  P = (양품+불량)×CT ÷ 가동시간
+  //  Q = (양품−불량)×CT ÷ (양품+불량)×CT
+  //  OEE = A×P×Q = (양품−불량)×CT ÷ 부하시간
+  const NEW_RW_TYPES = ['rework', 'retest', '재작업', '재검사'];
+  const isNewRwType = t => {
+    const x = String(t || '').trim().toLowerCase().replace(/[\s\/._-]/g, '');
+    return NEW_RW_TYPES.some(k => x.indexOf(k.replace(/[\s\/._-]/g, '')) >= 0);
+  };
+  const newOeeCalc = React.useMemo(() => {
+    // 로그별 원장 만들기
+    const dtBy = {}, dfBy = {}, rwBy = {};
+    allDowntimeLogs.forEach(d => { (dtBy[d.productionLogId] = dtBy[d.productionLogId] || []).push(d); });
+    // V113: OEE 대상은 «기능불량»만 (조립·외관·치수 불량은 재작업 대상이 아니므로 제외)
+    const dfAllBy = {};
+    allDefectLogs.forEach(d => {
+      const q = parseFloat(d.quantity) || 0;
+      dfAllBy[d.productionLogId] = (dfAllBy[d.productionLogId] || 0) + q;
+      if (String(d.defectType || '').trim() === '기능불량') {
+        dfBy[d.productionLogId] = (dfBy[d.productionLogId] || 0) + q;
+      }
+    });
+    allReworkLogs.forEach(d => { rwBy[d.productionLogId] = (rwBy[d.productionLogId] || 0) + (parseFloat(d.quantity) || 0); });
+    const pm = t => { if (!t || String(t).indexOf(':') < 0) return null; const p = String(t).split(':'); const a = +p[0], b = +p[1]; return (isNaN(a) || isNaN(b)) ? null : a * 60 + b; };
+    const durOf = x => {
+      const v = parseFloat(x.duration) || 0; if (v) return v;
+      const s0 = pm(x.startTime); let e0 = pm(x.endTime);
+      if (s0 == null || e0 == null) return 0;
+      if (e0 < s0) e0 += 1440;
+      return e0 - s0;
+    };
+    return (logs, opts) => {
+      const o = opts || {};
+      const rows = [];
+      let LOAD = 0, OPER = 0, PNUM = 0, GOOD = 0, DEF = 0, RWT = 0, UD = 0, PD = 0, PT = 0, n = 0, skip = 0;
+      let RWQ = 0, G2 = 0, DEFALL = 0;   // 재작업 / 2차양품(재작업−기능불량) / 전체불량(참고)
+      logs.forEach(l => {
+        const c = computeLogContribution(l);
+        if (!c) { skip++; return; }
+        const cpuBase = (c.idealCT || 0) / 60;            // 개당 CT(분)
+        const ctR = o.ctRatio ? o.ctRatio : 1;
+        const cpu = ctR ? cpuBase / ctR : cpuBase;
+        let pd = 0, udAll = 0, rwt = 0;
+        (dtBy[l.id] || []).forEach(d => {
+          const t = durOf(d);
+          const cat = (d.downtimeCategory || d.category) === '계획' ? '계획' : '비계획';
+          if (cat === '계획') { pd += t; return; }
+          if (isNewRwType(d.downtimeType)) { rwt += t; return; }   // Rework/Retest → 어디에도 포함 안 함
+          udAll += t;
+        });
+        // 시뮬 조정: 특정 비가동 제외 / 계획↔비계획 이동
+        if (o.exclDt || o.moved) {
+          pd = 0; udAll = 0; rwt = 0;
+          (dtBy[l.id] || []).forEach(d => {
+            const t = durOf(d);
+            const nm = d.downtimeType;
+            if (o.exclDt && o.exclDt.has(nm)) return;
+            if (isNewRwType(nm)) { rwt += t; return; }
+            const base = (d.downtimeCategory || d.category) === '계획' ? '계획' : '비계획';
+            const cat = (o.moved && o.moved[nm]) ? o.moved[nm] : base;
+            if (cat === '계획') pd += t; else udAll += t;
+          });
+        }
+        const pt = c.productionTime || 0;
+        // V114: Rework/Retest 는 계획·비계획 어디에도 넣지 않음 → 비가동에서 빠지지 않고 가동시간에 그대로 남는다
+        const load = Math.max(0, pt - pd);
+        const oper = Math.max(0, load - udAll);
+        const g = c.goodQty || 0;
+        const df = dfBy[l.id] || 0;          // 기능불량
+        const dfAll = dfAllBy[l.id] || 0;     // 전체불량(참고)
+        const rq = rwBy[l.id] || 0;
+        const g2 = Math.max(0, rq - df);          // 2차양품 = 재작업 − 불량
+        const pnum = (g + df) * cpu;
+        PT += pt; PD += pd; UD += udAll; RWT += rwt; LOAD += load; OPER += oper;
+        GOOD += g; DEF += df; DEFALL += dfAll; RWQ += rq; G2 += g2; PNUM += pnum; n++;
+        rows.push({ log: l, load, oper, pnum, good: g, def: df, defAll: dfAll, rwq: rq, g2, rwt, cpu,
+          A: load ? oper / load : 0, P: oper ? pnum / oper : 0,
+          Q: (g + df) ? (g - g2) / (g + df) : 0 });
+      });
+      const A = LOAD ? OPER / LOAD : 0;
+      const P = OPER ? PNUM / OPER : 0;
+      const Q = (GOOD + DEF) ? (GOOD - G2) / (GOOD + DEF) : 0;
+      return { A, P, Q, OEE: A * P * Q, LOAD, OPER, PNUM, GOOD, DEF, DEFALL, RWQ, G2, RWT, UD, PD, PT, n, skip, rows };
+    };
+  }, [allDowntimeLogs, allDefectLogs, allReworkLogs, computeLogContribution]);
   const evaluateFormula = (tokens, values) => {
     if (!tokens || tokens.length === 0) return null;
     try {
@@ -6250,6 +6362,10 @@ function App() {
     icon: '🧪',
     label: 'OEE(시뮬)'
   }, {
+    id: 'newoee',
+    icon: '🆕',
+    label: 'New OEE'
+  }, {
     id: 'prodreport',
     icon: '📧',
     label: 'Production 보고'
@@ -6361,7 +6477,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V110"), React.createElement("div", {
+  }, "V114"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -15672,6 +15788,205 @@ function App() {
         h("div", { className: "bg-white rounded-lg border border-slate-200 p-4" },
           h("div", { className: "font-bold text-slate-700 mb-3" }, "데이터 입력 — 월별 값 (Goal / MPS / Act.)"),
           jigLines.map(renderJigTable))));
+  })(), activeTab === 'newoee' && (tcpData || feData) && (() => {
+    const D = nSec === 'TCP' ? tcpData : feData;
+    const base = allLogs.filter(l => l.source === nSec);
+    const dates = base.map(l => l.productionDate).filter(Boolean).sort();
+    const f = nFrom || (dates.length ? dates[dates.length - 1].slice(0, 8) + '01' : '');
+    const t = nTo || (dates.length ? dates[dates.length - 1] : '');
+    const lines = Array.from(new Set(base.map(l => l.lineName).filter(Boolean))).sort();
+    const inRange = l => (!f || l.productionDate >= f) && (!t || l.productionDate <= t);
+    const sel = base.filter(l => inRange(l) && (nLine === '전체' || l.lineName === nLine));
+    const opt = { exclDt: nExcl, moved: nMoved, ctRatio: 1 + nCtPct / 100 };
+    const R = newOeeCalc(sel, opt);
+    const R0 = newOeeCalc(sel, {});
+    const pct = v => (v * 100).toFixed(1);
+    const fm = v => Math.round(v).toLocaleString();
+    // 비가동 종류 집계 (시뮬용)
+    const dtAgg = {};
+    allDowntimeLogs.forEach(d => {
+      const l = sel.find(x => x.id === d.productionLogId);
+      if (!l) return;
+      const nm = d.downtimeType || '(미분류)';
+      const cat = (d.downtimeCategory || d.category) === '계획' ? '계획' : '비계획';
+      const pmv = tt => { if (!tt || String(tt).indexOf(':') < 0) return null; const p = String(tt).split(':'); return +p[0] * 60 + +p[1]; };
+      let dur = parseFloat(d.duration) || 0;
+      if (!dur) { const s0 = pmv(d.startTime); let e0 = pmv(d.endTime); if (s0 != null && e0 != null) { if (e0 < s0) e0 += 1440; dur = e0 - s0; } }
+      if (!dtAgg[nm]) dtAgg[nm] = { cat, dur: 0, rw: isNewRwType(nm) };
+      dtAgg[nm].dur += dur;
+    });
+    const SUBS = [['dash', '대시보드', '📈'], ['oee', 'OEE', '⚙️'], ['detail', '상세', '🔍'], ['cmp', '비교', '🆚'], ['sim', '시뮬', '🧪']];
+    const KPI = (label, v, v0, color) => React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4" },
+      React.createElement("div", { className: "text-xs font-semibold text-slate-500 mb-2" }, label),
+      React.createElement("div", { className: `text-3xl font-bold text-${color}-600` }, pct(v), React.createElement("span", { className: "text-base" }, "%")),
+      v0 != null && Math.abs(v - v0) > 0.0005 && React.createElement("div", { className: `text-xs font-bold mt-1 ${v > v0 ? 'text-emerald-600' : 'text-rose-600'}` },
+        (v > v0 ? '▲ +' : '▼ '), ((v - v0) * 100).toFixed(1), 'p'));
+    // 라인별 집계
+    const byLine = lines.map(ln => {
+      const s2 = base.filter(l => inRange(l) && l.lineName === ln);
+      if (!s2.length) return null;
+      return { line: ln, r: newOeeCalc(s2, opt) };
+    }).filter(x => x && x.r.n > 0);
+    // 월별 집계 (비교용)
+    const months = Array.from(new Set(base.map(l => (l.productionDate || '').slice(0, 7)).filter(Boolean))).sort().slice(-6);
+    const byMonth = months.map(m => {
+      const s2 = base.filter(l => (l.productionDate || '').slice(0, 7) === m && (nLine === '전체' || l.lineName === nLine));
+      return { m, r: newOeeCalc(s2, opt) };
+    }).filter(x => x.r.n > 0);
+
+    return React.createElement("div", null,
+      // ── 산식 안내 ──
+      React.createElement("div", { className: "bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-4" },
+        React.createElement("div", { className: "text-sm font-bold text-indigo-900 mb-2" }, "🆕 New OEE 산식"),
+        React.createElement("div", { className: "grid md:grid-cols-3 gap-2 text-xs" },
+          React.createElement("div", { className: "bg-white rounded-lg p-2 border border-indigo-100" },
+            React.createElement("b", { className: "text-indigo-700" }, "A "), "가동시간 ÷ 부하시간",
+            React.createElement("div", { className: "text-[11px] text-slate-500 mt-0.5" }, "Rework·Retest 는 계획·비계획 어디에도 넣지 않음 → 비가동에서 빠지지 않아 가동시간에 포함")),
+          React.createElement("div", { className: "bg-white rounded-lg p-2 border border-indigo-100" },
+            React.createElement("b", { className: "text-indigo-700" }, "P "), "(양품+기능불량)×CT ÷ 가동시간"),
+          React.createElement("div", { className: "bg-white rounded-lg p-2 border border-indigo-100" },
+            React.createElement("b", { className: "text-indigo-700" }, "Q "), "(양품−2차양품) ÷ (양품+기능불량)",
+            React.createElement("div", { className: "text-[11px] text-slate-500 mt-0.5" }, "2차양품 = 재작업 − 기능불량 · 조립/외관/치수 불량은 OEE에서 제외"))),
+        React.createElement("div", { className: "text-[11px] text-indigo-700 mt-2" }, "OEE = A × P × Q = (양품−2차양품) × CT ÷ 부하시간 · 기존 OEE 탭에는 영향 없음")),
+      // ── 필터 ──
+      React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-3 mb-4 flex flex-wrap items-center gap-2" },
+        React.createElement("div", { className: "flex rounded-lg overflow-hidden border border-slate-300" },
+          ['TCP', 'FE'].map(x => React.createElement("button", { key: x, onClick: () => { setNSec(x); setNLine('전체'); },
+            className: `px-3 py-1.5 text-sm font-semibold ${nSec === x ? 'bg-slate-800 text-white' : 'bg-white text-slate-600'}` }, x))),
+        React.createElement("input", { type: "date", value: f, onChange: e => setNFrom(e.target.value), className: "px-2 py-1.5 text-sm border border-slate-300 rounded-lg" }),
+        React.createElement("span", { className: "text-slate-400" }, "~"),
+        React.createElement("input", { type: "date", value: t, onChange: e => setNTo(e.target.value), className: "px-2 py-1.5 text-sm border border-slate-300 rounded-lg" }),
+        React.createElement("div", { className: "flex flex-wrap gap-1" }, ['전체', ...lines].map(ln =>
+          React.createElement("button", { key: ln, onClick: () => setNLine(ln),
+            className: `px-2 py-1 text-xs rounded-md font-medium ${nLine === ln ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}` }, ln))),
+        React.createElement("div", { className: "ml-auto flex gap-1" }, SUBS.map(([id, lb, ic]) =>
+          React.createElement("button", { key: id, onClick: () => setNSub(id),
+            className: `px-2.5 py-1.5 text-xs rounded-lg font-semibold ${nSub === id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}` }, ic + ' ' + lb)))),
+      R.n === 0 ? React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400 text-sm" }, "선택한 조건에 데이터가 없습니다.") :
+      React.createElement(React.Fragment, null,
+        // ── 대시보드 ──
+        nSub === 'dash' && React.createElement("div", null,
+          React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" },
+            KPI('OEE', R.OEE, null, 'indigo'), KPI('A 가동률', R.A, null, 'blue'),
+            KPI('P 성능', R.P, null, 'violet'), KPI('Q 품질', R.Q, null, 'emerald')),
+          React.createElement("div", { className: "grid lg:grid-cols-2 gap-4" },
+            React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4" },
+              React.createElement("div", { className: "text-xs font-semibold text-slate-600 mb-3" }, "시간 구성"),
+              React.createElement("table", { className: "w-full text-xs" }, React.createElement("tbody", null,
+                [['생산시간', R.PT], ['계획 비가동', R.PD], ['부하시간', R.LOAD], ['비계획 비가동', R.UD], ['Rework·Retest (비가동 제외 → 가동에 포함)', R.RWT], ['가동시간', R.OPER], ['P 분자 (양품+불량)×CT', R.PNUM]]
+                  .map(([k, v], i) => React.createElement("tr", { key: i, className: i % 2 ? 'bg-slate-50' : '' },
+                    React.createElement("td", { className: "py-1.5 px-2 text-slate-600" }, k),
+                    React.createElement("td", { className: "py-1.5 px-2 text-right font-semibold num" }, fm(v), '분'))))) ),
+            React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4" },
+              React.createElement("div", { className: "text-xs font-semibold text-slate-600 mb-3" }, "수량"),
+              React.createElement("table", { className: "w-full text-xs" }, React.createElement("tbody", null,
+                [['양품', R.GOOD], ['기능불량 (OEE 대상)', R.DEF], ['전체불량 (참고)', R.DEFALL], ['재작업', R.RWQ], ['2차양품 (재작업−기능불량)', R.G2], ['양품+기능불량 (Q 분모)', R.GOOD + R.DEF], ['양품−2차양품 (Q 분자)', R.GOOD - R.G2], ['대상 일지', R.n]]
+                  .map(([k, v], i) => React.createElement("tr", { key: i, className: i % 2 ? 'bg-slate-50' : '' },
+                    React.createElement("td", { className: "py-1.5 px-2 text-slate-600" }, k),
+                    React.createElement("td", { className: "py-1.5 px-2 text-right font-semibold num" }, fm(v))))))))),
+        // ── OEE (라인별) ──
+        nSub === 'oee' && React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 overflow-hidden" },
+          React.createElement("div", { className: "px-4 py-3 border-b border-slate-200 text-sm font-bold text-slate-700" }, "라인별 New OEE"),
+          React.createElement("div", { className: "overflow-x-auto" }, React.createElement("table", { className: "w-full text-xs" },
+            React.createElement("thead", null, React.createElement("tr", { className: "bg-slate-800 text-white" },
+              ['라인', '일지', '부하(분)', '가동(분)', 'Rw/Rt(분)', '양품', '기능불량', '2차양품', 'A', 'P', 'Q', 'OEE'].map((h, i) =>
+                React.createElement("th", { key: i, className: 'px-3 py-2 font-semibold ' + (i === 0 ? 'text-left' : 'text-right') }, h)))),
+            React.createElement("tbody", null, byLine.map((x, i) => React.createElement("tr", { key: x.line, className: i % 2 ? 'bg-slate-50' : '' },
+              React.createElement("td", { className: "px-3 py-2 font-semibold text-slate-700" }, x.line),
+              React.createElement("td", { className: "px-3 py-2 text-right text-slate-500 num" }, x.r.n),
+              React.createElement("td", { className: "px-3 py-2 text-right num" }, fm(x.r.LOAD)),
+              React.createElement("td", { className: "px-3 py-2 text-right num" }, fm(x.r.OPER)),
+              React.createElement("td", { className: "px-3 py-2 text-right num text-amber-700" }, fm(x.r.RWT)),
+              React.createElement("td", { className: "px-3 py-2 text-right num" }, fm(x.r.GOOD)),
+              React.createElement("td", { className: "px-3 py-2 text-right num text-rose-600" }, fm(x.r.DEF)),
+              React.createElement("td", { className: "px-3 py-2 text-right num text-amber-700" }, fm(x.r.G2)),
+              React.createElement("td", { className: "px-3 py-2 text-right num" }, pct(x.r.A)),
+              React.createElement("td", { className: "px-3 py-2 text-right num" }, pct(x.r.P)),
+              React.createElement("td", { className: "px-3 py-2 text-right num" }, pct(x.r.Q)),
+              React.createElement("td", { className: "px-3 py-2 text-right font-bold text-indigo-700 num" }, pct(x.r.OEE)))))))),
+        // ── 상세 (일지별) ──
+        nSub === 'detail' && React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 overflow-hidden" },
+          React.createElement("div", { className: "px-4 py-3 border-b border-slate-200 text-sm font-bold text-slate-700" }, "일지별 상세 ", React.createElement("span", { className: "text-xs font-normal text-slate-400" }, R.rows.length + "건")),
+          React.createElement("div", { className: "overflow-x-auto max-h-[600px] overflow-y-auto" }, React.createElement("table", { className: "w-full text-xs" },
+            React.createElement("thead", { className: "sticky top-0 bg-slate-800 text-white" }, React.createElement("tr", null,
+              ['일자', '라인', '주야', '아이템', '부하', '가동', 'Rw/Rt', '양품', '기능불량', '2차양품', 'A', 'P', 'Q', 'OEE'].map((h, i) =>
+                React.createElement("th", { key: i, className: 'px-2 py-2 font-semibold ' + (i < 4 ? 'text-left' : 'text-right') }, h)))),
+            React.createElement("tbody", null, R.rows.slice(0, 500).map((x, i) => React.createElement("tr", { key: i, className: i % 2 ? 'bg-slate-50' : '' },
+              React.createElement("td", { className: "px-2 py-1.5" }, x.log.productionDate),
+              React.createElement("td", { className: "px-2 py-1.5" }, x.log.lineName),
+              React.createElement("td", { className: "px-2 py-1.5 text-slate-500" }, x.log.shift),
+              React.createElement("td", { className: "px-2 py-1.5 text-slate-600" }, x.log.item),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num" }, fm(x.load)),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num" }, fm(x.oper)),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num text-amber-700" }, x.rwt ? fm(x.rwt) : '-'),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num" }, fm(x.good)),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num text-rose-600" }, x.def ? fm(x.def) : '-'),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num text-amber-700" }, x.g2 ? fm(x.g2) : '-'),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num" }, pct(x.A)),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num" }, pct(x.P)),
+              React.createElement("td", { className: "px-2 py-1.5 text-right num" }, pct(x.Q)),
+              React.createElement("td", { className: "px-2 py-1.5 text-right font-bold text-indigo-700 num" }, pct(x.A * x.P * x.Q)))))))),
+        // ── 비교 (월별) ──
+        nSub === 'cmp' && React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 overflow-hidden" },
+          React.createElement("div", { className: "px-4 py-3 border-b border-slate-200 text-sm font-bold text-slate-700" }, "월별 비교 ", React.createElement("span", { className: "text-xs font-normal text-slate-400" }, nLine)),
+          React.createElement("div", { className: "overflow-x-auto" }, React.createElement("table", { className: "w-full text-sm" },
+            React.createElement("thead", null, React.createElement("tr", { className: "bg-slate-800 text-white" },
+              ['월', '일지', 'A', 'P', 'Q', 'OEE', '전월 대비'].map((h, i) =>
+                React.createElement("th", { key: i, className: 'px-3 py-2 font-semibold ' + (i === 0 ? 'text-left' : 'text-right') }, h)))),
+            React.createElement("tbody", null, byMonth.map((x, i) => {
+              const prev = i > 0 ? byMonth[i - 1].r.OEE : null;
+              const d0 = prev != null ? (x.r.OEE - prev) * 100 : null;
+              return React.createElement("tr", { key: x.m, className: i % 2 ? 'bg-slate-50' : '' },
+                React.createElement("td", { className: "px-3 py-2 font-semibold" }, x.m),
+                React.createElement("td", { className: "px-3 py-2 text-right text-slate-500 num" }, x.r.n),
+                React.createElement("td", { className: "px-3 py-2 text-right num" }, pct(x.r.A)),
+                React.createElement("td", { className: "px-3 py-2 text-right num" }, pct(x.r.P)),
+                React.createElement("td", { className: "px-3 py-2 text-right num" }, pct(x.r.Q)),
+                React.createElement("td", { className: "px-3 py-2 text-right font-bold text-indigo-700 num" }, pct(x.r.OEE)),
+                React.createElement("td", { className: `px-3 py-2 text-right font-bold num ${d0 == null ? 'text-slate-300' : d0 > 0 ? 'text-emerald-600' : 'text-rose-600'}` },
+                  d0 == null ? '−' : (d0 > 0 ? '+' : '') + d0.toFixed(1) + 'p'));
+            }))))),
+        // ── 시뮬 ──
+        nSub === 'sim' && React.createElement("div", null,
+          React.createElement("div", { className: "bg-gradient-to-r from-slate-50 to-indigo-50 rounded-xl border border-slate-200 p-5 mb-4" },
+            React.createElement("div", { className: "flex items-center justify-center gap-8" },
+              React.createElement("div", { className: "text-center" },
+                React.createElement("div", { className: "text-xs text-slate-500 mb-1" }, "현재"),
+                React.createElement("div", { className: "text-3xl font-bold text-slate-400 num" }, pct(R0.OEE), "%")),
+              React.createElement("div", { className: "text-2xl text-slate-300" }, "→"),
+              React.createElement("div", { className: "text-center" },
+                React.createElement("div", { className: "text-xs text-indigo-600 font-semibold mb-1" }, "시뮬"),
+                React.createElement("div", { className: "text-4xl font-bold text-indigo-700 num" }, pct(R.OEE), "%")),
+              React.createElement("div", { className: "text-center pl-6 border-l border-slate-200" },
+                React.createElement("div", { className: "text-xs text-slate-500 mb-1" }, "변화"),
+                React.createElement("div", { className: `text-xl font-bold num ${R.OEE > R0.OEE ? 'text-emerald-600' : R.OEE < R0.OEE ? 'text-rose-600' : 'text-slate-400'}` },
+                  ((R.OEE - R0.OEE) * 100).toFixed(1), "p")))),
+          React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-3 mb-4" },
+            KPI('A 가동률', R.A, R0.A, 'blue'), KPI('P 성능', R.P, R0.P, 'violet'), KPI('Q 품질', R.Q, R0.Q, 'emerald')),
+          React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4 mb-3" },
+            React.createElement("div", { className: "flex items-center gap-3 mb-3" },
+              React.createElement("span", { className: "text-xs font-bold text-slate-600" }, "CT 조정"),
+              React.createElement("input", { type: "range", min: -30, max: 30, value: nCtPct, onChange: e => setNCtPct(parseInt(e.target.value)), className: "flex-1 max-w-xs" }),
+              React.createElement("span", { className: "text-sm font-bold num text-indigo-700" }, (nCtPct > 0 ? '+' : '') + nCtPct + '%'),
+              React.createElement("button", { onClick: () => { setNExcl(new Set()); setNMoved({}); setNCtPct(0); },
+                className: "ml-auto px-2 py-1 rounded text-xs bg-slate-100 text-slate-600" }, "초기화"))),
+          React.createElement("div", { className: "bg-white rounded-xl border border-slate-200 p-4" },
+            React.createElement("div", { className: "text-xs font-bold text-slate-600 mb-2" }, "비가동 조정 ",
+              React.createElement("span", { className: "font-normal text-slate-400" }, "계획↔비계획 · 제외 · Rework/Retest는 항상 제외됨")),
+            React.createElement("div", { className: "space-y-1 max-h-80 overflow-y-auto" },
+              Object.entries(dtAgg).sort((a, b) => b[1].dur - a[1].dur).map(([nm, info]) =>
+                React.createElement("div", { key: nm, className: "flex items-center gap-2 text-xs py-1 border-b border-slate-50" },
+                  React.createElement("span", { className: "flex-1 text-slate-700" }, nm,
+                    React.createElement("span", { className: "text-slate-400 ml-1" }, fm(info.dur), "분")),
+                  info.rw ? React.createElement("span", { className: "px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold" }, "Rw/Rt 제외") :
+                  React.createElement(React.Fragment, null,
+                    React.createElement("button", { onClick: () => setNMoved(p => ({ ...p, [nm]: (p[nm] || info.cat) === '계획' ? '비계획' : '계획' })),
+                      className: `px-2 py-0.5 rounded font-semibold ${(nMoved[nm] || info.cat) === '계획' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}` },
+                      (nMoved[nm] || info.cat)),
+                    React.createElement("input", { type: "checkbox", checked: nExcl.has(nm),
+                      onChange: () => setNExcl(p => { const s2 = new Set(p); s2.has(nm) ? s2.delete(nm) : s2.add(nm); return s2; }),
+                      title: "제외", className: "rounded" }))))))))
+    );
   })(), activeTab === 'prodreport' && (tcpData || feData) && (() => {
     const empMap = {};
     [...(tcpData?.employees || []), ...(feData?.employees || [])].forEach(e => {
