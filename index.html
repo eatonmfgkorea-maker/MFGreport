@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V117</title>
+  <title>MFG Report V118</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V118',
+  d: '2026-09-23',
+  items: ['탭 이름 변경 — 불량 → «불량(최종불량)», 재작업 → «재작업(1차불량)»', '«불량(최종불량)_유형별», «재작업(1차불량)_유형별» 탭 추가', '유형별 비중(%)·누적 비중, 월별/주별 추이, 유형별 개별 선그래프, 유형×기간 히트맵, 라인별 유형 구성을 한 화면에', '분류 기준을 대분류·세부 유형·스테이션 중 선택', '발생률 = 불량(또는 재작업) ÷ 생산수량(양품+불량)', 'Leak / LEAK 처럼 대소문자만 다른 유형은 자동으로 합쳐서 집계', '진행 중인 달은 증감(▲▼) 판단에서 제외']
+}, {
   v: 'V117',
   d: '2026-09-10',
   items: ['New OEE 의 «OEE 시뮬» 이 새 산식으로 계산되도록 수정 — 기존에는 시뮬만 옛 수식이 그대로 적용되어 Q 값이 달랐음', '시뮬의 불량 집계를 기능불량만으로 제한, 재작업은 2차양품(재작업−기능불량)으로 환산', 'New OEE ↔ 기존 탭을 오갈 때 시뮬 수식이 해당 산식의 기본값으로 자동 초기화', 'OEE 상세 분석 팝업의 표현을 New 산식에 맞게 변경 — «비계획 비가동(Rework·Retest 제외)», «실제 생산량(양품+기능불량)», «기능불량(OEE 반영)», «2차양품(재작업−기능불량)»']
@@ -492,6 +496,226 @@ const __idb = {
     });
   }
 };
+// ===== V118: 불량(최종불량)·재작업(1차불량) 유형별 분석 =====
+function DefectTypePanel({ mode, tcpData, feData }) {
+  const ref = React.useRef(null);
+  const st = React.useRef({ sec: 'FE', line: '전체', period: 6, dim: 'sub', unit: 'm', hi: null });
+  const RAW = React.useMemo(() => {
+    const out = { df: [], rw: [], prod: [] };
+    const normSub = s => { s = String(s || '').trim(); if (!s) return '(미분류)'; return s.toUpperCase() === 'LEAK' ? 'Leak' : s; };
+    [['FE', feData], ['TCP', tcpData]].forEach(([sec, d]) => {
+      if (!d) return;
+      const logs = {};
+      (d.productionLogs || []).forEach(p => { if (p.section === sec || !p.section) logs[p.id] = p; });
+      const dfq = {};
+      [...(d.defectLogs || []), ...(d.processDefectLogs || [])].forEach(x => {
+        const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
+        if (!p || q <= 0) return;
+        dfq[p.id] = (dfq[p.id] || 0) + q;
+        out.df.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.defectType || '(미분류)', normSub(x.defectSubType), q]);
+      });
+      (d.reworkLogs || []).forEach(x => {
+        const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
+        if (!p || q <= 0) return;
+        out.rw.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.reworkType || '(미분류)', normSub(x.reworkSubType), q]);
+      });
+      Object.values(logs).forEach(p => {
+        out.prod.push([sec, p.lineName, p.productionDate, (parseFloat(p.goodQuantity) || 0) + (dfq[p.id] || 0)]);
+      });
+    });
+    return out;
+  }, [tcpData, feData]);
+
+  React.useEffect(() => {
+    if (!document.getElementById('dtp-style')) {
+      const el = document.createElement('style'); el.id = 'dtp-style';
+      el.textContent = `
+.dtp{--acc:#c8243f;--acc-soft:#fbe9ec;--ink:#1e293b;--sub:#64748b;--faint:#94a3b8;--line:#e2e8f0;--bg:#f1f5f9;font-size:14px;color:var(--ink)}
+.dtp.rw{--acc:#b86b00;--acc-soft:#fdf1df}
+.dtp .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:14px}
+.dtp .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.dtp .seg button{padding:6px 12px;font-size:13px;color:var(--sub);background:#fff}
+.dtp .seg button[aria-pressed="true"]{background:#1e293b;color:#fff;font-weight:700}
+.dtp select{font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;background:#fff}
+.dtp .lbl{font-size:12px;color:var(--faint);margin-left:4px}.dtp .sp{flex:1}
+.dtp .story{display:grid;grid-template-columns:auto 1fr;gap:4px 28px;align-items:end;background:#fff;border:1px solid var(--line);border-left:5px solid var(--acc);border-radius:12px;padding:16px 20px;margin-bottom:14px}
+.dtp .big{font-size:42px;font-weight:900;line-height:1;color:var(--acc);font-variant-numeric:tabular-nums}
+.dtp .big small{font-size:16px;color:var(--sub);font-weight:500;margin-left:4px}
+.dtp .facts{display:flex;flex-wrap:wrap;gap:6px 28px;font-size:13px;color:var(--sub)}
+.dtp .facts b{color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
+.dtp .g2{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:14px;margin-bottom:14px}
+.dtp .pn{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0;margin-bottom:14px}
+.dtp .g2 .pn{margin-bottom:0}
+.dtp .pn h2{font-size:15px;margin:0 0 2px;font-weight:700}
+.dtp .hint{font-size:12px;color:var(--faint);margin:0 0 12px}
+.dtp .par{display:flex;flex-direction:column;gap:6px}
+.dtp .rt{display:grid;grid-template-columns:120px 1fr 62px 48px 44px;align-items:center;gap:8px;font-size:13px;border-radius:6px;padding:2px 4px;text-align:left;background:none;width:100%}
+.dtp .rt:hover,.dtp .rt[aria-pressed="true"]{background:var(--acc-soft)}
+.dtp .rt[aria-pressed="true"]{font-weight:700}
+.dtp .rt .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dtp .trk{display:block;height:14px;background:var(--bg);border-radius:4px;overflow:hidden}
+.dtp .fil{display:block;height:100%;border-radius:4px}
+.dtp .n{text-align:right;font-variant-numeric:tabular-nums}
+.dtp .pc{text-align:right;font-weight:700;color:var(--acc);font-variant-numeric:tabular-nums}
+.dtp .cm{text-align:right;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.dtp .lg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--sub);margin-top:8px}
+.dtp .lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.dtp .sc{overflow-x:auto}
+.dtp .sm{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.dtp .smc{border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;background:#fff}
+.dtp .smc:hover,.dtp .smc.on{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.dtp .smh{display:flex;align-items:baseline;gap:6px;font-size:13px}
+.dtp .smh b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.dtp .smh .pc{margin-left:auto}
+.dtp table.ht{border-collapse:separate;border-spacing:3px;font-size:12px;width:100%;min-width:560px}
+.dtp table.ht th{font-weight:500;color:var(--faint);font-size:11px;padding:2px 4px;text-align:center;white-space:nowrap}
+.dtp table.ht th.t,.dtp table.ht td.t{text-align:left;position:sticky;left:0;background:#fff;white-space:nowrap}
+.dtp table.ht th.part{color:var(--acc)}
+.dtp table.ht td{text-align:center;padding:7px 4px;border-radius:5px;font-variant-numeric:tabular-nums;min-width:48px}
+.dtp table.ht td.t{font-weight:500;padding-right:10px}
+.dtp table.ht td.tot{background:none;font-weight:700}
+.dtp table.ht tr.hi td.t{color:var(--acc);font-weight:700}
+.dtp .up{color:#c8243f;font-weight:700;font-size:11px;margin-left:4px}.dtp .dn{color:#1f8a5b;font-weight:700;font-size:11px;margin-left:4px}
+.dtp table.cx{border-collapse:collapse;width:100%;font-size:12px;min-width:560px}
+.dtp table.cx th,.dtp table.cx td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dtp table.cx th{color:var(--faint);font-weight:500;font-size:11px}
+.dtp table.cx td:first-child,.dtp table.cx th:first-child{text-align:left;font-weight:700}
+.dtp .bgc{border-radius:4px;padding:2px 6px}
+.dtp .empty{padding:40px;text-align:center;color:var(--faint)}
+@media(max-width:1000px){.dtp .g2{grid-template-columns:1fr}.dtp .story{grid-template-columns:1fr}}`;
+      document.head.appendChild(el);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const root = ref.current; if (!root) return;
+    const S = st.current;
+    const PAL = ['#3b6fd8', '#8a5cd6', '#1f9d8a', '#d9822b', '#c8243f', '#5f7d95', '#b3528d', '#6a9f3a'];
+    const OTHER = '#b9c1cb';
+    const fmt = n => Math.round(n).toLocaleString('ko-KR');
+    const pct = (a, b) => b ? a / b * 100 : 0;
+    const DI = { type: 4, sub: 5, st: 3 }, DN = { type: '대분류', sub: '세부 유형', st: '스테이션' };
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const wk = ds => { const d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.toISOString().slice(0, 10); };
+    const pk = ds => S.unit === 'm' ? ds.slice(0, 7) : wk(ds);
+    const pl = k => S.unit === 'm' ? (+k.slice(5, 7)) + '월' : k.slice(5).replace('-', '/');
+    const isDf = mode === 'df';
+    root.className = 'dtp' + (isDf ? '' : ' rw');
+
+    const render = () => {
+      const all = RAW.df.concat(RAW.rw).filter(r => r[0] === S.sec).map(r => r[2]).sort();
+      let cut = '0000-00-00';
+      if (S.period && all.length) { const L = all[all.length - 1]; const d = new Date(+L.slice(0, 4), +L.slice(5, 7) - S.period, 1);
+        cut = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01'; }
+      const inL = r => r[0] === S.sec && r[2] >= cut && (S.line === '전체' || r[1] === S.line);
+      const rows = (isDf ? RAW.df : RAW.rw).filter(inL);
+      const di = DI[S.dim];
+      const lines = [...new Set(RAW.prod.filter(r => r[0] === S.sec).map(r => r[1]))].sort();
+      const segBtn = (grp, v, t) => `<button data-g="${grp}" data-v="${v}" aria-pressed="${String(S[grp]) === String(v)}">${t}</button>`;
+      let h = `<div class="bar">
+        <div class="seg">${segBtn('sec', 'FE', 'FE')}${segBtn('sec', 'TCP', 'TCP')}</div>
+        <select data-s="line"><option value="전체">전체 라인</option>${lines.map(l => `<option ${S.line === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+        <select data-s="period">${[[3, '최근 3개월'], [6, '최근 6개월'], [12, '최근 12개월'], [0, '전체']].map(([v, t]) => `<option value="${v}" ${S.period === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <span class="sp"></span><span class="lbl">분류 기준</span>
+        <div class="seg">${segBtn('dim', 'type', '대분류')}${segBtn('dim', 'sub', '세부 유형')}${segBtn('dim', 'st', '스테이션')}</div>
+        <span class="lbl">추이 단위</span><div class="seg">${segBtn('unit', 'm', '월')}${segBtn('unit', 'w', '주')}</div></div>`;
+      const total = rows.reduce((a, r) => a + r[6], 0);
+      if (!total) {
+        root.innerHTML = h + `<div class="pn empty">선택한 조건에 ${isDf ? '불량' : '재작업'} 기록이 없습니다. 기간을 늘리거나 다른 라인을 선택하세요.</div>`;
+        bind(); return;
+      }
+      const byT = {}; rows.forEach(r => { byT[r[di]] = (byT[r[di]] || 0) + r[6]; });
+      const types = Object.entries(byT).sort((a, b) => b[1] - a[1]);
+      const top = types.slice(0, 6).map(t => t[0]);
+      const col = t => { const i = top.indexOf(t); return i >= 0 ? PAL[i] : OTHER; };
+      const pers = [...new Set(rows.map(r => pk(r[2])))].sort();
+      const byP = {}, byPT = {}, prodP = {};
+      rows.forEach(r => { const k = pk(r[2]); byP[k] = (byP[k] || 0) + r[6]; byPT[k + '|' + r[di]] = (byPT[k + '|' + r[di]] || 0) + r[6]; });
+      RAW.prod.forEach(r => { if (inL(r)) { const k = pk(r[2]); prodP[k] = (prodP[k] || 0) + r[3]; } });
+      const prod = pers.reduce((a, k) => a + (prodP[k] || 0), 0);
+      const lastDate = rows.map(r => r[2]).sort().pop(), lastK = pers[pers.length - 1];
+      const partial = S.unit === 'm' ? (+lastDate.slice(8, 10) < 25) : (new Set(rows.filter(r => pk(r[2]) === lastK).map(r => r[2])).size < 5);
+      const plab = k => pl(k) + (partial && k === lastK ? '(진행중)' : '');
+      const ci = partial && pers.length > 1 ? pers.length - 2 : pers.length - 1;
+      const lp = pers[ci], pp = pers[ci - 1];
+      const rL = pct(byP[lp] || 0, prodP[lp] || 0), rP = pp ? pct(byP[pp] || 0, prodP[pp] || 0) : null, dd = rP == null ? null : rL - rP;
+      let acc = 0, t80 = 0; for (const [, v] of types) { acc += v; t80++; if (acc / total >= 0.8) break; }
+      h += `<div class="story"><div><div class="big">${pct(total, prod).toFixed(2)}<small>%</small></div>
+        <div style="font-size:12px;color:var(--sub);margin-top:6px">${isDf ? '최종불량률' : '1차불량률'} — 생산수량(양품+불량) ${fmt(prod)}개 중 ${fmt(total)}개</div></div>
+        <div class="facts"><span>가장 많은 ${DN[S.dim]}<br><b>${esc(types[0][0])}</b> ${pct(types[0][1], total).toFixed(1)}%</span>
+        <span>상위 ${t80}개 유형이<br><b>전체의 80%</b></span>
+        <span>${plab(lp)} 발생률<br><b>${rL.toFixed(2)}%</b>${dd == null ? '' : `<span class="${dd > 0 ? 'up' : 'dn'}">${dd > 0 ? '▲' : '▼'} ${Math.abs(dd).toFixed(2)}%p</span>`}</span></div></div>`;
+      // 유형별 비중
+      let cum = 0; const mx = types[0][1];
+      h += `<div class="g2"><section class="pn"><h2>유형별 비중</h2><p class="hint">많은 순서. 굵은 숫자는 전체 대비 비중, 옅은 숫자는 누적 비중입니다. 항목을 누르면 아래에서 강조됩니다.</p><div class="par">`
+        + types.slice(0, 15).map(([t, v]) => { cum += v;
+          return `<button class="rt" data-hi="${esc(t)}" aria-pressed="${S.hi === t}"><span class="nm" title="${esc(t)}">${esc(t)}</span><span class="trk"><span class="fil" style="width:${v / mx * 100}%;background:${col(t)}"></span></span><span class="n">${fmt(v)}</span><span class="pc">${pct(v, total).toFixed(1)}%</span><span class="cm">${(cum / total * 100).toFixed(0)}%</span></button>`; }).join('')
+        + (types.length > 15 ? `<div class="cm" style="text-align:left;margin-top:4px">외 ${types.length - 15}개 유형 ${fmt(types.slice(15).reduce((a, t) => a + t[1], 0))}개</div>` : '') + `</div></section>`;
+      // 추이
+      const W = 640, H = 230, L0 = 46, R0 = 46, T0 = 10, B0 = 26, cw = (W - L0 - R0) / pers.length, bw = Math.min(38, cw * 0.62);
+      const mq = Math.max(...pers.map(k => byP[k] || 0)), rates = pers.map(k => pct(byP[k] || 0, prodP[k] || 0)), mr = Math.max(...rates, 0.0001);
+      let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+      for (let g = 0; g <= 4; g++) { const y = T0 + (H - T0 - B0) * g / 4;
+        svg += `<line x1="${L0}" x2="${W - R0}" y1="${y}" y2="${y}" stroke="#e2e8f0"/><text x="${L0 - 6}" y="${y + 4}" text-anchor="end" font-size="10" fill="#94a3b8">${fmt(mq * (1 - g / 4))}</text><text x="${W - R0 + 6}" y="${y + 4}" font-size="10" fill="#94a3b8">${(mr * (1 - g / 4)).toFixed(1)}%</text>`; }
+      pers.forEach((k, i) => { const x = L0 + cw * i + (cw - bw) / 2; let y = H - B0;
+        const segs = top.map(t => [t, byPT[k + '|' + t] || 0]); segs.push(['__o', (byP[k] || 0) - segs.reduce((a, s) => a + s[1], 0)]);
+        segs.forEach(([t, v]) => { if (v <= 0) return; const hh = (H - T0 - B0) * v / mq; y -= hh;
+          svg += `<rect x="${x}" y="${y}" width="${bw}" height="${hh}" fill="${t === '__o' ? OTHER : col(t)}" opacity="${S.hi && S.hi !== t ? 0.18 : 1}"><title>${plab(k)} ${t === '__o' ? '기타' : esc(t)}: ${fmt(v)}</title></rect>`; });
+        svg += `<text x="${L0 + cw * i + cw / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#64748b">${plab(k)}</text>`; });
+      svg += `<polyline points="${rates.map((r, i) => `${L0 + cw * i + cw / 2},${T0 + (H - T0 - B0) * (1 - r / mr)}`).join(' ')}" fill="none" stroke="#1e293b" stroke-width="2"/>`;
+      rates.forEach((r, i) => { svg += `<circle cx="${L0 + cw * i + cw / 2}" cy="${T0 + (H - T0 - B0) * (1 - r / mr)}" r="3" fill="#fff" stroke="#1e293b" stroke-width="2"><title>${plab(pers[i])} 발생률 ${r.toFixed(2)}%</title></circle>`; });
+      h += `<section class="pn"><h2>${S.unit === 'm' ? '월별' : '주별'} 추이</h2><p class="hint">막대는 ${isDf ? '불량' : '재작업'} 수량(상위 6개 유형), 선은 발생률입니다.${S.hi ? ` «${esc(S.hi)}» 강조 중.` : ''}</p>${svg}</svg>
+        <div class="lg">${top.map(t => `<span><i style="background:${col(t)}"></i>${esc(t)}</span>`).join('')}<span><i style="background:${OTHER}"></i>기타</span><span><i style="background:#1e293b;height:2px;vertical-align:3px"></i>발생률</span></div></section></div>`;
+      // 유형별 선그래프 (small multiples)
+      const smT = types.slice(0, 12).map(t => t[0]);
+      h += `<section class="pn"><h2>유형별 ${S.unit === 'm' ? '월별' : '주별'} 추이</h2><p class="hint">유형마다 따로 그린 수량 추이입니다. 점선은 그 유형의 발생률(생산수량 대비)입니다. 카드를 누르면 위 그래프에서 강조됩니다.</p><div class="sm">`
+        + smT.map(t => {
+          const vals = pers.map(k => byPT[k + '|' + t] || 0), rts = pers.map((k, i) => pct(vals[i], prodP[k] || 0));
+          const w = 250, hh = 96, l = 6, r = 6, tp = 8, bt = 18, cw2 = pers.length > 1 ? (w - l - r) / (pers.length - 1) : 0;
+          const mv = Math.max(...vals, 1), mrr = Math.max(...rts, 0.0001);
+          const X = i => l + cw2 * i, Y = v => tp + (hh - tp - bt) * (1 - v / mv), YR = v => tp + (hh - tp - bt) * (1 - v / mrr);
+          const vv = partial && vals.length > 1 ? vals.slice(0, -1) : vals, last = vv[vv.length - 1], prior = vv.slice(0, -1), avg = prior.length ? prior.reduce((a, b) => a + b, 0) / prior.length : 0;
+          const tr = !prior.length || !avg ? '' : last > avg * 1.15 ? '<span class="up">▲</span>' : last < avg * 0.85 ? '<span class="dn">▼</span>' : '';
+          let s = `<svg viewBox="0 0 ${w} ${hh}" width="100%">`;
+          s += `<polyline points="${rts.map((v, i) => `${X(i)},${YR(v)}`).join(' ')}" fill="none" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="3 3"/>`;
+          s += `<polyline points="${vals.map((v, i) => `${X(i)},${Y(v)}`).join(' ')}" fill="none" stroke="${col(t) === OTHER ? '#475569' : col(t)}" stroke-width="2.2"/>`;
+          vals.forEach((v, i) => { s += `<circle cx="${X(i)}" cy="${Y(v)}" r="2.6" fill="${col(t) === OTHER ? '#475569' : col(t)}"><title>${plab(pers[i])}: ${fmt(v)}개 · 발생률 ${rts[i].toFixed(2)}%</title></circle>`; });
+          pers.forEach((k, i) => { if (pers.length <= 8 || i % Math.ceil(pers.length / 6) === 0 || i === pers.length - 1)
+            s += `<text x="${X(i)}" y="${hh - 4}" text-anchor="${i === 0 ? 'start' : i === pers.length - 1 ? 'end' : 'middle'}" font-size="9" fill="#94a3b8">${pl(k)}</text>`; });
+          s += `<text x="${w - r}" y="${Math.max(10, Y(vals[vals.length - 1]) - 5)}" text-anchor="end" font-size="10" font-weight="700" fill="#1e293b">${fmt(vals[vals.length - 1])}</text></svg>`;
+          return `<div class="smc${S.hi === t ? ' on' : ''}" data-hi="${esc(t)}"><div class="smh"><b title="${esc(t)}">${esc(t)}</b><span style="color:#94a3b8;font-size:12px">${fmt(byT[t])}개</span>${tr}<span class="pc">${pct(byT[t], total).toFixed(1)}%</span></div>${s}</div>`;
+        }).join('') + `</div>${partial ? `<p class="hint" style="margin:8px 0 0">${plab(lastK)}은 아직 끝나지 않은 기간이라 ▲▼ 판단에서 뺐습니다.</p>` : ''}</section>`;
+      // 히트맵
+      const hT = types.slice(0, 15).map(t => t[0]); let hm = 0;
+      hT.forEach(t => pers.forEach(k => { hm = Math.max(hm, byPT[k + '|' + t] || 0); }));
+      h += `<section class="pn"><h2>유형 × 기간 히트맵</h2><p class="hint">색이 진할수록 많습니다.</p><div class="sc"><table class="ht"><thead><tr><th class="t">${DN[S.dim]}</th>${pers.map(k => `<th class="${partial && k === lastK ? 'part' : ''}">${plab(k)}</th>`).join('')}<th>합계</th><th>비중</th></tr></thead><tbody>`
+        + hT.map(t => `<tr class="${S.hi === t ? 'hi' : ''}"><td class="t">${esc(t)}</td>` + pers.map(k => { const v = byPT[k + '|' + t] || 0, a = hm ? v / hm : 0;
+          return `<td style="background:color-mix(in srgb, var(--acc) ${Math.round(a * 85)}%, #f1f5f9);color:${a > 0.55 ? '#fff' : '#1e293b'}">${v ? fmt(v) : '<span style="color:#cbd5e1">·</span>'}</td>`; }).join('')
+          + `<td class="tot">${fmt(byT[t])}</td><td class="tot" style="color:var(--acc)">${pct(byT[t], total).toFixed(1)}%</td></tr>`).join('') + `</tbody></table></div></section>`;
+      // 라인 × 유형
+      if (S.line === '전체') {
+        const ls = [...new Set(rows.map(r => r[1]))], byL = {}, byLT = {}, prL = {};
+        rows.forEach(r => { byL[r[1]] = (byL[r[1]] || 0) + r[6]; byLT[r[1] + '|' + r[di]] = (byLT[r[1] + '|' + r[di]] || 0) + r[6]; });
+        RAW.prod.forEach(r => { if (inL(r)) prL[r[1]] = (prL[r[1]] || 0) + r[3]; });
+        ls.sort((a, b) => byL[b] - byL[a]);
+        h += `<section class="pn"><h2>라인별 유형 구성</h2><p class="hint">괄호 안은 라인 내 비중입니다.</p><div class="sc"><table class="cx"><thead><tr><th>라인</th><th>생산수량</th><th>${isDf ? '불량' : '재작업'}</th><th>발생률</th>${top.map(t => `<th>${esc(t)}</th>`).join('')}<th>기타</th></tr></thead><tbody>`
+          + ls.map(l => { const s = top.reduce((a, t) => a + (byLT[l + '|' + t] || 0), 0);
+            return `<tr><td>${esc(l)}</td><td>${fmt(prL[l] || 0)}</td><td>${fmt(byL[l])}</td><td>${pct(byL[l], prL[l] || 0).toFixed(2)}%</td>` + top.map(t => { const v = byLT[l + '|' + t] || 0, sh = pct(v, byL[l]);
+              return `<td>${v ? `<span class="bgc" style="background:color-mix(in srgb, ${col(t)} ${Math.round(sh * 0.35)}%, transparent)">${fmt(v)} <span style="color:#94a3b8">(${sh.toFixed(0)}%)</span></span>` : '<span style="color:#cbd5e1">·</span>'}</td>`; }).join('') + `<td>${fmt(byL[l] - s)}</td></tr>`; }).join('')
+          + `</tbody></table></div></section>`;
+      }
+      root.innerHTML = h; bind();
+    };
+    const bind = () => {
+      root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S[b.dataset.g] = b.dataset.v; S.hi = null; if (b.dataset.g === 'sec') S.line = '전체'; render(); });
+      root.querySelectorAll('[data-s]').forEach(s => s.onchange = () => { S[s.dataset.s] = s.dataset.s === 'period' ? +s.value : s.value; S.hi = null; render(); });
+      root.querySelectorAll('[data-hi]').forEach(b => b.onclick = () => { const t = b.dataset.hi; S.hi = S.hi === t ? null : t; render(); });
+    };
+    render();
+  }, [RAW, mode]);
+  return React.createElement("div", { ref, className: "dtp" });
+}
+
 function ValidationPanel({
   tcpData,
   feData,
@@ -6480,11 +6704,19 @@ function App() {
   }, {
     id: 'defect',
     icon: '🔴',
-    label: '불량'
+    label: '불량(최종불량)'
+  }, {
+    id: 'defecttype',
+    icon: '📊',
+    label: '불량(최종불량)_유형별'
   }, {
     id: 'rework',
     icon: '♻️',
-    label: '재작업'
+    label: '재작업(1차불량)'
+  }, {
+    id: 'reworktype',
+    icon: '📊',
+    label: '재작업(1차불량)_유형별'
   }, {
     id: 'downtime',
     icon: '⏸️',
@@ -6573,7 +6805,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V117"), React.createElement("div", {
+  }, "V118"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -9182,7 +9414,7 @@ function App() {
         color: efficiency >= 100 ? '#059669' : efficiency >= 80 ? '#0284c7' : '#dc2626'
       }
     }, efficiency.toFixed(1), "%"))))))));
-  })(), (activeTab === 'defect' || activeTab === 'rework') && (tcpData || feData) && (() => {
+  })(), activeTab === 'defecttype' && (tcpData || feData) && React.createElement(DefectTypePanel, { key: 'dtp-df', mode: 'df', tcpData: tcpData, feData: feData }), activeTab === 'reworktype' && (tcpData || feData) && React.createElement(DefectTypePanel, { key: 'dtp-rw', mode: 'rw', tcpData: tcpData, feData: feData }), (activeTab === 'defect' || activeTab === 'rework') && (tcpData || feData) && (() => {
     const kind = activeTab;
     const isDefect = kind === 'defect';
     const labelMain = isDefect ? '불량' : '재작업';
