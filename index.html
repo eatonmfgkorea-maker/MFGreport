@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V118</title>
+  <title>MFG Report V119</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V119',
+  d: '2026-09-23',
+  items: ['유형별 탭을 «기능불량»만 집계하도록 변경 — 조립·외관·치수 불량 제외, 분모도 양품+기능불량 (New OEE 와 같은 기준)', '유형별 탭 기간 기본값을 «올해 1월 ~ 최근월»로 변경', '시작월·종료월을 직접 지정해서 조회 가능', '빠른 선택(올해·최근 3/6/12개월·전체)은 그대로 유지', '요약에 조회 기간을 함께 표시']
+}, {
   v: 'V118',
   d: '2026-09-23',
   items: ['탭 이름 변경 — 불량 → «불량(최종불량)», 재작업 → «재작업(1차불량)»', '«불량(최종불량)_유형별», «재작업(1차불량)_유형별» 탭 추가', '유형별 비중(%)·누적 비중, 월별/주별 추이, 유형별 개별 선그래프, 유형×기간 히트맵, 라인별 유형 구성을 한 화면에', '분류 기준을 대분류·세부 유형·스테이션 중 선택', '발생률 = 불량(또는 재작업) ÷ 생산수량(양품+불량)', 'Leak / LEAK 처럼 대소문자만 다른 유형은 자동으로 합쳐서 집계', '진행 중인 달은 증감(▲▼) 판단에서 제외']
@@ -499,7 +503,7 @@ const __idb = {
 // ===== V118: 불량(최종불량)·재작업(1차불량) 유형별 분석 =====
 function DefectTypePanel({ mode, tcpData, feData }) {
   const ref = React.useRef(null);
-  const st = React.useRef({ sec: 'FE', line: '전체', period: 6, dim: 'sub', unit: 'm', hi: null });
+  const st = React.useRef({ sec: 'FE', line: '전체', from: '', to: '', dim: 'sub', unit: 'm', hi: null });
   const RAW = React.useMemo(() => {
     const out = { df: [], rw: [], prod: [] };
     const normSub = s => { s = String(s || '').trim(); if (!s) return '(미분류)'; return s.toUpperCase() === 'LEAK' ? 'Leak' : s; };
@@ -508,15 +512,17 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       const logs = {};
       (d.productionLogs || []).forEach(p => { if (p.section === sec || !p.section) logs[p.id] = p; });
       const dfq = {};
+      // V119: 기능불량만 집계 (조립·외관·치수 불량 제외)
+      const isFn = t => String(t || '').trim() === '기능불량';
       [...(d.defectLogs || []), ...(d.processDefectLogs || [])].forEach(x => {
         const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
-        if (!p || q <= 0) return;
+        if (!p || q <= 0 || !isFn(x.defectType)) return;
         dfq[p.id] = (dfq[p.id] || 0) + q;
         out.df.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.defectType || '(미분류)', normSub(x.defectSubType), q]);
       });
       (d.reworkLogs || []).forEach(x => {
         const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
-        if (!p || q <= 0) return;
+        if (!p || q <= 0 || !isFn(x.reworkType)) return;
         out.rw.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.reworkType || '(미분류)', normSub(x.reworkSubType), q]);
       });
       Object.values(logs).forEach(p => {
@@ -604,10 +610,22 @@ function DefectTypePanel({ mode, tcpData, feData }) {
 
     const render = () => {
       const all = RAW.df.concat(RAW.rw).filter(r => r[0] === S.sec).map(r => r[2]).sort();
-      let cut = '0000-00-00';
-      if (S.period && all.length) { const L = all[all.length - 1]; const d = new Date(+L.slice(0, 4), +L.slice(5, 7) - S.period, 1);
-        cut = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01'; }
-      const inL = r => r[0] === S.sec && r[2] >= cut && (S.line === '전체' || r[1] === S.line);
+      const firstM = all.length ? all[0].slice(0, 7) : '';
+      const lastM = all.length ? all[all.length - 1].slice(0, 7) : '';
+      // V119: 기본값 = 올해 1월 ~ 최근월
+      if (!S.to) S.to = lastM;
+      if (!S.from) S.from = (S.to || lastM).slice(0, 4) + '-01';
+      if (S.from > S.to) { const t = S.from; S.from = S.to; S.to = t; }
+      const mShift = (ym, n) => { const d = new Date(+ym.slice(0, 4), +ym.slice(5, 7) - 1 + n, 1); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
+      const dFrom = S.from + '-01', dTo = S.to + '-31';
+      const inL = r => r[0] === S.sec && r[2] >= dFrom && r[2] <= dTo && (S.line === '전체' || r[1] === S.line);
+      const presets = [
+        ['올해', lastM.slice(0, 4) + '-01', lastM],
+        ['최근 3개월', mShift(lastM, -2), lastM],
+        ['최근 6개월', mShift(lastM, -5), lastM],
+        ['최근 12개월', mShift(lastM, -11), lastM],
+        ['전체', firstM, lastM]];
+      const curPreset = (presets.find(p => p[1] === S.from && p[2] === S.to) || [''])[0];
       const rows = (isDf ? RAW.df : RAW.rw).filter(inL);
       const di = DI[S.dim];
       const lines = [...new Set(RAW.prod.filter(r => r[0] === S.sec).map(r => r[1]))].sort();
@@ -615,10 +633,14 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       let h = `<div class="bar">
         <div class="seg">${segBtn('sec', 'FE', 'FE')}${segBtn('sec', 'TCP', 'TCP')}</div>
         <select data-s="line"><option value="전체">전체 라인</option>${lines.map(l => `<option ${S.line === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
-        <select data-s="period">${[[3, '최근 3개월'], [6, '최근 6개월'], [12, '최근 12개월'], [0, '전체']].map(([v, t]) => `<option value="${v}" ${S.period === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+        <select data-preset="1" aria-label="빠른 선택">${presets.map(p => `<option value="${p[1]}|${p[2]}" ${curPreset === p[0] ? 'selected' : ''}>${p[0]}</option>`).join('')}${curPreset ? '' : '<option selected value="">직접 지정</option>'}</select>
+        <input type="month" data-s="from" value="${S.from}" min="${firstM}" max="${lastM}" aria-label="시작월" style="font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:9px">
+        <span style="color:#94a3b8">~</span>
+        <input type="month" data-s="to" value="${S.to}" min="${firstM}" max="${lastM}" aria-label="종료월" style="font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:9px">
         <span class="sp"></span><span class="lbl">분류 기준</span>
-        <div class="seg">${segBtn('dim', 'type', '대분류')}${segBtn('dim', 'sub', '세부 유형')}${segBtn('dim', 'st', '스테이션')}</div>
-        <span class="lbl">추이 단위</span><div class="seg">${segBtn('unit', 'm', '월')}${segBtn('unit', 'w', '주')}</div></div>`;
+        <div class="seg">${segBtn('dim', 'sub', '세부 유형')}${segBtn('dim', 'st', '스테이션')}</div>
+        <span class="lbl">추이 단위</span><div class="seg">${segBtn('unit', 'm', '월')}${segBtn('unit', 'w', '주')}</div></div>
+        <p style="font-size:12px;color:#94a3b8;margin:-6px 0 12px 4px">기능불량만 집계합니다 — 조립·외관·치수 불량은 제외 (New OEE 와 같은 기준)</p>`;
       const total = rows.reduce((a, r) => a + r[6], 0);
       if (!total) {
         root.innerHTML = h + `<div class="pn empty">선택한 조건에 ${isDf ? '불량' : '재작업'} 기록이 없습니다. 기간을 늘리거나 다른 라인을 선택하세요.</div>`;
@@ -641,7 +663,7 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       const rL = pct(byP[lp] || 0, prodP[lp] || 0), rP = pp ? pct(byP[pp] || 0, prodP[pp] || 0) : null, dd = rP == null ? null : rL - rP;
       let acc = 0, t80 = 0; for (const [, v] of types) { acc += v; t80++; if (acc / total >= 0.8) break; }
       h += `<div class="story"><div><div class="big">${pct(total, prod).toFixed(2)}<small>%</small></div>
-        <div style="font-size:12px;color:var(--sub);margin-top:6px">${isDf ? '최종불량률' : '1차불량률'} — 생산수량(양품+불량) ${fmt(prod)}개 중 ${fmt(total)}개</div></div>
+        <div style="font-size:12px;color:var(--sub);margin-top:6px">${isDf ? '최종불량률' : '1차불량률'} (기능불량 기준) — ${S.from.replace('-', '.')} ~ ${S.to.replace('-', '.')} 생산수량(양품+기능불량) ${fmt(prod)}개 중 ${fmt(total)}개</div></div>
         <div class="facts"><span>가장 많은 ${DN[S.dim]}<br><b>${esc(types[0][0])}</b> ${pct(types[0][1], total).toFixed(1)}%</span>
         <span>상위 ${t80}개 유형이<br><b>전체의 80%</b></span>
         <span>${plab(lp)} 발생률<br><b>${rL.toFixed(2)}%</b>${dd == null ? '' : `<span class="${dd > 0 ? 'up' : 'dn'}">${dd > 0 ? '▲' : '▼'} ${Math.abs(dd).toFixed(2)}%p</span>`}</span></div></div>`;
@@ -708,7 +730,8 @@ function DefectTypePanel({ mode, tcpData, feData }) {
     };
     const bind = () => {
       root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { S[b.dataset.g] = b.dataset.v; S.hi = null; if (b.dataset.g === 'sec') S.line = '전체'; render(); });
-      root.querySelectorAll('[data-s]').forEach(s => s.onchange = () => { S[s.dataset.s] = s.dataset.s === 'period' ? +s.value : s.value; S.hi = null; render(); });
+      root.querySelectorAll('[data-s]').forEach(s => s.onchange = () => { if (!s.value) return; S[s.dataset.s] = s.value; S.hi = null; render(); });
+      root.querySelectorAll('[data-preset]').forEach(s => s.onchange = () => { if (!s.value) return; const [f, t] = s.value.split('|'); S.from = f; S.to = t; S.hi = null; render(); });
       root.querySelectorAll('[data-hi]').forEach(b => b.onclick = () => { const t = b.dataset.hi; S.hi = S.hi === t ? null : t; render(); });
     };
     render();
@@ -6805,7 +6828,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V118"), React.createElement("div", {
+  }, "V119"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
