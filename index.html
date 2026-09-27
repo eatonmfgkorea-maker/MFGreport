@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V123</title>
+  <title>MFG Report V124</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V124',
+  d: '2026-09-28',
+  items: ['유형별 탭에 «공정+유형» 분류 기준 추가 (기본값) — 같은 불량이 공정별로 제대로 모이도록', '같은 공정에서 표기만 다르게 입력된 유형을 하나로 합침 — 예: Op80.OPR Leak Test 의 «OPR Leak»·«Leak»·«LEAK» → «Leak»', '규칙: 유형의 첫 단어가 공정 이름에 이미 있으면 그 단어를 떼고, 대소문자만 다른 표기는 가장 많이 쓰인 표기로 통일', '엑셀 원본 데이터에 입력된 유형(원본)·정리된 유형·공정+유형 열 추가, «유형 정리 내역» 시트 추가']
+}, {
   v: 'V123',
   d: '2026-09-23',
   items: ['조직도 카드의 고용형태 표시를 직급 옆 괄호 표기로 변경 — 예: 리더 (정규직)']
@@ -637,7 +641,7 @@ async function dtpExportXlsx(E) {
   s1.getColumn(1).width = 30; s1.getColumn(2).width = 34;
   const note = 5 + info.length + 1;
   ['시트 안내', '유형별 비중 — 유형별 수량·비중·누적 비중 + 막대 차트', '기간별 추이 — 기간별 생산수량·수량·발생률, 상위 6개 유형 누적 막대 + 발생률 선', '유형별 추이 — 유형마다 기간별 발생률·수량 + 유형별 선 차트',
-    '히트맵 — 유형 × 기간 수량 (색 농도 = 많음)', '라인별 — 라인별 생산수량·수량·발생률·유형 구성', '원본 데이터 — 계산에 쓴 기록 전체', '생산수량 — 발생률 분모로 쓴 일지별 생산수량']
+    '히트맵 — 유형 × 기간 수량 (색 농도 = 많음)', '라인별 — 라인별 생산수량·수량·발생률·유형 구성', '원본 데이터 — 계산에 쓴 기록 전체 (입력된 유형과 정리된 유형을 함께)', '생산수량 — 발생률 분모로 쓴 일지별 생산수량', '유형 정리 내역 — 표기만 달라서 하나로 합친 항목']
     .forEach((t, i) => { const c = s1.getCell(note + i, 1); c.value = t; c.font = i ? { ...F, color: { argb: 'FF475569' } } : { ...F, bold: true }; });
   if (E.partial) { const c = s1.getCell(note + 9, 1); c.value = `※ ${E.lastPartialLabel} 은 아직 끝나지 않은 기간입니다.`; c.font = { ...F, color: { argb: 'FFC8243F' } }; }
 
@@ -703,10 +707,16 @@ async function dtpExportXlsx(E) {
 
   // ⑦ 원본 데이터 / ⑧ 생산수량
   const s7 = wb.addWorksheet('원본 데이터');
-  hdr(s7, 1, ['공정', '라인', '생산일자', '스테이션', '대분류', '세부 유형', '수량']);
-  E.rows.forEach((r, i) => put(s7, i + 2, [r[0], r[1], r[2], r[3], r[4], r[5], r[6]], [null, null, null, null, null, null, '#,##0']));
-  s7.autoFilter = { from: 'A1', to: 'G1' }; s7.views = [{ state: 'frozen', ySplit: 1 }];
-  [8, 14, 12, 26, 12, 20, 10].forEach((w, i) => s7.getColumn(i + 1).width = w);
+  hdr(s7, 1, ['공정', '라인', '생산일자', '스테이션', '대분류', '입력된 유형(원본)', '정리된 유형', '공정+유형', '수량']);
+  E.rows.forEach((r, i) => put(s7, i + 2, [r[0], r[1], r[2], r[3], r[4], r[8], r[5], r[7], r[6]], [null, null, null, null, null, null, null, null, '#,##0']));
+  s7.autoFilter = { from: 'A1', to: 'I1' }; s7.views = [{ state: 'frozen', ySplit: 1 }];
+  [8, 14, 12, 26, 12, 18, 16, 34, 10].forEach((w, i) => s7.getColumn(i + 1).width = w);
+  const sM = wb.addWorksheet('유형 정리 내역');
+  hdr(sM, 1, ['스테이션', '입력된 유형(원본)', '→ 정리된 유형', '수량']);
+  (E.merged || []).forEach((m, i) => put(sM, i + 2, [m.st, m.raw, m.nv, m.q], [null, null, null, '#,##0']));
+  sM.getCell((E.merged || []).length + 3, 1).value = '규칙: ① 유형의 첫 단어가 공정 이름에 들어 있으면 그 단어를 뗌 (Op80.OPR Leak Test + «OPR Leak» → «Leak»)  ② 대소문자만 다른 표기는 가장 많이 쓰인 표기로 통일';
+  sM.getCell((E.merged || []).length + 3, 1).font = { ...F, color: { argb: 'FF64748B' } };
+  [30, 20, 20, 12].forEach((w, i) => sM.getColumn(i + 1).width = w); sM.views = [{ state: 'frozen', ySplit: 1 }];
   const s8 = wb.addWorksheet('생산수량');
   hdr(s8, 1, ['공정', '라인', '생산일자', '생산수량(양품+기능불량)']);
   E.prodRows.forEach((r, i) => put(s8, i + 2, [r[0], r[1], r[2], r[3]], [null, null, null, '#,##0']));
@@ -724,7 +734,7 @@ async function dtpExportXlsx(E) {
 // ===== V118: 불량(최종불량)·재작업(1차불량) 유형별 분석 =====
 function DefectTypePanel({ mode, tcpData, feData }) {
   const ref = React.useRef(null);
-  const st = React.useRef({ sec: 'FE', line: '전체', from: '', to: '', dim: 'sub', unit: 'm', hi: null });
+  const st = React.useRef({ sec: 'FE', line: '전체', from: '', to: '', dim: 'sc', unit: 'm', hi: null });
   const RAW = React.useMemo(() => {
     const out = { df: [], rw: [], prod: [] };
     const normSub = s => { s = String(s || '').trim(); if (!s) return '(미분류)'; return s.toUpperCase() === 'LEAK' ? 'Leak' : s; };
@@ -739,17 +749,40 @@ function DefectTypePanel({ mode, tcpData, feData }) {
         const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
         if (!p || q <= 0 || !isFn(x.defectType)) return;
         dfq[p.id] = (dfq[p.id] || 0) + q;
-        out.df.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.defectType || '(미분류)', normSub(x.defectSubType), q]);
+        out.df.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.defectType || '(미분류)', String(x.defectSubType || '').trim(), q]);
       });
       (d.reworkLogs || []).forEach(x => {
         const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
         if (!p || q <= 0 || !isFn(x.reworkType)) return;
-        out.rw.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.reworkType || '(미분류)', normSub(x.reworkSubType), q]);
+        out.rw.push([sec, p.lineName, p.productionDate, x.station || '(미지정)', x.reworkType || '(미분류)', String(x.reworkSubType || '').trim(), q]);
       });
       Object.values(logs).forEach(p => {
         out.prod.push([sec, p.lineName, p.productionDate, (parseFloat(p.goodQuantity) || 0) + (dfq[p.id] || 0)]);
       });
     });
+    // V124: 유형 정리 — 같은 공정에서 «OPR Leak» / «Leak» / «LEAK» 처럼 표기만 다른 것을 하나로
+    //  ① 유형의 첫 단어가 공정 이름에 이미 들어 있으면 그 단어를 뗀다 (Op80.OPR Leak Test + «OPR Leak» → «Leak»)
+    //  ② 대소문자만 다른 표기는 가장 많이 쓰인 표기로 통일 (LEAK → Leak)
+    const strip = (st, sub) => {
+      const w = sub.split(/\s+/).filter(Boolean);
+      if (w.length < 2) return sub;
+      return String(st).toLowerCase().indexOf(w[0].toLowerCase()) >= 0 ? w.slice(1).join(' ') : sub;
+    };
+    const spell = {};
+    const all = out.df.concat(out.rw);
+    all.forEach(r => { const v = r[5] ? strip(r[3], r[5]) : ''; r.push(v); if (v) { const k = v.toLowerCase(); (spell[k] = spell[k] || {})[v] = (spell[k][v] || 0) + r[6]; } });
+    const canon = {};
+    Object.keys(spell).forEach(k => { canon[k] = Object.entries(spell[k]).sort((a, b) => b[1] - a[1])[0][0]; });
+    const merged = {};   // 정리 내역
+    all.forEach(r => {
+      const raw = r[5], stripped = r.pop();
+      const nv = stripped ? canon[stripped.toLowerCase()] : '(미분류)';
+      if (raw && raw !== nv) { const mk = r[3] + '|' + raw + '|' + nv; merged[mk] = (merged[mk] || 0) + r[6]; }
+      r[5] = nv;
+      r.push(r[3] + ' · ' + nv);   // [7] 공정+유형
+      r.push(raw || '(미분류)');     // [8] 원래 입력한 유형
+    });
+    out.merged = Object.entries(merged).map(([k, q]) => { const [st, raw, nv] = k.split('|'); return { st, raw, nv, q }; }).sort((a, b) => b.q - a.q);
     return out;
   }, [tcpData, feData]);
 
@@ -770,13 +803,13 @@ function DefectTypePanel({ mode, tcpData, feData }) {
 .dtp .big small{font-size:16px;color:var(--sub);font-weight:500;margin-left:4px}
 .dtp .facts{display:flex;flex-wrap:wrap;gap:6px 28px;font-size:13px;color:var(--sub)}
 .dtp .facts b{color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
-.dtp .g2{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:14px;margin-bottom:14px}
+.dtp .g2{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,6fr);gap:14px;margin-bottom:14px}
 .dtp .pn{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0;margin-bottom:14px}
 .dtp .g2 .pn{margin-bottom:0}
 .dtp .pn h2{font-size:15px;margin:0 0 2px;font-weight:700}
 .dtp .hint{font-size:12px;color:var(--faint);margin:0 0 12px}
 .dtp .par{display:flex;flex-direction:column;gap:6px}
-.dtp .rt{display:grid;grid-template-columns:120px 1fr 62px 48px 44px;align-items:center;gap:8px;font-size:13px;border-radius:6px;padding:2px 4px;text-align:left;background:none;width:100%}
+.dtp .rt{display:grid;grid-template-columns:minmax(120px,210px) 1fr 62px 48px 40px;align-items:center;gap:8px;font-size:13px;border-radius:6px;padding:2px 4px;text-align:left;background:none;width:100%}
 .dtp .rt:hover,.dtp .rt[aria-pressed="true"]{background:var(--acc-soft)}
 .dtp .rt[aria-pressed="true"]{font-weight:700}
 .dtp .rt .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -822,7 +855,7 @@ function DefectTypePanel({ mode, tcpData, feData }) {
     const OTHER = '#b9c1cb';
     const fmt = n => Math.round(n).toLocaleString('ko-KR');
     const pct = (a, b) => b ? a / b * 100 : 0;
-    const DI = { type: 4, sub: 5, st: 3 }, DN = { type: '대분류', sub: '세부 유형', st: '스테이션' };
+    const DI = { type: 4, sub: 5, st: 3, sc: 7 }, DN = { type: '대분류', sub: '세부 유형', st: '스테이션', sc: '공정+유형' };
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     const wk = ds => { const d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.toISOString().slice(0, 10); };
     const pk = ds => S.unit === 'm' ? ds.slice(0, 7) : wk(ds);
@@ -860,10 +893,11 @@ function DefectTypePanel({ mode, tcpData, feData }) {
         <span style="color:#94a3b8">~</span>
         <input type="month" data-s="to" value="${S.to}" min="${firstM}" max="${lastM}" aria-label="종료월" style="font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:9px">
         <span class="sp"></span><span class="lbl">분류 기준</span>
-        <div class="seg">${segBtn('dim', 'sub', '세부 유형')}${segBtn('dim', 'st', '스테이션')}</div>
+        <div class="seg">${segBtn('dim', 'sc', '공정+유형')}${segBtn('dim', 'sub', '세부 유형')}${segBtn('dim', 'st', '스테이션')}</div>
         <span class="lbl">추이 단위</span><div class="seg">${segBtn('unit', 'm', '월')}${segBtn('unit', 'w', '주')}</div>
         <button data-x="1" style="padding:6px 12px;font-size:13px;font-weight:700;border-radius:9px;background:#15803d;color:#fff">엑셀 다운로드</button></div>
-        <p style="font-size:12px;color:#94a3b8;margin:-6px 0 12px 4px">기능불량만 집계합니다 — 조립·외관·치수 불량은 제외 (New OEE 와 같은 기준)</p>`;
+        <p style="font-size:12px;color:#94a3b8;margin:-6px 0 12px 4px">기능불량만 집계합니다 — 조립·외관·치수 불량은 제외 (New OEE 와 같은 기준).
+        같은 공정에서 표기만 다르게 입력된 유형(예: Op80 공정의 «OPR Leak»·«Leak»·«LEAK»)은 하나로 합쳤습니다 — ${(RAW.merged || []).length}개 표기 정리 (엑셀 «유형 정리 내역» 시트에서 확인).</p>`;
       const total = rows.reduce((a, r) => a + r[6], 0);
       if (!total) {
         root._exp = null;
@@ -967,7 +1001,9 @@ function DefectTypePanel({ mode, tcpData, feData }) {
           rLast: rL / 100, dd, lastLabel: plab(lp), partial, lastPartialLabel: plab(lastK), pers, periodLabels: pers.map(plab),
           byP, byPT, prodP, byT, top, pal: PAL, colorOf: col, accent: isDf ? '#C8243F' : '#B86B00',
           dec: avgs.some(v => v > 0 && v < 0.1) ? 3 : 2,
-          lineRows: Object.values(lr).sort((a, b) => b.qty - a.qty), rows, prodRows: RAW.prod.filter(inL) };
+          lineRows: Object.values(lr).sort((a, b) => b.qty - a.qty), rows, prodRows: RAW.prod.filter(inL),
+          merged: (() => { const m = {}; rows.forEach(r => { if (r[8] !== r[5] && r[8] !== '(미분류)') { const k = r[3] + '|' + r[8] + '|' + r[5]; m[k] = (m[k] || 0) + r[6]; } });
+            return Object.entries(m).map(([k, q]) => { const [st, raw, nv] = k.split('|'); return { st, raw, nv, q }; }).sort((a, b) => b.q - a.q); })() };
       }
       root.innerHTML = h; bind();
     };
@@ -7078,7 +7114,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V123"), React.createElement("div", {
+  }, "V124"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
