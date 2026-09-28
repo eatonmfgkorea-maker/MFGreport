@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V124</title>
+  <title>MFG Report V125</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V125',
+  d: '2026-09-28',
+  items: ['P(성능) 계산 오류 수정 — CT가 등록되지 않은 일지가 섞이면 분모(기대생산량)에서는 빠지는데 분자(양품)에는 들어가서 P가 부풀려지던 문제', '영향 받던 곳: OEE(비교), OEE 탭 라인별·월별, 대시보드 월별 추이·누계, Production 보고 — 모두 OEE(상세)와 같은 방식(CT 있는 일지의 양품만 P 분자)으로 통일', '2026년 기준 영향: TCP Nospin 9월(2.35배), TCP 2PC 9월(1.11배), 나머지는 1% 미만', '수동 입력한 월 실적은 기존처럼 입력 양품 그대로 사용']
+}, {
   v: 'V124',
   d: '2026-09-28',
   items: ['유형별 탭에 «공정+유형» 분류 기준 추가 (기본값) — 같은 불량이 공정별로 제대로 모이도록', '같은 공정에서 표기만 다르게 입력된 유형을 하나로 합침 — 예: Op80.OPR Leak Test 의 «OPR Leak»·«Leak»·«LEAK» → «Leak»', '규칙: 유형의 첫 단어가 공정 이름에 이미 있으면 그 단어를 떼고, 대소문자만 다른 표기는 가장 많이 쓰인 표기로 통일', '엑셀 원본 데이터에 입력된 유형(원본)·정리된 유형·공정+유형 열 추가, «유형 정리 내역» 시트 추가']
@@ -5444,13 +5448,15 @@ function App() {
       return false;
     });
   };
+  const gqPof = x => x.goodQtyForP !== undefined ? (x.goodQtyForP || 0) : (x.goodQty || 0);   // V125
   const getDashboardSectionData = (year, month, sectionType) => {
     let totalGoodQty = 0,
       totalDefects = 0,
       totalRework = 0;
     let totalLoadTime = 0,
       totalOperatingTime = 0,
-      totalExpectedOutput = 0;
+      totalExpectedOutput = 0,
+      totalGoodQtyForP = 0;   // V125: CT 있는 일지의 양품만 (P 분자)
     let logCount = 0;
     const manualSection = sectionType === 'TCP' ? 'TCP' : sectionType === 'FE' ? 'FE' : null;
     let usedManual = false;
@@ -5461,6 +5467,7 @@ function App() {
         const t = parseManualTotals(d);
         if (!t) return;
         totalGoodQty += t.goodQty;
+        totalGoodQtyForP += gqPof(t);
         totalDefects += t.defects;
         totalRework += t.rework;
         totalLoadTime += t.loadTime;
@@ -5475,6 +5482,7 @@ function App() {
         const c = computeLogContribution(log);
         if (!c) return;
         totalGoodQty += c.goodQty;
+        totalGoodQtyForP += c.goodQtyForP || 0;
         totalDefects += c.defects;
         totalRework += c.rework;
         totalLoadTime += c.loadTime;
@@ -5487,6 +5495,7 @@ function App() {
     if (!hasData) return null;
     const totals = {
       goodQty: totalGoodQty,
+      goodQtyForP: totalGoodQtyForP,
       defects: totalDefects,
       rework: totalRework,
       loadTime: totalLoadTime,
@@ -5612,11 +5621,13 @@ function App() {
       totalRework = 0;
     let totalLoadTime = 0,
       totalOperatingTime = 0,
-      totalExpectedOutput = 0;
+      totalExpectedOutput = 0,
+      totalGoodQtyForP = 0;   // V125
     logs.forEach(log => {
       const c = computeLogContribution(log);
       if (!c) return;
       totalGoodQty += c.goodQty;
+      totalGoodQtyForP += c.goodQtyForP || 0;
       totalDefects += c.defects;
       totalRework += c.rework;
       totalLoadTime += c.loadTime;
@@ -5625,6 +5636,7 @@ function App() {
     });
     const totals = {
       goodQty: totalGoodQty,
+      goodQtyForP: totalGoodQtyForP,
       defects: totalDefects,
       rework: totalRework,
       loadTime: totalLoadTime,
@@ -5969,6 +5981,7 @@ function App() {
   };
   const addTotals = (a, b) => ({
     goodQty: (a.goodQty || 0) + (b.goodQty || 0),
+    goodQtyForP: gqPof(a) + gqPof(b),
     rework: (a.rework || 0) + (b.rework || 0),
     defects: (a.defects || 0) + (b.defects || 0),
     loadTime: (a.loadTime || 0) + (b.loadTime || 0),
@@ -5977,6 +5990,7 @@ function App() {
   });
   const emptyTotals = () => ({
     goodQty: 0,
+    goodQtyForP: 0,
     rework: 0,
     defects: 0,
     loadTime: 0,
@@ -6004,6 +6018,7 @@ function App() {
     const agg = aggregateContribs(logs);
     return {
       goodQty: agg.goodQty,
+      goodQtyForP: agg.goodQtyForP,
       rework: agg.rework,
       defects: agg.defects,
       loadTime: agg.loadTime,
@@ -7114,7 +7129,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V124"), React.createElement("div", {
+  }, "V125"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -13946,13 +13961,15 @@ function App() {
         pt = 0,
         pdt = 0,
         updt = 0,
-        bq = 0;
+        bq = 0,
+        gqP = 0;   // V125: CT 있는 일지의 양품만 (P 분자)
       logArr.forEach(l => {
         const c = computeLogContribution(l);
         if (!c) return;
         lt += c.loadTime || 0;
         ot += c.operatingTime || 0;
         gq += c.goodQty || 0;
+        gqP += c.goodQtyForP || 0;
         df += c.defects || 0;
         rw += c.rework || 0;
         exp += c.expectedOutput || 0;
@@ -13963,6 +13980,7 @@ function App() {
       });
       const m = computeMetricsFromTotals({
         goodQty: gq,
+        goodQtyForP: gqP,
         defects: df,
         rework: rw,
         loadTime: lt,
@@ -23372,6 +23390,7 @@ function App() {
       const oeeLinesOf = sec => sec === 'TCP' ? ['1PC', '2PC', 'Nospin'] : ['GVV', 'LVS', 'FLVV', 'Memb', 'ICV', 'UCC'];
       const emptyT = () => ({
         goodQty: 0,
+        goodQtyForP: 0,
         rework: 0,
         defects: 0,
         loadTime: 0,
