@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V126</title>
+  <title>MFG Report V128</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,14 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V128',
+  d: '2026-10-06',
+  items: ['Production 보고 달성률 색 기준 변경 — TCP: 실적이 계획과 정확히 같을 때만 녹색 / FE: 100~105% 일 때만 녹색, 그 외 빨간색', '기존 TCP 는 반올림 100%(99.5~100.4%)를 녹색으로, FE 는 95~105% 를 녹색으로 처리했음', '반올림하면 100%·105% 로 보이지만 기준을 벗어난 경우 소수 1자리로 표시 (예: 99.6%)']
+}, {
+  v: 'V127',
+  d: '2026-10-06',
+  items: ['Production Review — TCP 1PC 인원·정시/잔업이 하루씩 밀려 표시되던 오류 수정', '원인: 계획파일 «_순번» 시트를 읽을 때 날짜당 6칸을 훑었는데, Nospin 칸이 없는 날은 4칸이라 다음 날의 1PC 값으로 덮어씀 (9월·10월 1PC 에 영향, 2PC 는 정상)', '수정: 다음 날짜 열 전까지만 읽고, 이미 읽은 값은 덮어쓰지 않음', '기존에 잘못 저장된 값은 이번 버전 첫 실행 때 계획파일을 다시 읽어 자동으로 교체']
+}, {
   v: 'V126',
   d: '2026-09-28',
   items: ['유형별 탭 월별 추이 막대에 마우스를 올리면 그 기간·그 유형의 아이템별 구성을 원형그래프로 표시 — 아이템별 수량과 비중(%)', '아이템이 10개를 넘으면 상위 9개 + 나머지 묶음으로 표시']
@@ -3686,12 +3694,14 @@ function App() {
             if (ds) dateCols.push({ c, ds });
           }
         }
-        dateCols.forEach(({ c: start, ds }) => {
-          for (let off = 0; off < 6; off++) {
-            const c = start + off;
+        dateCols.forEach(({ c: start, ds }, di) => {
+          // V127: 다음 날짜 열 전까지만 탐색 (Nospin 칸이 없는 달은 날짜당 4칸이라 6칸을 훑으면 다음 날 1PC 를 덮어썼음)
+          const end = di + 1 < dateCols.length ? dateCols[di + 1].c : start + 6;
+          for (let c = start; c < end; c++) {
             if (c > range.e.c) break;
             const ln = String(getCell(ws, R.line, c) ?? '').trim();
             if (ln !== '1PC' && ln !== '2PC' && ln !== 'Nospin') continue;
+            if (out[`${ds}|${ln}`]) continue;
             const numOf = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
             const strOf = v => { const t = String(v ?? '').trim(); return (t === '정시' || t === '잔업' || t === '특근') ? t : ''; };
             const rec = {
@@ -3960,7 +3970,7 @@ function App() {
   });
   // V107: TCP 순번 시트 기반 인원/잔업 정보
   const [tcpSeqInfo, setTcpSeqInfo] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_tcp_seq') || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem('mfg_tcp_seq2') || '{}') || {}; } catch { return {}; }
   });
   const readFePlanRaw = () => {
     try {
@@ -4727,7 +4737,7 @@ function App() {
           let hasLocal = false;
           if (type === 'tcp') {
             const pp = JSON.parse(localStorage.getItem('mfg_production_plan') || '{}');
-            hasLocal = Object.keys(pp).some(k => k.indexOf('TCP|') === 0);
+            hasLocal = Object.keys(pp).some(k => k.indexOf('TCP|') === 0) && localStorage.getItem('mfg_tcp_seq_v') === '2';   // V127: 순번 파서 수정 → 한 번 재파싱
           } else {
             const fr = JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || 'null');
             hasLocal = !!(fr && Array.isArray(fr.rows) && fr.rows.length > 0);
@@ -5319,7 +5329,7 @@ function App() {
         const seq = parseTcpSeq(wb);
         if (seq && Object.keys(seq).length) {
           setTcpSeqInfo(seq);
-          try { localStorage.setItem('mfg_tcp_seq', JSON.stringify(seq)); } catch {}
+          try { localStorage.setItem('mfg_tcp_seq2', JSON.stringify(seq)); localStorage.setItem('mfg_tcp_seq_v', '2'); localStorage.removeItem('mfg_tcp_seq'); } catch {}
           try { console.log('[TCP seq]', Object.keys(seq).length + '건'); } catch {}
         }
       } catch (e) {}
@@ -7169,7 +7179,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V126"), React.createElement("div", {
+  }, "V128"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -16526,6 +16536,20 @@ function App() {
           h("div", { className: "font-bold text-slate-700 mb-3" }, "데이터 입력 — 월별 값 (Goal / MPS / Act.)"),
           jigLines.map(renderJigTable))));
   })(), activeTab === 'prodreport' && (tcpData || feData) && (() => {
+    // V128: 달성률 판정 — TCP 는 계획과 정확히 같을 때만, FE 는 100~105% 일 때만 녹색
+    const achOk = (sec, good, plan) => {
+      if (!(plan > 0)) return false;
+      if (sec === 'TCP') return Math.round(good) === Math.round(plan);
+      const r = good / plan * 100;
+      return good >= plan && r <= 105 + 1e-9;
+    };
+    // 반올림 때문에 «100%» 로 보이는데 빨간색이 되는 혼란 방지: 경계에서 숨는 차이는 소수 1자리로
+    const achTxt = (sec, good, plan) => {
+      const r = good / plan * 100, r0 = r.toFixed(0);
+      const ok = achOk(sec, good, plan);
+      if (!ok && (r0 === '100' || (sec === 'FE' && r0 === '105'))) return r.toFixed(1);
+      return r0;
+    };
     const empMap = {};
     [...(tcpData?.employees || []), ...(feData?.employees || [])].forEach(e => {
       empMap[e.id] = e.name;
@@ -18513,10 +18537,10 @@ function App() {
             if (p <= 0) return React.createElement("span", {
               className: "text-slate-300"
             }, "-");
-            const rate = lr.good / p * 100;
+            const rate = lr.good / p * 100, __ok = achOk('TCP', lr.good, p), __tx = achTxt('TCP', lr.good, p);
             return React.createElement("span", {
-              className: Math.round(rate) === 100 ? 'text-green-600' : 'text-red-600'
-            }, rate.toFixed(0), "%");
+              className: __ok ? 'text-green-600' : 'text-red-600'
+            }, __tx, "%");
           })() : ''), React.createElement("td", {
             className: "px-2 py-1.5 border align-top text-left text-xs bg-blue-50 border-r-[3px] border-r-slate-600"
           }, (() => {
@@ -18593,10 +18617,10 @@ function App() {
             if (p <= 0) return React.createElement("span", {
               className: "text-slate-300"
             }, "-");
-            const rate = rr.good / p * 100;
+            const rate = rr.good / p * 100, __ok = achOk('TCP', rr.good, p), __tx = achTxt('TCP', rr.good, p);
             return React.createElement("span", {
-              className: Math.round(rate) === 100 ? 'text-green-600' : 'text-red-600'
-            }, rate.toFixed(0), "%");
+              className: __ok ? 'text-green-600' : 'text-red-600'
+            }, __tx, "%");
           })() : ''), React.createElement("td", {
             className: "px-2 py-1.5 border align-top text-left text-xs bg-amber-50"
           }, (() => {
@@ -18749,8 +18773,8 @@ function App() {
         }, rate1 === null ? React.createElement("span", {
           className: "text-slate-300"
         }, "-") : React.createElement("span", {
-          className: Math.round(rate1) === 100 ? 'text-green-600' : 'text-red-600'
-        }, rate1.toFixed(0), "%")), React.createElement("td", {
+          className: achOk('TCP', t1.good, p1) ? 'text-green-600' : 'text-red-600'
+        }, achTxt('TCP', t1.good, p1), "%")), React.createElement("td", {
           className: "px-2 py-1.5 border align-top text-left text-xs bg-blue-100 border-r-[3px] border-r-slate-600"
         }, React.createElement("div", {
           className: "space-y-0.5"
@@ -18769,8 +18793,8 @@ function App() {
         }, rate2 === null ? React.createElement("span", {
           className: "text-slate-300"
         }, "-") : React.createElement("span", {
-          className: Math.round(rate2) === 100 ? 'text-green-600' : 'text-red-600'
-        }, rate2.toFixed(0), "%")), React.createElement("td", {
+          className: achOk('TCP', t2.good, p2) ? 'text-green-600' : 'text-red-600'
+        }, achTxt('TCP', t2.good, p2), "%")), React.createElement("td", {
           className: "px-2 py-1.5 border align-top text-left text-xs bg-amber-100"
         }, React.createElement("div", {
           className: "space-y-0.5"
@@ -19027,10 +19051,10 @@ function App() {
             if (p <= 0) return React.createElement("span", {
               className: "text-slate-300"
             }, "-");
-            const rate = r.good / p * 100;
+            const rate = r.good / p * 100, __ok = achOk('FE', r.good, p), __tx = achTxt('FE', r.good, p);
             return React.createElement("span", {
-              className: rate > 95 && rate < 105 ? 'text-green-600' : 'text-red-600'
-            }, rate.toFixed(0), "%");
+              className: __ok ? 'text-green-600' : 'text-red-600'
+            }, __tx, "%");
           })()), !isUcc && React.createElement(React.Fragment, null, React.createElement("td", {
             className: "px-2 py-1.5 border text-center align-middle text-sm"
           }, r.opr1st > 0 ? Math.round(r.opr1st).toLocaleString() : '-'), React.createElement("td", {
@@ -19177,8 +19201,8 @@ function App() {
         }, rateTotal === null ? React.createElement("span", {
           className: "text-slate-300"
         }, "-") : React.createElement("span", {
-          className: rateTotal > 95 && rateTotal < 105 ? 'text-green-600' : 'text-red-600'
-        }, rateTotal.toFixed(0), "%")), !isUcc && React.createElement(React.Fragment, null, React.createElement("td", {
+          className: achOk('FE', totals.good, planTotal) ? 'text-green-600' : 'text-red-600'
+        }, achTxt('FE', totals.good, planTotal), "%")), !isUcc && React.createElement(React.Fragment, null, React.createElement("td", {
           className: "px-2 py-1.5 border text-center"
         }, totals.opr1st > 0 ? Math.round(totals.opr1st).toLocaleString() : '-'), React.createElement("td", {
           className: "px-2 py-1.5 border text-center"
