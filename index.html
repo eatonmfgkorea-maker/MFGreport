@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V129</title>
+  <title>MFG Report V130</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V130',
+  d: '2026-10-07',
+  items: ['비가동 탭에 «비가동 구분»(비계획 / 계획 / 전체) 추가 — 기본은 비계획만', '전월 대비 증감 분석, 연간 총 비가동·건수, 월별 차트, 월별 유형 상세, 비가동 내역 검색이 모두 선택한 구분으로 계산', '계획 비가동(휴식·식사·조회·체조 등)은 근무일수·특근 여부에 따라 늘고 줄어 증감 분석에서 의미가 없으므로 분리', 'PPT 내보내기의 비가동 슬라이드도 비계획 비가동만으로 구성']
+}, {
   v: 'V129',
   d: '2026-10-07',
   items: ['Production Review — 토·일요일 생산은 계획파일 값과 관계없이 항상 «특근»으로 표시 (기존엔 순번 시트에 정시라고 적혀 있으면 정시로 나왔음)', '날짜를 눌러 휴일(빨강)로 표시하면 그날 생산도 «특근»으로 바뀜 — 요약·상세·인쇄 모두']
@@ -4258,6 +4262,7 @@ function App() {
   const [dtDetailMonth, setDtDetailMonth] = useState(null);
   const [dtCmpMonth, setDtCmpMonth] = useState(null);
   const [dtCmpBy, setDtCmpBy] = useState('line');
+  const [dtCat, setDtCat] = useState('비계획');   // V130: 비가동 탭 — 비계획 / 계획 / 전체
   const [dtCmpDrill, setDtCmpDrill] = useState(null); // 비가동 비교표 행 클릭 시 세부 분석 대상
   const [dtViewMode, setDtViewMode] = useState('all');
   const [dtCatFilter, setDtCatFilter] = useState('all'); // all | 계획 | 비계획
@@ -7183,7 +7188,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V129"), React.createElement("div", {
+  }, "V130"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -10460,7 +10465,9 @@ function App() {
     yearLogs.forEach(l => {
       logById[l.id] = l;
     });
-    const yearDts = (targetData?.downtimeLogs || []).filter(dt => dt.productionLogId != null && logById[dt.productionLogId]);
+    const dtCatOf = dt => ((dt.downtimeCategory || dt.category) === '계획' ? '계획' : '비계획');
+    const catOk = dt => dtCat === '전체' || dtCatOf(dt) === dtCat;   // V130
+    const yearDts = (targetData?.downtimeLogs || []).filter(dt => dt.productionLogId != null && logById[dt.productionLogId] && catOk(dt));
     const computeDur = (dt, log) => {
       let dur = parseFloat(dt.duration) || 0;
       if (!dur && dt.startTime && dt.endTime) {
@@ -10491,7 +10498,7 @@ function App() {
       if (!dtCmpMonth) return null;
       const cur = dtCmpMonth, prev = cur === 1 ? 12 : cur - 1;
       const prevYear = cur === 1 ? dtYear - 1 : dtYear;
-      const allDts = (targetData?.downtimeLogs || []).filter(dt => dt.productionLogId != null && logById[dt.productionLogId]);
+      const allDts = (targetData?.downtimeLogs || []).filter(dt => dt.productionLogId != null && logById[dt.productionLogId] && catOk(dt));
       const keyOf = (dt, log) => {
         if (dtCmpBy === 'line') return resolveLineName(dtSection, log.lineName);
         if (dtCmpBy === 'item') return (log.item || '(미지정)');
@@ -10775,6 +10782,18 @@ function App() {
       className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
     }, React.createElement("div", {
       className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
+    }, "비가동 구분"), React.createElement("div", {
+      className: "p-2 grid grid-cols-3 gap-1"
+    }, ['비계획', '계획', '전체'].map(c => React.createElement("button", {
+      key: c,
+      onClick: () => { setDtCat(c); setDtDetailMonth(null); },
+      className: `py-1.5 rounded-lg text-xs font-bold ${dtCat === c ? (c === '비계획' ? 'bg-rose-600 text-white' : c === '계획' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white') : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`
+    }, c))), React.createElement("div", {
+      className: "px-3 pb-2 text-[10px] text-slate-400 leading-snug"
+    }, "계획 비가동(휴식·식사·조회 등)은 근무일수에 따라 늘고 줄어 개선 대상이 아닙니다. 기본은 비계획만 표시합니다.")), React.createElement("div", {
+      className: "bg-white rounded-xl border border-slate-200 overflow-hidden"
+    }, React.createElement("div", {
+      className: "bg-slate-50 text-slate-700 border-b border-slate-200 px-4 py-2 font-semibold text-sm"
     }, "라인"), React.createElement("div", {
       className: "p-3 space-y-1.5"
     }, React.createElement("label", {
@@ -10842,7 +10861,7 @@ function App() {
     }, React.createElement("div", {
       className: "bg-indigo-50 border-b border-indigo-200 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2"
     }, React.createElement("div", { className: "font-bold text-sm text-indigo-900" },
-        `${dtCmp.cur}월 vs ${dtCmp.prevYear !== dtYear ? dtCmp.prevYear + '년 ' : ''}${dtCmp.prev}월 비가동 증감 분석 (man-min)`),
+        `${dtCmp.cur}월 vs ${dtCmp.prevYear !== dtYear ? dtCmp.prevYear + '년 ' : ''}${dtCmp.prev}월 ${dtCat === '전체' ? '' : dtCat + ' '}비가동 증감 분석 (man-min)`),
       React.createElement("div", { className: "flex bg-white rounded-lg p-0.5 border border-indigo-200" },
         [{ k: 'line', l: '라인별' }, { k: 'item', l: '아이템별' }, { k: 'reason', l: '유형별' }].map(o =>
           React.createElement("button", {
@@ -10951,7 +10970,7 @@ function App() {
       className: "bg-white rounded-xl border border-slate-200 p-4"
     }, React.createElement("div", {
       className: "text-xs text-slate-500 font-medium"
-    }, dtYear, "년 총 비가동"), React.createElement("div", {
+    }, dtYear, "년 총 ", dtCat === '전체' ? '' : dtCat + ' ', "비가동"), React.createElement("div", {
       className: "text-2xl font-bold text-slate-800 mt-1"
     }, Math.round(totalMin).toLocaleString(), React.createElement("span", {
       className: "text-sm ml-1 font-medium text-slate-500"
@@ -10967,7 +10986,7 @@ function App() {
       className: "bg-white rounded-xl border border-slate-200 p-4"
     }, React.createElement("h3", {
       className: "text-center text-base font-bold text-slate-800 mb-3"
-    }, dtYear, "년 월별 비가동 시간 (공수)"), React.createElement("svg", {
+    }, dtYear, "년 월별 ", dtCat === '전체' ? '' : dtCat + ' ', "비가동 시간 (공수)"), React.createElement("svg", {
       viewBox: `0 0 ${W} ${H}`,
       className: "w-full"
     }, [0, 0.25, 0.5, 0.75, 1].map((f, i) => {
@@ -24192,7 +24211,7 @@ function App() {
       });
       ['TCP', 'FE'].forEach(sec => {
         const byType = {};
-        allDowntimeLogs.filter(d => inSec(d.productionLogId, sec)).forEach(d => {
+        allDowntimeLogs.filter(d => inSec(d.productionLogId, sec) && (d.downtimeCategory || d.category) !== '계획').forEach(d => {   // V130: 비계획만
           const min = minDiffExp(d.startTime, d.endTime) || parseFloat(d.duration) || 0;
           const t = d.downtimeType || d.downtimeCategory || '기타';
           byType[t] = (byType[t] || 0) + min;
@@ -24203,7 +24222,7 @@ function App() {
         s.background = {
           color: 'FFFFFF'
         };
-        s.addText(sec + ' 비가동 — ' + exportMonth + '월 유형별', {
+        s.addText(sec + ' 비계획 비가동 — ' + exportMonth + '월 유형별', {
           x: 0.5,
           y: 0.3,
           fontSize: 24,
@@ -24227,7 +24246,7 @@ function App() {
             showTitle: false,
             showValue: false
           });
-          s.addText('총 비가동', {
+          s.addText('총 비계획 비가동', {
             x: 7.2,
             y: 1.5,
             w: 5.6,
