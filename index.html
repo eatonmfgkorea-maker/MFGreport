@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V128</title>
+  <title>MFG Report V129</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V129',
+  d: '2026-10-07',
+  items: ['Production Review — 토·일요일 생산은 계획파일 값과 관계없이 항상 «특근»으로 표시 (기존엔 순번 시트에 정시라고 적혀 있으면 정시로 나왔음)', '날짜를 눌러 휴일(빨강)로 표시하면 그날 생산도 «특근»으로 바뀜 — 요약·상세·인쇄 모두']
+}, {
   v: 'V128',
   d: '2026-10-06',
   items: ['Production 보고 달성률 색 기준 변경 — TCP: 실적이 계획과 정확히 같을 때만 녹색 / FE: 100~105% 일 때만 녹색, 그 외 빨간색', '기존 TCP 는 반올림 100%(99.5~100.4%)를 녹색으로, FE 는 95~105% 를 녹색으로 처리했음', '반올림하면 100%·105% 로 보이지만 기준을 벗어난 경우 소수 1자리로 표시 (예: 99.6%)']
@@ -7179,7 +7183,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V128"), React.createElement("div", {
+  }, "V129"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -15869,7 +15873,8 @@ function App() {
       }
       return { items, minutes, workers, noCT, over, unknown, fromSeq };
     };
-    // 요약 뷰용: 특정 교대(주간/야간)의 단일 라인 상태. 토요일은 특근.
+    const isOffDay = date => { const wd = new Date(date + 'T00:00:00').getDay(); return wd === 0 || wd === 6 || !!reviewHolidays[prSection + '|' + date]; };
+    // 요약 뷰용: 특정 교대(주간/야간)의 단일 라인 상태. 토·일·휴일은 특근.
     const shiftStatusOne = (line, date, shift) => {
       const list = (dayMap[line + '|' + date] || {})[shift] || [];
       if (!list.length) return null;
@@ -15881,10 +15886,11 @@ function App() {
         else if (bq > 0) minutes += e.qty / bq * ctBaseR;
         else noCT++;
       });
+      // V129: 토·일요일 또는 휴일로 표시(빨강)한 날 생산이 있으면 무조건 특근 — 순번 시트 값보다 우선
+      if (isOffDay(date)) return '특근';
       // V107: 순번 시트에 값이 있으면 우선 사용
       const v = seqShift(line, date, shift);
       if (v && v.st) return v.st;
-      if (new Date(date).getDay() === 6) return '특근';
       if (noCT > 0 && minutes === 0) return '?'; // CT 미등록 — 정시로 단정하지 않음
       return minutes > 480 ? '잔업' : '정시';
     };
@@ -15930,7 +15936,7 @@ function App() {
         h("span", { className: "font-bold text-slate-800" }, grp.label, " 생산계획"),
         grp.lines.length > 1 && h("span", { className: "text-[11px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 font-semibold" }, "통합"),
         h("span", { className: "text-xs text-slate-400" }, curMonth.replace('-', '년 ') + '월' + (prSummary ? ' · 요약' : ' · ' + prShift))),
-      h("div", { className: "text-[11px] text-slate-400 mb-1" }, prSummary ? "🟦 정시 · 🟧 잔업 · 🟨 특근(토요일) · ⬜ ? = CT 미등록으로 판정 불가 · 날짜 클릭 = 휴일 토글" : "🟦 정시 · 🟧 잔업(교대당 계획수량 기준 투입 8시간 초과) · 날짜 클릭 = 휴일 표시(빨강) 토글"),
+      h("div", { className: "text-[11px] text-slate-400 mb-1" }, prSummary ? "🟦 정시 · 🟧 잔업 · 🟨 특근(토·일·휴일) · ⬜ ? = CT 미등록으로 판정 불가 · 날짜 클릭 = 휴일 토글(휴일 생산은 특근)" : "🟦 정시 · 🟧 잔업(교대당 계획수량 기준 투입 8시간 초과) · 날짜 클릭 = 휴일 표시(빨강) 토글"),
       h("table", { className: "w-full border-collapse text-xs", style: { tableLayout: 'fixed' } },
         h("thead", null, h("tr", null, ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'].map((d, i) =>
           h("th", { key: d, className: "border border-slate-300 py-1 " + (i === 0 ? 'bg-rose-100 text-rose-600' : i === 6 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600') }, d)))),
@@ -15953,7 +15959,7 @@ function App() {
           }
           // ===== 상세 뷰 =====
           const sum = inMonth ? daySummary(line, ds) : { items: [] };
-          const badge = sum.items.length ? h("span", { className: "float-right text-sm px-1.5 py-0.5 rounded border font-extrabold " + badgeCls(sum.unknown ? '?' : sum.over ? '잔업' : '정시'), title: sum.unknown ? 'CT 미등록으로 판정 불가' : '' }, sum.unknown ? '?' : sum.over ? '잔업' : '정시') : null;
+          const badge = sum.items.length ? h("span", { className: "float-right text-sm px-1.5 py-0.5 rounded border font-extrabold " + badgeCls(isOffDay(ds) ? '특근' : sum.unknown ? '?' : sum.over ? '잔업' : '정시'), title: isOffDay(ds) ? '토·일·휴일 생산 = 특근' : sum.unknown ? 'CT 미등록으로 판정 불가' : '' }, isOffDay(ds) ? '특근' : sum.unknown ? '?' : sum.over ? '잔업' : '정시') : null;
           return h("td", { key: di, className: "border border-slate-300 align-top p-1.5 " + bg, style: { height: '7rem' } },
             inMonth && h("div", null,
               h("div", { onClick: () => toggleHoliday(ds), className: "cursor-pointer font-extrabold text-base leading-tight " + (hol || di === 0 ? 'text-rose-600' : di === 6 ? 'text-blue-700' : 'text-slate-700'), title: "클릭 = 휴일 토글" }, pad2(d.getMonth() + 1) + '/' + pad2(d.getDate()), badge),
@@ -16175,7 +16181,7 @@ function App() {
             }
             const s = daySummary(line, ds);
             let c = '<b' + (hol ? ' style="color:#dc2626"' : '') + '>' + ds.slice(5).replace('-', '/') + '</b>';
-            if (s.items.length) c += ' <span style="font-size:9px">' + (s.unknown ? '[?]' : s.over ? '[잔업]' : '[정시]') + '</span>';
+            if (s.items.length) c += ' <span style="font-size:9px">' + (isOffDay(ds) ? '[특근]' : s.unknown ? '[?]' : s.over ? '[잔업]' : '[정시]') + '</span>';
             if (s.workers) c += '<div style="color:#64748b;font-size:9px">인원 ' + s.workers + '</div>';
             s.items.forEach(e => { c += '<div>' + e.name + ' <b style="float:right">' + e.qty.toLocaleString() + '</b></div>'; });
             return '<td valign=top style="height:70px;' + bgc + '">' + c + '</td>';
