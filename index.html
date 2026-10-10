@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V131</title>
+  <title>MFG Report V132</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V132',
+  d: '2026-10-10',
+  items: ['새 수식이 기본 OEE 로 변경 — 왼쪽 메인 메뉴의 대시보드 / OEE / OEE(상세) / OEE(비교) / OEE(시뮬) 가 모두 새 수식으로 계산', 'New OEE 메뉴 대신 «Old OEE» 펼침 메뉴 신설 — 이전 수식으로 같은 5개 화면을 볼 수 있음, 상단에 «Old 수식 적용중» 표시', 'Production 보고·PPT·엑셀 다운로드·유효성검사 등 OEE 가 나오는 모든 곳이 새 수식 기준', 'OEE 목표값은 그대로 유지', 'OEE 탭에서 메뉴를 오갈 때 이전 수식 결과가 남아 있던 문제 수정 (수식이 바뀌면 바로 다시 계산)', '화면 표기를 «수식» 으로 통일']
+}, {
   v: 'V131',
   d: '2026-10-07',
   items: ['비가동 증감 분석에서 항목을 눌렀을 때 «내용별 합계»와 «상세 내역» 추가 — 어떤 사유로 비가동이 생겼는지 확인 가능', '내용별 합계: 입력된 비가동 내용이 같은 것끼리 묶어 두 달의 man-min·건수·증감 비교', '상세 내역: 두 달의 기록 전체(일자·주야·라인·아이템·유형·시간·인원·man-min·내용), 이번 달 먼저 큰 순서']
@@ -360,11 +364,11 @@ const VERSION_NOTES = [{
 }, {
   v: 'V117',
   d: '2026-09-10',
-  items: ['New OEE 의 «OEE 시뮬» 이 새 산식으로 계산되도록 수정 — 기존에는 시뮬만 옛 수식이 그대로 적용되어 Q 값이 달랐음', '시뮬의 불량 집계를 기능불량만으로 제한, 재작업은 2차양품(재작업−기능불량)으로 환산', 'New OEE ↔ 기존 탭을 오갈 때 시뮬 수식이 해당 산식의 기본값으로 자동 초기화', 'OEE 상세 분석 팝업의 표현을 New 산식에 맞게 변경 — «비계획 비가동(Rework·Retest 제외)», «실제 생산량(양품+기능불량)», «기능불량(OEE 반영)», «2차양품(재작업−기능불량)»']
+  items: ['New OEE 의 «OEE 시뮬» 이 새 수식으로 계산되도록 수정 — 기존에는 시뮬만 옛 수식이 그대로 적용되어 Q 값이 달랐음', '시뮬의 불량 집계를 기능불량만으로 제한, 재작업은 2차양품(재작업−기능불량)으로 환산', 'New OEE ↔ 기존 탭을 오갈 때 시뮬 수식이 해당 수식의 기본값으로 자동 초기화', 'OEE 상세 분석 팝업의 표현을 New 수식에 맞게 변경 — «비계획 비가동(Rework·Retest 제외)», «실제 생산량(양품+기능불량)», «기능불량(OEE 반영)», «2차양품(재작업−기능불량)»']
 }, {
   v: 'V116',
   d: '2026-09-09',
-  items: ['New OEE 하위 5개 메뉴가 기존 대시보드·OEE·OEE(상세)·OEE(비교)·OEE(시뮬) 화면을 그대로 사용하고 계산식만 새 산식으로 적용되도록 변경', '별도로 만들었던 New OEE 전용 화면은 제거 — 기존 화면과 완전히 동일한 구성·기능', '계산 전환은 computeLogContribution 한 곳에서 처리 (A: Rework·Retest 를 비가동에서 제외해 가동시간에 포함 / P: (양품+기능불량)×CT ÷ 가동시간 / Q: (양품−2차양품) ÷ (양품+기능불량))', 'New OEE 화면 상단에 적용 중인 산식을 배너로 표시']
+  items: ['New OEE 하위 5개 메뉴가 기존 대시보드·OEE·OEE(상세)·OEE(비교)·OEE(시뮬) 화면을 그대로 사용하고 계산식만 새 수식으로 적용되도록 변경', '별도로 만들었던 New OEE 전용 화면은 제거 — 기존 화면과 완전히 동일한 구성·기능', '계산 전환은 computeLogContribution 한 곳에서 처리 (A: Rework·Retest 를 비가동에서 제외해 가동시간에 포함 / P: (양품+기능불량)×CT ÷ 가동시간 / Q: (양품−2차양품) ÷ (양품+기능불량))', 'New OEE 화면 상단에 적용 중인 수식을 배너로 표시']
 }, {
   v: 'V115',
   d: '2026-09-09',
@@ -380,11 +384,11 @@ const VERSION_NOTES = [{
 }, {
   v: 'V112',
   d: '2026-09-09',
-  items: ['New OEE 의 Q 산식 수정 — 분자를 (양품−불량)에서 (양품−2차양품)으로 변경', '2차양품 = 재작업 − 불량 (재작업해서 양품으로 살린 수량, 이미 양품에 포함되어 있어 차감)', 'Q = (양품−2차양품) ÷ (양품+불량),  OEE = (양품−2차양품)×CT ÷ 부하시간', '대시보드 수량표에 재작업·2차양품 표시, 라인별·일지별 표에 2차양품 열 추가']
+  items: ['New OEE 의 Q 수식 수정 — 분자를 (양품−불량)에서 (양품−2차양품)으로 변경', '2차양품 = 재작업 − 불량 (재작업해서 양품으로 살린 수량, 이미 양품에 포함되어 있어 차감)', 'Q = (양품−2차양품) ÷ (양품+불량),  OEE = (양품−2차양품)×CT ÷ 부하시간', '대시보드 수량표에 재작업·2차양품 표시, 라인별·일지별 표에 2차양품 열 추가']
 }, {
   v: 'V111',
   d: '2026-09-09',
-  items: ['«New OEE» 탭 신설 — 새 산식을 적용한 대시보드·OEE·상세·비교·시뮬을 한 탭 안에서 전환', 'A = 가동 ÷ 부하 (Rework·Retest 시간은 부하·가동 양쪽에서 완전히 제외)', 'P = (양품+불량)×CT ÷ 가동시간 — A의 분자가 그대로 P의 분모', 'Q = (양품−불량) ÷ (양품+불량)', 'OEE = A×P×Q = (양품−불량)×CT ÷ 부하시간', '시뮬에서 비가동 계획↔비계획 이동·제외와 CT ±30% 조정 가능', '기존 대시보드·OEE·상세·비교·시뮬 탭은 전혀 건드리지 않음']
+  items: ['«New OEE» 탭 신설 — 새 수식을 적용한 대시보드·OEE·상세·비교·시뮬을 한 탭 안에서 전환', 'A = 가동 ÷ 부하 (Rework·Retest 시간은 부하·가동 양쪽에서 완전히 제외)', 'P = (양품+불량)×CT ÷ 가동시간 — A의 분자가 그대로 P의 분모', 'Q = (양품−불량) ÷ (양품+불량)', 'OEE = A×P×Q = (양품−불량)×CT ÷ 부하시간', '시뮬에서 비가동 계획↔비계획 이동·제외와 CT ±30% 조정 가능', '기존 대시보드·OEE·상세·비교·시뮬 탭은 전혀 건드리지 않음']
 }, {
   v: 'V110',
   d: '2026-09-07',
@@ -416,7 +420,7 @@ const VERSION_NOTES = [{
 }, {
   v: 'V103',
   d: '2026-08-28',
-  items: ['OEE 시뮬 수식 조정 대폭 확장 — 괄호 ( ) 와 숫자 상수를 넣어 자유롭게 조합 가능', '시간 기반 필드 추가: Q손실비가동 · 가동시간+Q손실 · 가치가동시간 · 순가동시간 · 불량시간 · 폐기시간 · 재작업시간 · 총생산시간', '수량 필드 추가: 폐기(불량−재작업), 기준 필드 추가: 개당CT(분/초)', '산식 프리셋 3종 — 현재 산식 / 시간 기반(회사 표준) / 시간 기반(불량만)', '«Q손실로 볼 비가동 종류» 직접 지정 — Rework·Retest 등을 골라 A에서 빼고 Q로 반영', '수식 편집 시 각 항의 실제 계산값을 즉시 표시, 토큰 1개 되돌리기(⌫) 추가', '재작업 시간은 비가동 기록 우선, 기록이 없으면 재작업수량×CT로 자동 환산']
+  items: ['OEE 시뮬 수식 조정 대폭 확장 — 괄호 ( ) 와 숫자 상수를 넣어 자유롭게 조합 가능', '시간 기반 필드 추가: Q손실비가동 · 가동시간+Q손실 · 가치가동시간 · 순가동시간 · 불량시간 · 폐기시간 · 재작업시간 · 총생산시간', '수량 필드 추가: 폐기(불량−재작업), 기준 필드 추가: 개당CT(분/초)', '수식 프리셋 3종 — 현재 수식 / 시간 기반(회사 표준) / 시간 기반(불량만)', '«Q손실로 볼 비가동 종류» 직접 지정 — Rework·Retest 등을 골라 A에서 빼고 Q로 반영', '수식 편집 시 각 항의 실제 계산값을 즉시 표시, 토큰 1개 되돌리기(⌫) 추가', '재작업 시간은 비가동 기록 우선, 기록이 없으면 재작업수량×CT로 자동 환산']
 }, {
   v: 'V102',
   d: '2026-08-24',
@@ -924,7 +928,7 @@ function DefectTypePanel({ mode, tcpData, feData }) {
         <div class="seg">${segBtn('dim', 'sc', '공정+유형')}${segBtn('dim', 'sub', '세부 유형')}${segBtn('dim', 'st', '스테이션')}</div>
         <span class="lbl">추이 단위</span><div class="seg">${segBtn('unit', 'm', '월')}${segBtn('unit', 'w', '주')}</div>
         <button data-x="1" style="padding:6px 12px;font-size:13px;font-weight:700;border-radius:9px;background:#15803d;color:#fff">엑셀 다운로드</button></div>
-        <p style="font-size:12px;color:#94a3b8;margin:-6px 0 12px 4px">기능불량만 집계합니다 — 조립·외관·치수 불량은 제외 (New OEE 와 같은 기준).
+        <p style="font-size:12px;color:#94a3b8;margin:-6px 0 12px 4px">기능불량만 집계합니다 — 조립·외관·치수 불량은 제외 (OEE 와 같은 기준).
         같은 공정에서 표기만 다르게 입력된 유형(예: Op80 공정의 «OPR Leak»·«Leak»·«LEAK»)은 하나로 합쳤습니다 — ${(RAW.merged || []).length}개 표기 정리 (엑셀 «유형 정리 내역» 시트에서 확인).</p>`;
       const total = rows.reduce((a, r) => a + r[6], 0);
       if (!total) {
@@ -2756,10 +2760,11 @@ function App() {
   const setTcpDataMerged = data => setTcpData(mergeProcessDefects(data));
   const setFeDataMerged = data => setFeData(mergeProcessDefects(data));
   const [activeTab, setActiveTab] = useState('dashboard');
-  // V116: New OEE — 기존 5개 화면을 그대로 쓰되 계산만 새 산식으로
-  const NEWOEE_MAP = { newoee: 'dashboard', newoee_dash: 'dashboard', newoee_oee: 'oee', newoee_detail: 'oeedetail', newoee_cmp: 'oeecompare', newoee_sim: 'oeesim' };
-  const isNewOee = !!NEWOEE_MAP[activeTab];
-  const effTab = NEWOEE_MAP[activeTab] || activeTab;
+  // V132: 새 수식이 기본 OEE — Old OEE 메뉴에서만 이전 수식으로 계산 (화면은 동일)
+  const OLDOEE_MAP = { oldoee: 'dashboard', oldoee_dash: 'dashboard', oldoee_oee: 'oee', oldoee_detail: 'oeedetail', oldoee_cmp: 'oeecompare', oldoee_sim: 'oeesim' };
+  const isOldOee = !!OLDOEE_MAP[activeTab];
+  const isNewOee = !isOldOee;
+  const effTab = OLDOEE_MAP[activeTab] || activeTab;
 
   const [h52Data, setH52Data] = useState(() => {
     try {
@@ -4314,7 +4319,7 @@ function App() {
     Q:{num:['goodQty','+','defects','-','rework'],den:['goodQty','+','defects']}
   });
   const simModeRef = React.useRef(null);
-  // V117: New OEE ↔ 기존 전환 시 시뮬 기본 수식을 해당 산식으로 초기화
+  // V117: New OEE ↔ 기존 전환 시 시뮬 기본 수식을 해당 수식으로 초기화
   React.useEffect(() => {
     const mode = isNewOee ? 'new' : 'old';
     if (simModeRef.current === mode) return;
@@ -5799,7 +5804,7 @@ function App() {
     const idealCT = hasCT ? ctBaseMinutes * 60 / baseQtyNum : 0;
     let outDefects = defects, outRework = rework, rwDt = 0, funcDefects = 0, secondGood = 0;
     if (isNewOee) {
-      // ── New OEE 산식 ──
+      // ── New OEE 수식 ──
       //  · Rework/Retest 비가동은 계획·비계획 어디에도 넣지 않음 → 가동시간에 그대로 포함
       //  · 불량은 «기능불량»만 대상 (조립·외관·치수 불량 제외)
       //  · 2차양품 = 재작업 − 기능불량 (재작업으로 살린 수량)
@@ -6603,7 +6608,7 @@ function App() {
       total: computeMetricsFromTotals(emptyTotals()),
       isManual: false
     };
-  }, [allLogs, oeeYear, oeeMonth, oeeSection, oeeManual, tcpData, feData, getOeeSectionLines]);
+  }, [allLogs, oeeYear, oeeMonth, oeeSection, oeeManual, tcpData, feData, getOeeSectionLines, isNewOee]);
   const monthlyOeeArr = useMemo(() => {
     const arr = [];
     for (let m = 1; m <= 12; m++) {
@@ -6628,7 +6633,7 @@ function App() {
       });
     }
     return arr;
-  }, [allLogs, oeeYear, oeeSection, oeeManual, tcpData, feData, getOeeSectionLines]);
+  }, [allLogs, oeeYear, oeeSection, oeeManual, tcpData, feData, getOeeSectionLines, isNewOee]);
   const ytd2026Overall = useMemo(() => {
     let total = emptyTotals();
     for (let m = 1; m <= oeeMonth; m++) {
@@ -6636,7 +6641,7 @@ function App() {
     }
     if (!Object.values(total).some(v => v > 0)) return null;
     return computeMetricsFromTotals(total).OEE;
-  }, [allLogs, oeeYear, oeeMonth, oeeSection, oeeManual, tcpData, feData, getOeeSectionLines]);
+  }, [allLogs, oeeYear, oeeMonth, oeeSection, oeeManual, tcpData, feData, getOeeSectionLines, isNewOee]);
   const ytd2026Lines = useMemo(() => {
     const result = {};
     getOeeSectionLines.forEach(g => {
@@ -6649,7 +6654,7 @@ function App() {
       }
     });
     return result;
-  }, [allLogs, oeeYear, oeeMonth, oeeSection, oeeManual, getOeeSectionLines, tcpData, feData]);
+  }, [allLogs, oeeYear, oeeMonth, oeeSection, oeeManual, getOeeSectionLines, tcpData, feData, isNewOee]);
   const updateManual = (kind, key, value, lineName, field) => {
     const next = {
       ...oeeManual
@@ -7062,15 +7067,15 @@ function App() {
     icon: '🧪',
     label: 'OEE(시뮬)'
   }, {
-    id: 'newoee',
-    icon: '🆕',
-    label: 'New OEE',
+    id: 'oldoee',
+    icon: '🗂️',
+    label: 'Old OEE',
     children: [
-      { id: 'newoee_dash', icon: '📈', label: '대시보드' },
-      { id: 'newoee_oee', icon: '⚙️', label: 'OEE' },
-      { id: 'newoee_detail', icon: '🔍', label: 'OEE 상세' },
-      { id: 'newoee_cmp', icon: '🆚', label: 'OEE 비교' },
-      { id: 'newoee_sim', icon: '🧪', label: 'OEE 시뮬' }
+      { id: 'oldoee_dash', icon: '📈', label: '대시보드' },
+      { id: 'oldoee_oee', icon: '⚙️', label: 'OEE' },
+      { id: 'oldoee_detail', icon: '🔍', label: 'OEE 상세' },
+      { id: 'oldoee_cmp', icon: '🆚', label: 'OEE 비교' },
+      { id: 'oldoee_sim', icon: '🧪', label: 'OEE 시뮬' }
     ]
   }, {
     id: 'prodreport',
@@ -7192,7 +7197,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V131"), React.createElement("div", {
+  }, "V132"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -7314,13 +7319,13 @@ function App() {
     }
   }, React.createElement("div", {
     className: activeTab === 'orgchart' ? "mb-2" : "mb-5"
-  }, isNewOee && React.createElement("div", {
-    className: "mb-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1"
-  }, React.createElement("span", { className: "text-sm font-bold text-indigo-900" }, "🆕 New OEE 산식 적용 중"),
-     React.createElement("span", { className: "text-xs text-indigo-700" }, "A : Rework·Retest 는 비가동에서 제외 → 가동시간에 포함"),
-     React.createElement("span", { className: "text-xs text-indigo-700" }, "P : (양품+기능불량) × CT ÷ 가동시간"),
-     React.createElement("span", { className: "text-xs text-indigo-700" }, "Q : (양품−2차양품) ÷ (양품+기능불량)"),
-     React.createElement("span", { className: "text-[11px] text-indigo-500" }, "2차양품 = 재작업−기능불량 · 조립/외관/치수 불량은 제외")),
+  }, isOldOee && React.createElement("div", {
+    className: "mb-3 rounded-xl border border-slate-300 bg-slate-100 px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1"
+  }, React.createElement("span", { className: "text-sm font-bold text-slate-800" }, "🗂️ Old 수식 적용중"),
+     React.createElement("span", { className: "text-xs text-slate-600" }, "A : Rework·Retest 포함 비계획 비가동 반영"),
+     React.createElement("span", { className: "text-xs text-slate-600" }, "P : 양품 ÷ 기대 생산량"),
+     React.createElement("span", { className: "text-xs text-slate-600" }, "Q : (양품+불량−재작업) ÷ (양품+불량)"),
+     React.createElement("span", { className: "text-[11px] text-slate-500" }, "불량은 전체 유형 기준 · 메인 메뉴의 OEE 는 새 수식")),
      isGuest && React.createElement("div", {
     className: "mb-3 flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2"
   }, React.createElement("span", {
@@ -15271,7 +15276,7 @@ function App() {
       {id:'productionTime',label:'생산시간',g:'시간'},{id:'loadTime',label:'부하시간',g:'시간'},
       {id:'operatingTime',label:'가동시간',g:'시간'},
       {id:'plannedDt',label:'계획비가동',g:'시간'},{id:'unplannedDt',label:'비계획비가동',g:'시간'},
-      // 시간 (V103 신규 — 시간 기반 산식용)
+      // 시간 (V103 신규 — 시간 기반 수식용)
       {id:'qLossDt',label:'Q손실비가동',g:'시간+'},{id:'unplannedDtExQ',label:'비계획−Q손실',g:'시간+'},
       {id:'opTimeIncQ',label:'가동시간+Q손실',g:'시간+'},
       {id:'valueTime',label:'가치가동(양품×IdealCT)',g:'시간+'},{id:'netOpTime',label:'순가동시간(Ideal)',g:'시간+'},
@@ -15294,7 +15299,7 @@ function App() {
       {id:'loadTimeDivCt',label:'부하시간÷IdealCT',g:'환산'},{id:'loadTimeDivPlanCt',label:'부하시간÷계획CT',g:'환산'}
     ];
     const SIM_DEFAULT = isNewOee ? {
-      // V117: New OEE 산식
+      // V117: New OEE 수식
       A:{num:['operatingTime'],den:['loadTime']},
       P:{num:['goodQty','+','defects'],den:['expectedOutput']},
       Q:{num:['goodQty','-','rework'],den:['goodQty','+','defects']}
@@ -15303,9 +15308,9 @@ function App() {
       P:{num:['goodQty'],den:['expectedOutput']},
       Q:{num:['goodQty','+','defects','-','rework'],den:['goodQty','+','defects']}
     };
-    // V103: 산식 프리셋
+    // V103: 수식 프리셋
     const SIM_PRESETS = {
-      '현재 산식': SIM_DEFAULT,
+      '현재 수식': SIM_DEFAULT,
       '시간 기반 (회사 표준)': {
         A:{num:['opTimeIncQ'],den:['loadTime']},
         P:{num:['netOpTime'],den:['opTimeIncQ']},
@@ -15435,7 +15440,7 @@ function App() {
     //  - 기준 가동시간이 0인데 시간이 회수되면 idealCT로 절대 계산(60/idealCT = 분당 기대수량)
     const compute = (adj) => {
       let productionTime=0, plannedDt=0, unplannedDt=0, goodQty=0, expectedOutput=0, defects=0, rework=0;
-      // V103: 시간 기반 산식용 누적값 (로그 단위로 CT를 곱해 합산)
+      // V103: 시간 기반 수식용 누적값 (로그 단위로 CT를 곱해 합산)
       let qLossDt=0, valueTime=0, defectTime=0, scrapTime=0, reworkQtyTime=0, scrapQty=0, ctMinSum=0, ctMinN=0;
       // V104: 계획 CT(planQty) 기준 누적
       let planExpOut=0, planValueTime=0, planTotalTime=0, planCtSum=0, planCtN=0, noPlanQty=0;
