@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V133</title>
+  <title>MFG Report V134</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V134',
+  d: '2026-10-18',
+  items: ['왼쪽 메뉴 정리 — 비슷한 화면을 펼침 메뉴로 묶음', 'Production report: Production 보고 / Production Review', '수량: 전체 수량 / 상세 수량', '불량(최종불량): 최종불량 / 유형별 최종불량', '재작업(1차불량): 1차불량 / 유형별 1차불량', 'Capacity: Capacity CT / Capacity Utilization(가동률)', 'FTFR: FTFR 전체 / FTFR(세부)', '52시간 메뉴 삭제', '펼침 메뉴 제목을 다시 누르면 접힘']
+}, {
   v: 'V133',
   d: '2026-10-14',
   items: ['조직도: 수정·삭제한 내용이 다시 들어가면 예전 상태로 보이던 문제 수정', '원인 — 공유저장소에서 조직도를 다 불러오기 전에 조직도 탭이 열리면 파일에 들어 있던 초기 명단(예전 명단)이 표시되고, 나중에 최신 데이터가 도착해도 화면이 바뀌지 않았음 (공유저장소에는 정상 저장되어 있었음)', '조직도를 이 PC에도 바로 저장해 다시 열 때 즉시 최신 상태로 표시', '공유저장소에서 더 최신 조직도가 도착하면 조직도 화면을 자동으로 새로 고침', '불러오는 중에는 조직도를 «불러오는 중»으로 표시해 예전 명단으로 수정하는 일을 막음', '공유폴더 수동 저장 등 다른 저장 경로에도 조직도를 함께 저장']
@@ -2778,6 +2782,7 @@ function App() {
   const setTcpDataMerged = data => setTcpData(mergeProcessDefects(data));
   const setFeDataMerged = data => setFeData(mergeProcessDefects(data));
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [navCollapsed, setNavCollapsed] = useState({});
   // V132: 새 수식이 기본 OEE — Old OEE 메뉴에서만 이전 수식으로 계산 (화면은 동일)
   const OLDOEE_MAP = { oldoee: 'dashboard', oldoee_dash: 'dashboard', oldoee_oee: 'oee', oldoee_detail: 'oeedetail', oldoee_cmp: 'oeecompare', oldoee_sim: 'oeesim' };
   const isOldOee = !!OLDOEE_MAP[activeTab];
@@ -7103,37 +7108,37 @@ function App() {
       { id: 'oldoee_sim', icon: '🧪', label: 'OEE 시뮬' }
     ]
   }, {
-    id: 'prodreport',
+    id: 'grp_prod',
     icon: '📧',
-    label: 'Production 보고'
+    label: 'Production report',
+    children: [
+      { id: 'prodreport', icon: '📧', label: 'Production 보고' },
+      { id: 'prodreview', icon: '📅', label: 'Production Review' }
+    ]
   }, {
-    id: 'prodreview',
-    icon: '📅',
-    label: 'Production Review'
-  }, {
-    id: 'quantity',
+    id: 'grp_qty',
     icon: '🍩',
-    label: '수량'
+    label: '수량',
+    children: [
+      { id: 'quantity', icon: '🍩', label: '전체 수량' },
+      { id: 'qdetail', icon: '📋', label: '상세 수량' }
+    ]
   }, {
-    id: 'qdetail',
-    icon: '📋',
-    label: '수량(상세)'
-  }, {
-    id: 'defect',
+    id: 'grp_defect',
     icon: '🔴',
-    label: '불량(최종불량)'
+    label: '불량(최종불량)',
+    children: [
+      { id: 'defect', icon: '🔴', label: '최종불량' },
+      { id: 'defecttype', icon: '📊', label: '유형별 최종불량' }
+    ]
   }, {
-    id: 'defecttype',
-    icon: '📊',
-    label: '불량(최종불량)_유형별'
-  }, {
-    id: 'rework',
+    id: 'grp_rework',
     icon: '♻️',
-    label: '재작업(1차불량)'
-  }, {
-    id: 'reworktype',
-    icon: '📊',
-    label: '재작업(1차불량)_유형별'
+    label: '재작업(1차불량)',
+    children: [
+      { id: 'rework', icon: '♻️', label: '1차불량' },
+      { id: 'reworktype', icon: '📊', label: '유형별 1차불량' }
+    ]
   }, {
     id: 'downtime',
     icon: '⏸️',
@@ -7143,33 +7148,29 @@ function App() {
     icon: '👤',
     label: 'PCS/MH'
   }, {
-    id: 'capacity',
+    id: 'grp_cap',
     icon: '📐',
-    label: 'Capacity'
-  }, {
-    id: 'caputil',
-    icon: '📊',
-    label: 'Capacity Utilization'
+    label: 'Capacity',
+    children: [
+      { id: 'capacity', icon: '📐', label: 'Capacity CT' },
+      { id: 'caputil', icon: '📊', label: 'Capacity Utilization(가동률)' }
+    ]
   }, {
     id: 'tool',
     icon: '🔧',
     label: 'Tool 교체'
   }, {
-    id: 'h52',
-    icon: '🕐',
-    label: '52시간'
-  }, {
     id: 'lotftfr',
     icon: '📦',
     label: 'Lot & FTFR'
   }, {
-    id: 'ftfr',
+    id: 'grp_ftfr',
     icon: '✨',
-    label: 'FTFR'
-  }, {
-    id: 'ftfrdetail',
-    icon: '🔬',
-    label: 'FTFR(세부)'
+    label: 'FTFR',
+    children: [
+      { id: 'ftfr', icon: '✨', label: 'FTFR 전체' },
+      { id: 'ftfrdetail', icon: '🔬', label: 'FTFR(세부)' }
+    ]
   }, {
     id: 'orgchart',
     icon: '🏢',
@@ -7193,7 +7194,8 @@ function App() {
   }];
   const isGuest = typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1';
   const GUEST_TABS = ['dashboard', 'oee', 'oeedetail', 'quantity', 'defect', 'rework', 'downtime', 'tool', 'lotftfr', 'export'];
-  const visibleTabs = isGuest ? TABS.filter(t => GUEST_TABS.includes(t.id) && !t.children) : TABS;
+  // V134: 게스트는 펼침 메뉴 안의 허용 화면을 꺼내서 단일 메뉴로 표시
+  const visibleTabs = isGuest ? TABS.flatMap(t => t.children ? t.children.filter(k => GUEST_TABS.includes(k.id)) : (GUEST_TABS.includes(t.id) ? [t] : [])) : TABS;
   React.useEffect(() => {
     if (isGuest && !GUEST_TABS.includes(activeTab)) {
       setActiveTab(visibleTabs[0]?.id || 'dashboard');
@@ -7222,7 +7224,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V133"), React.createElement("div", {
+  }, "V134"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -7272,12 +7274,17 @@ function App() {
       // V115: 하위 메뉴가 있는 탭 (New OEE) — 클릭 시 아래로 펼쳐짐
       if (tab.children) {
         const kids = tab.children;
-        const openNow = kids.some(k => k.id === activeTab) || activeTab === tab.id;
+        const inGroup = kids.some(k => k.id === activeTab) || activeTab === tab.id;
+        const openNow = inGroup && !navCollapsed[tab.id];
         return React.createElement("div", { key: tab.id },
           React.createElement("button", {
-            onClick: () => setActiveTab(openNow ? tab.id : kids[0].id),
-            className: `w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all relative ${openNow ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`,
-            style: openNow ? { background: 'linear-gradient(90deg, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.08) 100%)', boxShadow: 'inset 0 0 0 1px rgba(99,102,241,0.25)' } : {}
+            onClick: () => {
+              // V134: 펼침 메뉴 — 닫혀 있으면 펼치고 첫 화면으로, 펼쳐져 있으면 접기
+              if (inGroup) { setNavCollapsed(p => ({ ...p, [tab.id]: !p[tab.id] })); return; }
+              setNavCollapsed(p => ({ ...p, [tab.id]: false })); setActiveTab(kids[0].id);
+            },
+            className: `w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all relative ${inGroup ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'}`,
+            style: inGroup ? { background: 'linear-gradient(90deg, rgba(99,102,241,0.18) 0%, rgba(139,92,246,0.08) 100%)', boxShadow: 'inset 0 0 0 1px rgba(99,102,241,0.25)' } : {}
           },
             React.createElement("span", { className: "text-xl leading-none w-6 flex-shrink-0 flex items-center justify-center" }, tab.icon),
             React.createElement("span", { className: "text-[15px] font-semibold" }, tab.label),
