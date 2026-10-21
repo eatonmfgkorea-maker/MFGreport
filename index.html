@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V137</title>
+  <title>MFG Report V138</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V138',
+  d: '2026-10-21',
+  items: ['유형별 최종불량·유형별 1차불량 — FTIV(Rework) 아이템 제외 (불량·재작업 수량, 생산수량 모두). 불량품을 재작업하는 아이템이라 발생률 계산에서 뺌']
+}, {
   v: 'V137',
   d: '2026-10-21',
   items: ['일별 추이 팝업 — 생산 이력이 없는 날은 빼고 생산한 날만 이어서 그래프·표 표시 (0%로 떨어졌다 다시 시작하던 문제 해결)']
@@ -797,19 +801,23 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       const dfq = {};
       // V119: 기능불량만 집계 (조립·외관·치수 불량 제외)
       const isFn = t => String(t || '').trim() === '기능불량';
+      // V138: FTIV(Rework) 아이템은 불량품을 재작업하는 것이라 유형별 분석(최종불량·1차불량)에서 제외
+      const isFtivRw = p => String((p && p.item) || '').replace(/\s/g, '').toLowerCase() === 'ftiv(rework)';
       [...(d.defectLogs || []), ...(d.processDefectLogs || [])].forEach(x => {
         const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
-        if (!p || q <= 0 || !isFn(x.defectType)) return;
+        if (!p || q <= 0 || !isFn(x.defectType) || isFtivRw(p)) return;
         dfq[p.id] = (dfq[p.id] || 0) + q;
         { const row = [sec, p.lineName, p.productionDate, x.station || '(미지정)', x.defectType || '(미분류)', String(x.defectSubType || '').trim(), q]; row.item = p.item || '(미지정)'; out.df.push(row); }
       });
       (d.reworkLogs || []).forEach(x => {
         const p = logs[x.productionLogId]; const q = parseFloat(x.quantity) || 0;
-        if (!p || q <= 0 || !isFn(x.reworkType)) return;
+        if (!p || q <= 0 || !isFn(x.reworkType) || isFtivRw(p)) return;
         { const row = [sec, p.lineName, p.productionDate, x.station || '(미지정)', x.reworkType || '(미분류)', String(x.reworkSubType || '').trim(), q]; row.item = p.item || '(미지정)'; out.rw.push(row); }
       });
       Object.values(logs).forEach(p => {
-        out.prod.push([sec, p.lineName, p.productionDate, (parseFloat(p.goodQuantity) || 0) + (dfq[p.id] || 0)]);
+        const pr = [sec, p.lineName, p.productionDate, (parseFloat(p.goodQuantity) || 0) + (dfq[p.id] || 0)];
+        if (isFtivRw(p)) pr.fr = true;
+        out.prod.push(pr);
       });
     });
     // V124: 유형 정리 — 같은 공정에서 «OPR Leak» / «Leak» / «LEAK» 처럼 표기만 다른 것을 하나로
@@ -913,6 +921,8 @@ function DefectTypePanel({ mode, tcpData, feData }) {
     const pk = ds => S.unit === 'm' ? ds.slice(0, 7) : wk(ds);
     const pl = k => S.unit === 'm' ? (+k.slice(5, 7)) + '월' : k.slice(5).replace('-', '/');
     const isDf = mode === 'df';
+    // V138: FTIV(Rework) 아이템은 생산수량에서도 제외
+    const PRODX = RAW.prod.filter(r => !r.fr);
     root.className = 'dtp' + (isDf ? '' : ' rw');
 
     const render = () => {
@@ -935,7 +945,7 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       const curPreset = (presets.find(p => p[1] === S.from && p[2] === S.to) || [''])[0];
       const rows = (isDf ? RAW.df : RAW.rw).filter(inL);
       const di = DI[S.dim];
-      const lines = [...new Set(RAW.prod.filter(r => r[0] === S.sec).map(r => r[1]))].sort();
+      const lines = [...new Set(PRODX.filter(r => r[0] === S.sec).map(r => r[1]))].sort();
       const segBtn = (grp, v, t) => `<button data-g="${grp}" data-v="${v}" aria-pressed="${String(S[grp]) === String(v)}">${t}</button>`;
       let h = `<div class="bar">
         <div class="seg">${segBtn('sec', 'FE', 'FE')}${segBtn('sec', 'TCP', 'TCP')}</div>
@@ -963,7 +973,7 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       const pers = [...new Set(rows.map(r => pk(r[2])))].sort();
       const byP = {}, byPT = {}, prodP = {};
       rows.forEach(r => { const k = pk(r[2]); byP[k] = (byP[k] || 0) + r[6]; byPT[k + '|' + r[di]] = (byPT[k + '|' + r[di]] || 0) + r[6]; });
-      RAW.prod.forEach(r => { if (inL(r)) { const k = pk(r[2]); prodP[k] = (prodP[k] || 0) + r[3]; } });
+      PRODX.forEach(r => { if (inL(r)) { const k = pk(r[2]); prodP[k] = (prodP[k] || 0) + r[3]; } });
       const prod = pers.reduce((a, k) => a + (prodP[k] || 0), 0);
       const lastDate = rows.map(r => r[2]).sort().pop(), lastK = pers[pers.length - 1];
       const partial = S.unit === 'm' ? (+lastDate.slice(8, 10) < 25) : (new Set(rows.filter(r => pk(r[2]) === lastK).map(r => r[2])).size < 5);
@@ -1034,7 +1044,7 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       if (S.line === '전체') {
         const ls = [...new Set(rows.map(r => r[1]))], byL = {}, byLT = {}, prL = {};
         rows.forEach(r => { byL[r[1]] = (byL[r[1]] || 0) + r[6]; byLT[r[1] + '|' + r[di]] = (byLT[r[1] + '|' + r[di]] || 0) + r[6]; });
-        RAW.prod.forEach(r => { if (inL(r)) prL[r[1]] = (prL[r[1]] || 0) + r[3]; });
+        PRODX.forEach(r => { if (inL(r)) prL[r[1]] = (prL[r[1]] || 0) + r[3]; });
         ls.sort((a, b) => byL[b] - byL[a]);
         h += `<section class="pn"><h2>라인별 유형 구성</h2><p class="hint">괄호 안은 라인 내 비중입니다.</p><div class="sc"><table class="cx"><thead><tr><th>라인</th><th>생산수량</th><th>${isDf ? '불량' : '재작업'}</th><th>발생률</th>${top.map(t => `<th>${esc(t)}</th>`).join('')}<th>기타</th></tr></thead><tbody>`
           + ls.map(l => { const s = top.reduce((a, t) => a + (byLT[l + '|' + t] || 0), 0);
@@ -1046,14 +1056,14 @@ function DefectTypePanel({ mode, tcpData, feData }) {
       {
         const lr = {}, lp2 = {};
         rows.forEach(r => { const o = lr[r[1]] || (lr[r[1]] = { line: r[1], qty: 0, byT: {}, prod: 0 }); o.qty += r[6]; o.byT[r[di]] = (o.byT[r[di]] || 0) + r[6]; });
-        RAW.prod.forEach(r => { if (inL(r)) lp2[r[1]] = (lp2[r[1]] || 0) + r[3]; });
+        PRODX.forEach(r => { if (inL(r)) lp2[r[1]] = (lp2[r[1]] || 0) + r[3]; });
         Object.values(lr).forEach(o => { o.prod = lp2[o.line] || 0; });
         const avgs = types.slice(0, 12).map(t => pct(t[1], prod));
         root._exp = { isDf, sec: S.sec, line: S.line, from: S.from, to: S.to, dimName: DN[S.dim], unit: S.unit, prod, total, types, t80,
           rLast: rL / 100, dd, lastLabel: plab(lp), partial, lastPartialLabel: plab(lastK), pers, periodLabels: pers.map(plab),
           byP, byPT, prodP, byT, top, pal: PAL, colorOf: col, accent: isDf ? '#C8243F' : '#B86B00',
           dec: avgs.some(v => v > 0 && v < 0.1) ? 3 : 2,
-          lineRows: Object.values(lr).sort((a, b) => b.qty - a.qty), rows, prodRows: RAW.prod.filter(inL),
+          lineRows: Object.values(lr).sort((a, b) => b.qty - a.qty), rows, prodRows: PRODX.filter(inL),
           merged: (() => { const m = {}; rows.forEach(r => { if (r[8] !== r[5] && r[8] !== '(미분류)') { const k = r[3] + '|' + r[8] + '|' + r[5]; m[k] = (m[k] || 0) + r[6]; } });
             return Object.entries(m).map(([k, q]) => { const [st, raw, nv] = k.split('|'); return { st, raw, nv, q }; }).sort((a, b) => b.q - a.q); })() };
       }
@@ -1106,13 +1116,13 @@ function DefectTypePanel({ mode, tcpData, feData }) {
         const src = isDf ? RAW.df : RAW.rw;
         const lineOk = r => r[0] === S.sec && (S.line === '전체' || r[1] === S.line);
         const tRows = src.filter(r => lineOk(r) && r[V.di] === t);
-        const months = [...new Set(tRows.map(r => r[2].slice(0, 7)).concat(RAW.prod.filter(lineOk).map(r => r[2].slice(0, 7))))].sort();
+        const months = [...new Set(tRows.map(r => r[2].slice(0, 7)).concat(PRODX.filter(lineOk).map(r => r[2].slice(0, 7))))].sort();
         if (!ym) { const inR = tRows.map(r => r[2]).filter(d => d.slice(0, 7) >= S.from && d.slice(0, 7) <= S.to).sort(); ym = (inR.pop() || S.to + '-01').slice(0, 7); }
         const Y = +ym.slice(0, 4), M = +ym.slice(5, 7), nd = new Date(Y, M, 0).getDate();
         const ds = d => ym + '-' + String(d).padStart(2, '0');
         const q = {}, pq = {}, its = {};
         tRows.forEach(r => { if (r[2].slice(0, 7) === ym) { q[r[2]] = (q[r[2]] || 0) + r[6]; const it = r.item || '(미지정)'; its[it] = (its[it] || 0) + r[6]; } });
-        RAW.prod.forEach(r => { if (lineOk(r) && r[2].slice(0, 7) === ym) pq[r[2]] = (pq[r[2]] || 0) + r[3]; });
+        PRODX.forEach(r => { if (lineOk(r) && r[2].slice(0, 7) === ym) pq[r[2]] = (pq[r[2]] || 0) + r[3]; });
         const days = []; for (let d = 1; d <= nd; d++) { const k = ds(d), qq = q[k] || 0, pp = pq[k] || 0; days.push({ d, k, q: qq, p: pp, r: pp ? qq / pp * 100 : null, dow: new Date(Y, M - 1, d).getDay() }); }
         // V137: 생산 이력이 없는 날은 그래프·표에서 제외 → 생산한 날끼리 선이 이어짐
         const allDays = days.slice(); days.length = 0; allDays.forEach(x => { if (x.p > 0 || x.q > 0) days.push(x); });
@@ -7338,7 +7348,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V137"), React.createElement("div", {
+  }, "V138"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
