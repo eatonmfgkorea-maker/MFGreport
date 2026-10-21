@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V136</title>
+  <title>MFG Report V137</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V137',
+  d: '2026-10-21',
+  items: ['일별 추이 팝업 — 생산 이력이 없는 날은 빼고 생산한 날만 이어서 그래프·표 표시 (0%로 떨어졌다 다시 시작하던 문제 해결)']
+}, {
   v: 'V136',
   d: '2026-10-21',
   items: ['유형별 최종불량·1차불량 — «유형별 추이» 카드를 누르면 그 유형의 한 달 일별 추이(수량·발생률)가 큰 팝업으로 열림, ◀▶로 월 이동']
@@ -1110,14 +1114,16 @@ function DefectTypePanel({ mode, tcpData, feData }) {
         tRows.forEach(r => { if (r[2].slice(0, 7) === ym) { q[r[2]] = (q[r[2]] || 0) + r[6]; const it = r.item || '(미지정)'; its[it] = (its[it] || 0) + r[6]; } });
         RAW.prod.forEach(r => { if (lineOk(r) && r[2].slice(0, 7) === ym) pq[r[2]] = (pq[r[2]] || 0) + r[3]; });
         const days = []; for (let d = 1; d <= nd; d++) { const k = ds(d), qq = q[k] || 0, pp = pq[k] || 0; days.push({ d, k, q: qq, p: pp, r: pp ? qq / pp * 100 : null, dow: new Date(Y, M - 1, d).getDay() }); }
+        // V137: 생산 이력이 없는 날은 그래프·표에서 제외 → 생산한 날끼리 선이 이어짐
+        const allDays = days.slice(); days.length = 0; allDays.forEach(x => { if (x.p > 0 || x.q > 0) days.push(x); });
+        const nShow = Math.max(1, days.length);
         const tq = days.reduce((a, x) => a + x.q, 0), tp = days.reduce((a, x) => a + x.p, 0), tr = tp ? tq / tp * 100 : 0;
         const mxq = Math.max(1, ...days.map(x => x.q)), mxr = Math.max(0.0001, ...days.map(x => x.r || 0)) * 1.15;
         const dec = mxr < 0.1 ? 3 : 2;
         const c0 = V.col(t) === OTHER ? '#475569' : V.col(t);
-        const W = 1120, H = 380, l = 60, rr = 64, tp0 = 34, bt = 44, cw = (W - l - rr) / nd, bw = Math.min(22, cw * 0.55);
+        const W = 1120, H = 380, l = 60, rr = 64, tp0 = 34, bt = 44, cw = (W - l - rr) / nShow, bw = Math.min(22, cw * 0.55);
         const X = i => l + cw * i + cw / 2, Yq = v => H - bt - (H - tp0 - bt) * v / mxq, Yr = v => tp0 + (H - tp0 - bt) * (1 - v / mxr);
         let g = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">`;
-        days.forEach((x, i) => { if (!x.p) g += `<rect x="${l + cw * i}" y="${tp0}" width="${cw}" height="${H - tp0 - bt}" fill="#f1f5f9"/>`; });
         for (let k = 0; k <= 4; k++) { const y = tp0 + (H - tp0 - bt) * k / 4;
           g += `<line x1="${l}" x2="${W - rr}" y1="${y}" y2="${y}" stroke="#e2e8f0"/><text x="${l - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="#94a3b8">${fmt(mxq * (1 - k / 4))}</text><text x="${W - rr + 8}" y="${y + 4}" font-size="11" fill="#94a3b8">${(mxr * (1 - k / 4)).toFixed(dec)}%</text>`; }
         g += `<text x="${l - 8}" y="${tp0 - 14}" text-anchor="end" font-size="11" fill="#64748b">수량(개)</text><text x="${W - rr + 8}" y="${tp0 - 14}" font-size="11" fill="#64748b">발생률</text>`;
@@ -1125,10 +1131,8 @@ function DefectTypePanel({ mode, tcpData, feData }) {
           if (x.q > 0) { const y = Yq(x.q); g += `<rect x="${X(i) - bw / 2}" y="${y}" width="${bw}" height="${H - bt - y}" fill="${c0}" opacity=".28" rx="2"><title>${M}/${x.d} ${fmt(x.q)}개</title></rect>`; }
           const wk = x.dow === 0 ? '#c8243f' : x.dow === 6 ? '#3b6fd8' : '#64748b';
           g += `<text x="${X(i)}" y="${H - bt + 16}" text-anchor="middle" font-size="11" fill="${wk}" font-weight="${x.dow === 1 ? 700 : 400}">${x.d}</text>`;
-          if (x.dow === 1 || i === 0) g += `<text x="${X(i)}" y="${H - bt + 31}" text-anchor="middle" font-size="10" fill="#94a3b8">${'일월화수목금토'[x.dow]}</text>`; });
-        let seg = [], segs = [];
-        days.forEach((x, i) => { if (x.r == null) { if (seg.length) segs.push(seg); seg = []; } else seg.push(`${X(i)},${Yr(x.r)}`); });
-        if (seg.length) segs.push(seg);
+          if (i === 0 || x.dow < days[i - 1].dow || x.d - days[i - 1].d >= 7) g += `<text x="${X(i)}" y="${H - bt + 31}" text-anchor="middle" font-size="10" fill="#94a3b8">${'일월화수목금토'[x.dow]}</text>`; });
+        const segs = [days.map((x, i) => x.r == null ? null : `${X(i)},${Yr(x.r)}`).filter(Boolean)];
         segs.forEach(sg => { g += `<polyline points="${sg.join(' ')}" fill="none" stroke="${c0}" stroke-width="2.5" stroke-linejoin="round"/>`; });
         days.forEach((x, i) => { if (x.r == null) return;
           g += `<circle cx="${X(i)}" cy="${Yr(x.r)}" r="${x.q ? 4.5 : 3}" fill="${x.q ? c0 : '#fff'}" stroke="${c0}" stroke-width="2"><title>${M}/${x.d} 발생률 ${x.r.toFixed(dec)}% · ${fmt(x.q)}개 / 생산 ${fmt(x.p)}개</title></circle>`;
@@ -1164,7 +1168,7 @@ function DefectTypePanel({ mode, tcpData, feData }) {
             ${itl.length ? `<span>아이템: ${itl.map(([n, v]) => `${esc(n)} <b style="color:#1e293b">${fmt(v)}</b>`).join(' · ')}</span>` : ''}</div>
           ${tq ? '' : `<div style="padding:8px 12px;background:#f8fafc;border-radius:8px;color:#64748b;font-size:13px;margin-bottom:8px">${M}월에는 이 유형의 ${isDf ? '불량' : '재작업'} 기록이 없습니다.</div>`}
           ${g}
-          <div style="font-size:12px;color:#94a3b8;margin-top:4px">막대 = ${isDf ? '불량' : '재작업'} 수량, 선 = 발생률(그날 생산수량 대비), 점선 = 월 평균. 회색 칸은 생산이 없는 날입니다.</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">막대 = ${isDf ? '불량' : '재작업'} 수량, 선 = 발생률(그날 생산수량 대비), 점선 = 월 평균. 생산 이력이 없는 날(주말·휴무 등)은 빼고 생산한 날만 이어서 표시합니다.</div>
           ${tbl}</div>`;
         const close = () => { md.remove(); document.removeEventListener('keydown', onKey); };
         const onKey = e => { if (e.key === 'Escape') close(); };
@@ -7334,7 +7338,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V136"), React.createElement("div", {
+  }, "V137"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
