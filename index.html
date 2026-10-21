@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V134</title>
+  <title>MFG Report V135</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -302,6 +302,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V135',
+  d: '2026-10-21',
+  items: ['TCP·FE 데이터 불러오기 보완 — 빈(0바이트) 백업 파일은 건너뛰고, 최신 파일을 못 읽으면 그다음 최신 파일로 자동 대체']
+}, {
   v: 'V134',
   d: '2026-10-18',
   items: ['왼쪽 메뉴 정리 — 비슷한 화면을 펼침 메뉴로 묶음', 'Production report: Production 보고 / Production Review', '수량: 전체 수량 / 상세 수량', '불량(최종불량): 최종불량 / 유형별 최종불량', '재작업(1차불량): 1차불량 / 유형별 1차불량', 'Capacity: Capacity CT / Capacity Utilization(가동률)', 'FTFR: FTFR 전체 / FTFR(세부)', '52시간 메뉴 삭제', '펼침 메뉴 제목을 다시 누르면 접힘']
@@ -5134,8 +5138,22 @@ function App() {
           return;
         }
         const files = listResult.files;
+        // V135: 0바이트(저장 중 실패) 파일 제외
+        const __nonEmpty = f => !(f.size === 0 || f.size === '0');
+        const pickList = prefix => {
+          const matches = files.filter(f => (f.name || '').toLowerCase().startsWith(prefix) && __nonEmpty(f));
+          const byModified = (a, b) => {
+            const ta = a.modified ? new Date(a.modified).getTime() : 0;
+            const tb = b.modified ? new Date(b.modified).getTime() : 0;
+            if (tb !== ta) return tb - ta;
+            return (b.name || '').localeCompare(a.name || '');
+          };
+          const gz = matches.filter(f => (f.name || '').toLowerCase().endsWith('.json.gz')).sort(byModified);
+          const plain = matches.filter(f => !(f.name || '').toLowerCase().endsWith('.json.gz')).sort(byModified);
+          return gz.concat(plain).slice(0, 4);
+        };
         const pickLatest = prefix => {
-          const matches = files.filter(f => (f.name || '').toLowerCase().startsWith(prefix));
+          const matches = files.filter(f => (f.name || '').toLowerCase().startsWith(prefix) && __nonEmpty(f));
           if (matches.length === 0) return null;
           const byModified = (a, b) => {
             const ta = a.modified ? new Date(a.modified).getTime() : 0;
@@ -5150,6 +5168,15 @@ function App() {
         };
         const latestTcp = pickLatest('tcp-backup-');
         const latestFe = pickLatest('fe-backup-');
+        // V135: 최신 파일 로드 실패 시 그다음 최신 파일로 자동 대체
+        const loadFirstOk = async (list, prefix) => {
+          for (const f of (list || [])) {
+            const d = await loadOne(f, prefix);
+            if (d) return d;
+            console.warn('[MFGreport] 백업 로드 실패, 이전 파일로 대체:', f.name);
+          }
+          return null;
+        };
         const loadOne = async (file, prefix) => {
           if (!file) return null;
           const cacheKey = prefix + ':' + file.id;
@@ -5173,9 +5200,9 @@ function App() {
           }
         };
         const latestSettingsP = pickLatest('mfg-settings-');
-        const __tcpP = loadOne(latestTcp, 'tcp');
-        const __feP = loadOne(latestFe, 'fe');
-        const __setP = loadOne(latestSettingsP, 'set');
+        const __tcpP = loadFirstOk(pickList('tcp-backup-'), 'tcp');
+        const __feP = loadFirstOk(pickList('fe-backup-'), 'fe');
+        const __setP = loadFirstOk(pickList('mfg-settings-'), 'set');
         let tcpLoaded = false,
           feLoaded = false;
         __tcpP.then(d => {
@@ -7224,7 +7251,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-mono font-bold text-indigo-200 cursor-help hover:bg-white/20 transition-colors"
-  }, "V134"), React.createElement("div", {
+  }, "V135"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
