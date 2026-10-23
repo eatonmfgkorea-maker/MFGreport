@@ -7655,7 +7655,8 @@ function App() {
     className: "flex-1 min-w-0 overflow-x-auto overflow-y-auto h-screen print-scroll-reset"
   }, React.createElement("div", {
     className: activeTab === 'orgchart' ? "px-4 py-4 w-full" : "px-6 py-5 mx-auto",
-    style: activeTab === 'orgchart' ? { maxWidth: 'none' } : {
+    // OEE(상세)는 열이 많은 표라 넓은 화면을 모두 쓴다. 대시보드·OEE 탭은 보고서용이라 1400px 유지
+    style: activeTab === 'orgchart' || effTab === 'oeedetail' ? { maxWidth: 'none' } : {
       maxWidth: '1400px'
     }
   }, React.createElement("div", {
@@ -8857,7 +8858,8 @@ function App() {
         className: "relative flex-1 flex items-center justify-center"
       }, React.createElement("svg", {
         viewBox: "0 0 180 115",
-        className: "w-full"
+        className: "w-full",
+        style: { maxHeight: 170 }
       }, React.createElement("path", {
         d: arcPath(startA, endA),
         fill: "none",
