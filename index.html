@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V144</title>
+  <title>MFG Report V145</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -330,6 +330,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V145',
+  d: '2026-10-24',
+  items: ['FTIV 메뉴 추가 (로그인 사용자만) — FTIV 현황판: 시프트·시간대별 계획/실적, OPR·OVR 등 불량 수량·불량률, 재검사·재작업 미투입 LOT', 'FTIV 세부데이터 — 품질 트렌드(최초불량률·직행률, A/B조 비교), 불량 패턴(파레토, 요일×시간), 팔레트별 불량률, 재작업(소요 시간·대기 재고·미처리 LOT)', '데이터는 FTIV 설비 PLC 원본(2026-01-01~10-20) 기준. 제품별 측정값 원본(LOT 추적)은 사이트에 올리지 않음']
+}, {
   v: 'V144',
   d: '2026-10-23',
   items: ['디자인 개선 — 밝은 사이드바·라인 아이콘, 로그인 화면 밝은 테마, 강조색을 Eaton 블루로 통일', '차트 정리 — 제품별 수량 도넛을 상위 7개 색 + 기타 회색 + 순위 표로, 월별 막대·OEE(상세) 게이지 색 통일', '대시보드·OEE 탭은 보고서용으로 기존 화면 그대로 유지']
@@ -1283,6 +1287,468 @@ function DefectTypePanel({ mode, tcpData, feData }) {
   }, [RAW, mode]);
   return React.createElement("div", { ref, className: "dtp" });
 }
+
+// <FTIV-PANEL>
+// ===== FTIV (PLC 데이터) — 현황판 · 세부데이터 =====
+// 데이터: FTIVboard/data.js(현황판), detail.js(세부 집계), lots/YYYY-MM.js(LOT 원본, 필요할 때만)
+// build_data.py 가 PLC 엑셀에서 만든다. 화면은 순수 JS로 그리고 React 에는 마운트만 한다(DefectTypePanel 과 같은 방식).
+const FTIV_BASE = 'FTIVboard/';
+const ftivLoad = (() => {
+  const cache = {};
+  return src => cache[src] || (cache[src] = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = FTIV_BASE + src;
+    s.onload = res;
+    s.onerror = () => { delete cache[src]; rej(new Error(src + ' 를 불러오지 못했습니다')); };
+    document.head.appendChild(s);
+  }));
+})();
+
+const FTIVD = (function () {
+  const C_OPR = '#2a78d6', C_OVR = '#eb6834', C_ETC = '#1baf7a', C_A = '#0d366b', C_B = '#86b6ef', C_ALERT = '#e34948';
+  const SEQ = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5', '#2a78d6', '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b'];
+  const WD = ['일', '월', '화', '수', '목', '금', '토'];
+  const LEAD = [['≤12시간', 0, 12], ['12~24시간', 12, 24], ['1~3일', 24, 72], ['3~7일', 72, 168], ['7~30일', 168, 720], ['30일 이상', 720, 1e9]];
+  const MEAS = [['스프링1', 3], ['스프링2', 3], ['폴조립', 4], ['코일저항', 3], ['하우징리크', 3], ['OPR', 3], ['OVR', 3], ['PD1 압력', 3], ['PD2 압력', 3]];
+  const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const fmt = n => Math.round(n).toLocaleString();
+  const pct = (a, b, d = 2) => b ? (a / b * 100).toFixed(d) : '-';
+  const md = s => `${+s.slice(5, 7)}/${+s.slice(8, 10)}`;
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+
+  // LOT 월별 파일은 한 번 불러오면 화면을 다시 열어도 그대로 씀
+  const lots = {};
+  window.FTIV_LOTS_LOADED = (ch, data) => { lots[ch] = data; };
+
+  // ── 툴팁 하나를 모든 차트가 같이 씀 ──
+  let tipEl = null;
+  function tip(ev, html) {
+    if (!tipEl) { tipEl = document.createElement('div'); tipEl.className = 'ftv-tip'; document.body.appendChild(tipEl); }
+    if (html == null) { tipEl.style.display = 'none'; return; }
+    tipEl.innerHTML = html;
+    tipEl.style.display = 'block';
+    tipEl.style.left = Math.min(ev.clientX + 14, innerWidth - tipEl.offsetWidth - 8) + 'px';
+    tipEl.style.top = Math.min(ev.clientY + 14, innerHeight - tipEl.offsetHeight - 8) + 'px';
+  }
+  const tipRow = (c, v, lab) => `<div class="tr"><i style="background:${c}"></i><b>${v}</b><span>${esc(lab)}</span></div>`;
+
+  // ── 기간 묶음(일/주/월) ──
+  function bucketKey(day, unit) {
+    if (unit === 'd') return day;
+    if (unit === 'm') return day.slice(0, 7);
+    const d = new Date(day + 'T00:00:00'); const w = (d.getDay() + 6) % 7; d.setDate(d.getDate() - w);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  const bucketLabel = (k, unit) => unit === 'm' ? `${+k.slice(5, 7)}월` : unit === 'w' ? `${md(k)}주` : md(k);
+  const niceMax = v => { const st = [0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 2000, 5000, 10000]; const t = v / 4; return (st.find(s => s >= t) || Math.ceil(t)) * 4; };
+
+  // ── SVG 차트: x 묶음 위에 누적 막대 또는 선. 마우스는 x 위치로 묶음을 찾음 ──
+  function chart(host, o) {
+    const W = Math.max(320, host.clientWidth || 700), H = o.h || 240, m = { l: 48, r: 14, t: 12, b: 26 };
+    const n = o.cats.length;
+    if (!n) { host.innerHTML = '<div class="empty">데이터 없음</div>'; return; }
+    const tot = o.cats.map((_, i) => o.stack ? o.series.reduce((a, s) => a + (s.v[i] || 0), 0) : Math.max(...o.series.map(s => s.v[i] ?? 0)));
+    const ymax = o.ymax || niceMax(Math.max(...tot, ...(o.ref ? [o.ref.v] : [])) * 1.08 || 1);
+    const bw = (W - m.l - m.r) / n;
+    const x = i => m.l + bw * (i + 0.5);
+    const y = v => m.t + (1 - v / ymax) * (H - m.t - m.b);
+    let g = '';
+    for (let k = 0; k <= 4; k++) {
+      const v = ymax * k / 4, yy = y(v).toFixed(1);
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}" stroke="${k ? '#eceae4' : '#c9c8c2'}"/>`;
+      g += `<text x="${m.l - 7}" y="${+yy + 4}" text-anchor="end">${o.yfmt ? o.yfmt(v) : v}</text>`;
+    }
+    const step = Math.max(1, Math.ceil(n / Math.floor((W - m.l - m.r) / 54)));
+    o.cats.forEach((c, i) => { if (i % step === 0) g += `<text x="${x(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${esc(c)}</text>`; });
+    if (o.stack) {
+      const gap = Math.min(2, bw * 0.15), w = Math.max(1, bw - gap * 2 - (bw > 16 ? bw * 0.2 : 0));
+      o.cats.forEach((_, i) => {
+        let acc = 0;
+        o.series.forEach((s, si) => {
+          const v = s.v[i] || 0; if (!v) return;
+          const y0 = y(acc), y1 = y(acc + v); acc += v;
+          const top = si === o.series.length - 1 || o.series.slice(si + 1).every(t => !(t.v[i] || 0));
+          g += `<rect x="${(x(i) - w / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0, y0 - y1 - (acc > v ? 1 : 0)).toFixed(1)}" fill="${s.c}" ${top ? 'rx="2"' : ''}/>`;
+        });
+      });
+    } else {
+      o.series.forEach(s => {
+        let d = '', pen = false;
+        s.v.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); pen = true; });
+        g += `<path d="${d}" fill="none" stroke="${s.c}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${s.dash ? 'stroke-dasharray="5 4"' : ''}/>`;
+        if (n <= 40) s.v.forEach((v, i) => { if (v != null) g += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="${s.c}"/>`; });
+      });
+    }
+    if (o.ref) {
+      const ry = y(o.ref.v).toFixed(1);
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${ry}" y2="${ry}" stroke="#52514e" stroke-dasharray="5 4"/><text x="${m.l + 6}" y="${+ry - 5}" style="fill:#52514e">${esc(o.ref.label)}</text>`;
+    }
+    g += `<line class="xh" y1="${m.t}" y2="${H - m.b}" stroke="#8a8984" visibility="hidden"/><rect class="hit" x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent"/>`;
+    host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">${g}</svg>`;
+    const svg = host.firstChild, xh = svg.querySelector('.xh'), hit = svg.querySelector('.hit');
+    const idx = ev => { const r = svg.getBoundingClientRect(); return Math.max(0, Math.min(n - 1, Math.floor(((ev.clientX - r.left) * W / r.width - m.l) / bw))); };
+    hit.onpointermove = ev => { const i = idx(ev); xh.setAttribute('x1', x(i)); xh.setAttribute('x2', x(i)); xh.setAttribute('visibility', 'visible'); tip(ev, o.tip(i)); };
+    hit.onpointerleave = ev => { xh.setAttribute('visibility', 'hidden'); tip(ev, null); };
+    if (o.onClick) { hit.style.cursor = 'pointer'; hit.onclick = ev => o.onClick(idx(ev)); }
+  }
+  const legend = items => `<div class="lg">${items.map(([c, t, line]) => `<span><i style="background:${c};${line ? 'height:3px;border-radius:2px;vertical-align:3px' : ''}"></i>${esc(t)}</span>`).join('')}</div>`;
+
+  // ── 메인 ──
+  function mount(root, D) {
+    const days = D.days, last = days[days.length - 1];
+    const S = Object.assign({ tab: 'trend', range: '90', from: '', to: '', shift: 'all', unit: 'w', pm: 'opr', hm: 'opr', pal: null, lot: '' }, store.get('ftiv_detail', {}));
+    const save = () => store.set('ftiv_detail', { tab: S.tab, range: S.range, from: S.from, to: S.to, shift: S.shift, unit: S.unit, pm: S.pm, hm: S.hm });
+    const shiftOk = sh => S.shift === 'all' || (S.shift === 'A' ? sh === 0 : sh === 1);
+
+    function period() {
+      if (S.range === 'custom' && S.from && S.to) return [S.from, S.to];
+      if (S.range === 'all') return [days[0], last];
+      const d = new Date(last + 'T00:00:00'); d.setDate(d.getDate() - (+S.range - 1));
+      return [d.toISOString().slice(0, 10), last];
+    }
+    // 같은 길이의 직전 기간
+    function prevPeriod([a, b]) {
+      const A = new Date(a + 'T00:00:00'), B = new Date(b + 'T00:00:00'), len = (B - A) / 864e5 + 1;
+      const pb = new Date(A); pb.setDate(pb.getDate() - 1); const pa = new Date(pb); pa.setDate(pa.getDate() - (len - 1));
+      return [pa.toISOString().slice(0, 10), pb.toISOString().slice(0, 10)];
+    }
+    const inP = (day, [a, b]) => day >= a && day <= b;
+
+    function sumQs(p, shiftFilter = true) {
+      const t = { n: 0, good: 0, c: D.causes.map(() => 0) };
+      D.qs.forEach(r => { if (!inP(days[r[0]], p) || (shiftFilter && !shiftOk(r[1]))) return; t.n += r[2]; t.good += r[3]; r.slice(4).forEach((v, i) => t.c[i] += v); });
+      t.ng = t.c.reduce((a, b) => a + b, 0);
+      return t;
+    }
+
+    function render() {
+      save();
+      const p = period();
+      root.innerHTML = `
+        <div class="bar">
+          <b class="ttl">FTIV · PLC 세부데이터</b>
+          <div class="seg" data-g="tab">${[['trend', '품질 트렌드'], ['pattern', '불량 패턴'], ['pallet', '팔레트'], ['rework', '재작업'], ['lot', 'LOT 추적']].map(([k, t]) => `<button data-v="${k}" aria-pressed="${S.tab === k}">${t}</button>`).join('')}</div>
+          <span class="sp"></span>
+          ${S.tab === 'lot' ? '' : `
+          <div class="seg" data-g="range">${[['30', '30일'], ['90', '90일'], ['all', '전체'], ['custom', '기간 지정']].map(([k, t]) => `<button data-v="${k}" aria-pressed="${S.range === k}">${t}</button>`).join('')}</div>
+          ${S.range === 'custom' ? `<input type="date" data-f="from" value="${p[0]}" min="${days[0]}" max="${last}"> ~ <input type="date" data-f="to" value="${p[1]}" min="${days[0]}" max="${last}">` : `<span class="lbl">${md(p[0])} ~ ${md(p[1])}</span>`}
+          <div class="seg" data-g="shift">${[['all', 'A+B'], ['A', 'A조'], ['B', 'B조']].map(([k, t]) => `<button data-v="${k}" aria-pressed="${S.shift === k}">${t}</button>`).join('')}</div>`}
+        </div>
+        <div class="body"></div>
+        <div class="foot">PLC 원본 기준 · 데이터 생성 ${esc(D.built)} · 불량률은 최초 검사 기준(최초 투입 대비)</div>`;
+      root.querySelectorAll('[data-g]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S[g.dataset.g] = b.dataset.v; if (g.dataset.g === 'range' && b.dataset.v === 'custom' && !S.from) { [S.from, S.to] = p; } render(); }));
+      root.querySelectorAll('[data-f]').forEach(inp => inp.onchange = () => { S[inp.dataset.f] = inp.value; render(); });
+      const body = root.querySelector('.body');
+      ({ trend, pattern, pallet, rework, lot })[S.tab](body, p);
+    }
+
+    // ① 품질 트렌드
+    function trend(body, p) {
+      const t = sumQs(p), pv = sumQs(prevPeriod(p));
+      const iO = D.causes.indexOf('OPR'), iV = D.causes.indexOf('OVR');
+      const rate = x => x.n ? x.ng / x.n * 100 : null;
+      const dlt = (a, b) => a == null || b == null ? '' : `<span class="dl ${a > b ? 'up' : 'dn'}">${a > b ? '▲' : '▼'} ${Math.abs(a - b).toFixed(2)}%p</span>`;
+      const r0 = rate(t), rp = rate(pv);
+      // 묶음별
+      const keys = [], map = {};
+      D.qs.forEach(r => {
+        const day = days[r[0]]; if (!inP(day, p)) return;
+        const k = bucketKey(day, S.unit);
+        if (!map[k]) { map[k] = { n: 0, ng: 0, o: 0, v: 0, A: [0, 0], B: [0, 0] }; keys.push(k); }
+        const b = map[k], ng = r.slice(4).reduce((a, c) => a + c, 0);
+        b[r[1] ? 'B' : 'A'][0] += r[2]; b[r[1] ? 'B' : 'A'][1] += ng;
+        if (!shiftOk(r[1])) return;
+        b.n += r[2]; b.ng += ng; b.o += r[4 + iO]; b.v += r[4 + iV];
+      });
+      keys.sort();
+      const B = keys.map(k => map[k]);
+      const R = (a, n) => n ? a / n * 100 : 0;
+      body.innerHTML = `
+        <div class="story"><div><div class="big">${r0 == null ? '-' : r0.toFixed(2)}<small>%</small></div><div class="cap">최초불량률 ${dlt(r0, rp)}</div></div>
+          <div class="facts">
+            <span>직행률(FTFR) <b>${r0 == null ? '-' : (100 - r0).toFixed(2)}%</b></span>
+            <span>최초 투입 <b>${fmt(t.n)}</b></span><span>실적(양품) <b>${fmt(t.good)}</b></span><span>최초불량 <b>${fmt(t.ng)}</b></span>
+            <span>OPR <b>${pct(t.c[iO], t.n)}%</b></span><span>OVR <b>${pct(t.c[iV], t.n)}%</b></span>
+            <span class="muted">직전 같은 기간(${md(prevPeriod(p)[0])}~${md(prevPeriod(p)[1])}) ${rp == null ? '데이터 없음' : rp.toFixed(2) + '%'}</span></div></div>
+        <div class="pn"><div class="ph"><h2>최초불량률 추이 · 원인별</h2><div class="seg sm" data-u>${[['d', '일'], ['w', '주'], ['m', '월']].map(([k, tt]) => `<button data-v="${k}" aria-pressed="${S.unit === k}">${tt}</button>`).join('')}</div></div>
+          <p class="hint">막대 높이 = 최초 투입 대비 불량률. 생산한 날만 이어서 표시합니다.</p><div class="ch" data-c="stack"></div>
+          ${legend([[C_OPR, 'OPR 리크'], [C_OVR, 'OVR 리크'], [C_ETC, '기타(코일·하우징 등)']])}</div>
+        <div class="pn"><h2>A조 · B조 최초불량률 비교</h2><p class="hint">시프트 선택과 관계없이 두 조를 함께 봅니다.</p><div class="ch" data-c="ab"></div>
+          ${legend([[C_A, 'A조(주간)', 1], [C_B, 'B조(야간)', 1]])}</div>
+        <details class="pn tb"><summary>표로 보기</summary><table><thead><tr><th>기간</th><th>최초 투입</th><th>최초불량</th><th>불량률</th><th>OPR</th><th>OVR</th><th>A조</th><th>B조</th></tr></thead><tbody>
+          ${keys.map((k, i) => { const b = B[i]; return `<tr><td>${bucketLabel(k, S.unit)}</td><td>${fmt(b.n)}</td><td>${fmt(b.ng)}</td><td>${pct(b.ng, b.n)}%</td><td>${pct(b.o, b.n)}%</td><td>${pct(b.v, b.n)}%</td><td>${pct(b.A[1], b.A[0])}%</td><td>${pct(b.B[1], b.B[0])}%</td></tr>`; }).reverse().join('')}</tbody></table></details>`;
+      body.querySelector('[data-u]').querySelectorAll('button').forEach(b => b.onclick = () => { S.unit = b.dataset.v; render(); });
+      const cats = keys.map(k => bucketLabel(k, S.unit));
+      chart(body.querySelector('[data-c="stack"]'), {
+        cats, stack: true, yfmt: v => v + '%',
+        series: [{ c: C_OPR, v: B.map(b => R(b.o, b.n)) }, { c: C_OVR, v: B.map(b => R(b.v, b.n)) }, { c: C_ETC, v: B.map(b => R(b.ng - b.o - b.v, b.n)) }],
+        ref: r0 == null ? null : { v: r0, label: `기간 평균 ${r0.toFixed(2)}%` },
+        tip: i => { const b = B[i]; return `<div class="td">${cats[i]} · 최초 투입 ${fmt(b.n)}</div><div class="tr"><b>${pct(b.ng, b.n)}%</b><span>최초불량 ${fmt(b.ng)}</span></div>` + tipRow(C_OPR, pct(b.o, b.n) + '%', ` OPR ${b.o}`) + tipRow(C_OVR, pct(b.v, b.n) + '%', ` OVR ${b.v}`) + tipRow(C_ETC, pct(b.ng - b.o - b.v, b.n) + '%', ` 기타 ${b.ng - b.o - b.v}`); },
+      });
+      chart(body.querySelector('[data-c="ab"]'), {
+        cats, h: 200, yfmt: v => v + '%',
+        series: [{ c: C_A, v: B.map(b => b.A[0] ? R(b.A[1], b.A[0]) : null) }, { c: C_B, v: B.map(b => b.B[0] ? R(b.B[1], b.B[0]) : null) }],
+        tip: i => { const b = B[i]; return `<div class="td">${cats[i]}</div>` + tipRow(C_A, pct(b.A[1], b.A[0]) + '%', ` A조 ${fmt(b.A[1])}/${fmt(b.A[0])}`) + tipRow(C_B, pct(b.B[1], b.B[0]) + '%', ` B조 ${fmt(b.B[1])}/${fmt(b.B[0])}`); },
+      });
+    }
+
+    // ② 불량 패턴: 파레토 + 요일×시간 히트맵
+    function pattern(body, p) {
+      const t = sumQs(p);
+      const rows = D.causes.map((c, i) => [c, t.c[i]]).filter(r => r[1]).sort((a, b) => b[1] - a[1]);
+      let cum = 0;
+      const mx = rows.length ? rows[0][1] : 1;
+      // 히트맵: 달력 기준(요일×시각). 시프트 선택과 무관
+      const H = {}; const ci = S.hm === 'opr' ? 4 : S.hm === 'ovr' ? 5 : 3;
+      D.hours.forEach(([cal, hr, n, ng, o, v]) => {
+        if (!inP(cal, p)) return;
+        const wd = new Date(cal + 'T00:00:00').getDay(), k = wd + '|' + hr;
+        const c = H[k] || (H[k] = [0, 0]); c[0] += n; c[1] += [0, 0, 0, ng, o, v][ci];
+      });
+      const cells = Object.values(H).filter(c => c[0] >= 30).map(c => c[1] / c[0]);
+      const hmax = Math.max(...cells, 0.0001);
+      const order = [1, 2, 3, 4, 5, 6, 0];
+      let best = null;
+      Object.entries(H).forEach(([k, c]) => { if (c[0] >= 30 && (!best || c[1] / c[0] > best[1])) best = [k, c[1] / c[0], c[0]]; });
+      const byHr = Array.from({ length: 24 }, (_, h) => order.reduce((a, wd) => { const c = H[wd + '|' + h]; return c ? [a[0] + c[0], a[1] + c[1]] : a; }, [0, 0]));
+      const hrBest = byHr.map((c, h) => [h, c[0] ? c[1] / c[0] : -1]).sort((a, b) => b[1] - a[1])[0];
+      const hmName = S.hm === 'opr' ? 'OPR' : S.hm === 'ovr' ? 'OVR' : '전체 불량';
+      body.innerHTML = `
+        <div class="g2">
+          <div class="pn"><h2>불량 원인 파레토</h2><p class="hint">기간 내 최초불량 ${fmt(t.ng)}개 · 최초 투입 ${fmt(t.n)}개 대비</p>
+            <div class="par">${rows.map(([c, v]) => { cum += v; return `<div class="rt"><span class="nm">${esc(c)}</span><span class="trk"><span class="fil" style="width:${v / mx * 100}%;background:${c === 'OPR' ? C_OPR : c === 'OVR' ? C_OVR : C_ETC}"></span></span><span class="n">${fmt(v)}</span><span class="pc">${pct(v, t.ng, 1)}%</span><span class="cm">누적 ${pct(cum, t.ng, 0)}%</span></div>`; }).join('') || '<div class="empty">불량 없음</div>'}</div></div>
+          <div class="pn"><h2>요약</h2><ul class="sum">
+            ${best ? `<li><b>${WD[+best[0].split('|')[0]]}요일 ${best[0].split('|')[1]}시</b>에 ${hmName} 불량률이 가장 높음 (${(best[1] * 100).toFixed(1)}%, 투입 ${fmt(best[2])})</li>` : ''}
+            ${hrBest && hrBest[1] >= 0 ? `<li>시각만 보면 <b>${hrBest[0]}시</b>가 가장 높음 (${(hrBest[1] * 100).toFixed(1)}%)</li>` : ''}
+            ${rows[0] ? `<li>상위 원인 <b>${esc(rows[0][0])}</b>가 전체 불량의 ${pct(rows[0][1], t.ng, 1)}%</li>` : ''}
+            <li class="muted">히트맵은 달력 날짜·시각 기준이라 시프트 선택과 관계없이 전체를 봅니다. 투입 30개 미만인 칸은 흐리게 표시합니다.</li></ul></div>
+        </div>
+        <div class="pn"><div class="ph"><h2>요일 × 시간 ${hmName} 불량률</h2><div class="seg sm" data-h>${[['opr', 'OPR'], ['ovr', 'OVR'], ['all', '전체 불량']].map(([k, tt]) => `<button data-v="${k}" aria-pressed="${S.hm === k}">${tt}</button>`).join('')}</div></div>
+          <p class="hint">진할수록 불량률이 높음 (최대 ${(hmax * 100).toFixed(1)}%). 칸에 마우스를 올리면 투입·불량 수량이 나옵니다.</p>
+          <div class="sc"><table class="hm"><thead><tr><th></th>${Array.from({ length: 24 }, (_, h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>
+            ${order.map(wd => `<tr><th>${WD[wd]}</th>${Array.from({ length: 24 }, (_, h) => { const c = H[wd + '|' + h]; if (!c || !c[0]) return '<td class="na"></td>'; const r = c[1] / c[0], lv = Math.min(SEQ.length - 1, Math.floor(r / hmax * (SEQ.length - 1))); return `<td data-t="${WD[wd]}요일 ${h}시|${c[0]}|${c[1]}" style="background:${SEQ[lv]};${c[0] < 30 ? 'opacity:.35' : ''};color:${lv > 6 ? '#fff' : '#1e293b'}">${(r * 100).toFixed(0)}</td>`; }).join('')}</tr>`).join('')}
+          </tbody></table></div></div>`;
+      body.querySelector('[data-h]').querySelectorAll('button').forEach(b => b.onclick = () => { S.hm = b.dataset.v; render(); });
+      body.querySelectorAll('td[data-t]').forEach(td => {
+        td.onpointermove = ev => { const [lab, n, ng] = td.dataset.t.split('|'); tip(ev, `<div class="td">${lab}</div><div class="tr"><b>${pct(+ng, +n, 2)}%</b><span>${hmName} ${fmt(+ng)} / 투입 ${fmt(+n)}</span></div>`); };
+        td.onpointerleave = ev => tip(ev, null);
+      });
+    }
+
+    // ③ 팔레트(지그)
+    function pallet(body, p) {
+      const k = S.pm === 'opr' ? 4 : S.pm === 'ovr' ? 5 : 3, name = S.pm === 'opr' ? 'OPR' : S.pm === 'ovr' ? 'OVR' : '전체 불량';
+      const agg = D.pallets.map(() => [0, 0]);
+      D.pl.forEach(r => { if (inP(days[r[0]], p)) { agg[r[1]][0] += r[2]; agg[r[1]][1] += r[k]; } });
+      const N = agg.reduce((a, c) => a + c[0], 0), X = agg.reduce((a, c) => a + c[1], 0), pbar = N ? X / N : 0;
+      const rows = D.pallets.map((pl, i) => ({ pl, n: agg[i][0], x: agg[i][1], r: agg[i][0] ? agg[i][1] / agg[i][0] : 0 }))
+        .filter(r => r.n).map(r => ({ ...r, ucl: pbar + 3 * Math.sqrt(pbar * (1 - pbar) / r.n) })).sort((a, b) => b.r - a.r);
+      rows.forEach(r => r.flag = r.r > r.ucl);
+      const mx = Math.max(...rows.map(r => r.r), pbar) || 1;
+      if (!S.pal || !rows.some(r => r.pl === S.pal)) S.pal = rows[0]?.pl;
+      body.innerHTML = `
+        <div class="pn"><div class="ph"><h2>팔레트별 ${name} 불량률</h2><div class="seg sm" data-p>${[['opr', 'OPR'], ['ovr', 'OVR'], ['all', '전체 불량']].map(([kk, tt]) => `<button data-v="${kk}" aria-pressed="${S.pm === kk}">${tt}</button>`).join('')}</div></div>
+          <p class="hint">기간 평균 ${(pbar * 100).toFixed(2)}% (점선). 사용 횟수를 고려한 관리한계(평균 + 3σ)를 넘으면 <b style="color:${C_ALERT}">주의</b>로 표시합니다. 팔레트는 A+B 합계입니다. 막대를 누르면 아래에 추이가 나옵니다.</p>
+          <div class="par pal">${rows.map(r => `<button class="rt" data-pl="${esc(r.pl)}" aria-pressed="${r.pl === S.pal}"><span class="nm">${esc(r.pl)} ${r.flag ? `<em class="flag">주의</em>` : ''}</span><span class="trk"><span class="fil" style="width:${r.r / mx * 100}%;background:${r.flag ? C_ALERT : C_OPR}"></span><span class="avg" style="left:${pbar / mx * 100}%"></span></span><span class="pc" style="color:${r.flag ? C_ALERT : '#1e293b'}">${(r.r * 100).toFixed(2)}%</span><span class="n">${fmt(r.x)}</span><span class="cm">/ ${fmt(r.n)}회</span></button>`).join('')}</div></div>
+        <div class="pn"><h2>${esc(S.pal || '')} 주별 ${name} 불량률 · 전체 평균과 비교</h2><div class="ch" data-c="pal"></div>${legend([[C_OPR, S.pal || '', 1], ['#52514e', '전체 팔레트', 1]])}</div>`;
+      body.querySelector('[data-p]').querySelectorAll('button').forEach(b => b.onclick = () => { S.pm = b.dataset.v; render(); });
+      body.querySelectorAll('[data-pl]').forEach(b => b.onclick = () => { S.pal = b.dataset.pl; render(); });
+      const pidx = D.pallets.indexOf(S.pal), wk = {}, keys = [];
+      D.pl.forEach(r => {
+        const day = days[r[0]]; if (!inP(day, p)) return;
+        const kk = bucketKey(day, 'w'); if (!wk[kk]) { wk[kk] = [0, 0, 0, 0]; keys.push(kk); }
+        wk[kk][0] += r[2]; wk[kk][1] += r[k]; if (r[1] === pidx) { wk[kk][2] += r[2]; wk[kk][3] += r[k]; }
+      });
+      keys.sort();
+      chart(body.querySelector('[data-c="pal"]'), {
+        cats: keys.map(kk => bucketLabel(kk, 'w')), h: 200, yfmt: v => v + '%',
+        series: [{ c: C_OPR, v: keys.map(kk => wk[kk][2] ? wk[kk][3] / wk[kk][2] * 100 : null) }, { c: '#52514e', dash: 1, v: keys.map(kk => wk[kk][0] ? wk[kk][1] / wk[kk][0] * 100 : null) }],
+        tip: i => { const w = wk[keys[i]]; return `<div class="td">${bucketLabel(keys[i], 'w')}</div>` + tipRow(C_OPR, pct(w[3], w[2]) + '%', ` ${S.pal} ${w[3]}/${w[2]}`) + tipRow('#52514e', pct(w[1], w[0]) + '%', ` 전체 ${fmt(w[1])}/${fmt(w[0])}`); },
+      });
+    }
+
+    // ⑥ 재작업
+    function rework(body, p) {
+      const U = D.units.filter(u => inP(days[u[0]], p) && shiftOk(u[1]));
+      const done = U.filter(u => u[5]), good = U.filter(u => u[5] === 1), none = U.filter(u => !u[5]);
+      const lead = LEAD.map(([lab, a, b]) => [lab, done.filter(u => u[4] >= a && u[4] < b).length]).concat([['미처리', none.length]]);
+      const lmax = Math.max(...lead.map(l => l[1]), 1);
+      // 대기 재고: 날짜마다 (그날까지 불량 난 제품) − (그날까지 재작업 들어간 제품). 전체 이력으로 계산 후 기간만 표시
+      const addNg = new Array(days.length).fill(0), addRw = new Array(days.length).fill(0);
+      D.units.forEach(u => { if (!shiftOk(u[1])) return; addNg[u[0]]++; if (u[3] >= 0) addRw[u[3]]++; });
+      let bl = 0; const back = days.map((d, i) => (bl += addNg[i] - addRw[i]));
+      const idx = days.map((d, i) => i).filter(i => inP(days[i], p));
+      const pend = D.pend.filter(r => inP(days[r[1]], p) && shiftOk(r[2])).sort((a, b) => a[1] - b[1]);
+      const age = i => Math.round((new Date(last + 'T00:00:00') - new Date(days[i] + 'T00:00:00')) / 864e5);
+      body.innerHTML = `
+        <div class="story"><div><div class="big">${pct(good.length, done.length, 1)}<small>%</small></div><div class="cap">재작업 후 양품률</div></div>
+          <div class="facts">
+            <span>기간 최초불량 제품 <b>${fmt(U.length)}</b></span><span>재작업 투입 <b>${fmt(done.length)}</b> (${pct(done.length, U.length, 1)}%)</span>
+            <span>재작업 양품 <b>${fmt(good.length)}</b></span><span>재작업 후에도 불량 <b>${fmt(done.length - good.length)}</b></span>
+            <span>아직 미처리 <b style="color:${C_ALERT}">${fmt(none.length)}</b></span>
+            <span class="muted">${md(last)} 기준 전체 대기 재고 ${fmt(back[back.length - 1])}개</span></div></div>
+        <div class="g2">
+          <div class="pn"><h2>불량 → 재작업까지 걸린 시간</h2><p class="hint">불량 난 시각부터 처음 재검사한 시각까지</p>
+            <div class="par">${lead.map(([lab, v]) => `<div class="rt"><span class="nm">${lab}</span><span class="trk"><span class="fil" style="width:${v / lmax * 100}%;background:${lab === '미처리' ? C_ALERT : C_OPR}"></span></span><span class="n">${fmt(v)}</span><span class="pc">${pct(v, U.length, 1)}%</span><span></span></div>`).join('')}</div></div>
+          <div class="pn"><h2>재작업 대기 재고 추이</h2><p class="hint">그날까지 불량 난 제품 중 아직 재작업에 안 들어간 수량</p><div class="ch" data-c="back"></div></div>
+        </div>
+        <div class="pn"><h2>미처리 LOT <span class="muted">${fmt(pend.length)}개 · 오래된 순</span></h2><p class="hint">불량 이후 재검사 기록이 없는 제품입니다. LOT을 누르면 검사 이력을 봅니다.</p>
+          <div class="sc tb" style="max-height:360px"><table><thead><tr><th>LOT</th><th>불량 생산일</th><th>시프트</th><th>원인</th><th>경과</th></tr></thead><tbody>
+          ${pend.slice(0, 500).map(r => `<tr><td><a href="#" data-lot="${esc(r[0])}">${esc(r[0])}</a></td><td>${days[r[1]]}</td><td>${r[2] ? 'B' : 'A'}</td><td>${esc(D.causes[r[3]])}</td><td>${age(r[1])}일</td></tr>`).join('')}
+          </tbody></table>${pend.length > 500 ? `<p class="hint">처음 500개만 표시</p>` : ''}</div></div>`;
+      chart(body.querySelector('[data-c="back"]'), {
+        cats: idx.map(i => md(days[i])), h: 210,
+        series: [{ c: C_ALERT, v: idx.map(i => back[i]) }],
+        tip: i => `<div class="td">${days[idx[i]]}</div>` + tipRow(C_ALERT, fmt(back[idx[i]]) + '개', ' 대기') + `<div class="tr"><span>불량 +${addNg[idx[i]]} · 재작업 −${addRw[idx[i]]}</span></div>`,
+      });
+      body.querySelectorAll('[data-lot]').forEach(a => a.onclick = e => { e.preventDefault(); S.lot = a.dataset.lot; S.tab = 'lot'; render(); });
+    }
+
+    // ⑧ LOT 추적
+    function lot(body) {
+      body.innerHTML = `
+        <div class="pn"><h2>LOT(MARKING) 검사 이력</h2><p class="hint">MARKING 전체(예: 26194A0001)를 넣으면 그 제품의 모든 검사 이력을, 앞부분만(예: 26194A) 넣으면 해당 LOT 목록을 보여줍니다.</p>
+          <form class="lotf"><input data-q placeholder="MARKING 입력" value="${esc(S.lot)}" autocomplete="off"><button>검색</button></form><div class="lotr"></div></div>`;
+      const out = body.querySelector('.lotr'), form = body.querySelector('form');
+      form.onsubmit = e => { e.preventDefault(); S.lot = form.querySelector('[data-q]').value.trim().toUpperCase(); search(); };
+      async function search() {
+        const q = S.lot;
+        if (!q) { out.innerHTML = ''; return; }
+        const yy = +q.slice(0, 2), doy = +q.slice(2, 5);
+        if (q.length < 5 || isNaN(yy) || isNaN(doy) || doy < 1 || doy > 366) { out.innerHTML = '<div class="empty">MARKING 앞 5자리(연도 2자리 + 일차 3자리)가 필요합니다.</div>'; return; }
+        const d = new Date(2000 + yy, 0, 1); d.setDate(doy);
+        const ch = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        out.innerHTML = '<div class="empty">불러오는 중…</div>';
+        // 공개 사이트에는 LOT 원본(lots/)을 올리지 않으므로 파일이 없으면 그 사실을 알려 줌
+        try { if (!lots[ch]) await ftivLoad('lots/' + ch + '.js'); } catch (e) { out.innerHTML = `<div class="empty">${esc(ch)} LOT 원본을 불러오지 못했습니다. 제품별 측정값 원본은 보안상 사이트에 올리지 않았습니다.</div>`; return; }
+        const L = lots[ch] || {};
+        if (L[q]) return show(q, L[q]);
+        const hits = Object.keys(L).filter(k => k.startsWith(q)).sort();
+        if (!hits.length) { out.innerHTML = `<div class="empty">${esc(q)} 에 해당하는 기록이 없습니다.</div>`; return; }
+        const st = rows => rows.some(r => r[1]) ? ['양품', 'ok'] : ['불량', 'ng'];
+        out.innerHTML = `<p class="hint">${fmt(hits.length)}개 LOT${hits.length > 300 ? ' (처음 300개)' : ''}</p><div class="sc tb" style="max-height:420px"><table><thead><tr><th>LOT</th><th>최초 검사</th><th>검사 횟수</th><th>최종</th></tr></thead><tbody>
+          ${hits.slice(0, 300).map(k => { const r = L[k], s = st(r); return `<tr><td><a href="#" data-lot="${esc(k)}">${esc(k)}</a></td><td>${esc(r[0][0])}</td><td>${r.length}</td><td><span class="pill ${s[1]}">${s[0]}</span></td></tr>`; }).join('')}</tbody></table></div>`;
+        out.querySelectorAll('[data-lot]').forEach(a => a.onclick = e => { e.preventDefault(); S.lot = a.dataset.lot; form.querySelector('[data-q]').value = S.lot; search(); });
+      }
+      function show(q, rows) {
+        const fin = rows.some(r => r[1]), f = rows[0];
+        out.innerHTML = `
+          <div class="lotsum"><span class="pill ${fin ? 'ok' : 'ng'}">${fin ? '최종 양품' : '양품 기록 없음'}</span>
+            <span>최초 검사 <b>${esc(f[0])}</b> (${esc(f[4])} ${esc(f[5])}조)</span><span>검사 <b>${rows.length}</b>회</span>
+            <span>팔레트 <b>${esc([...new Set(rows.map(r => r[2]).filter(Boolean))].join(', ') || '-')}</b></span></div>
+          <div class="sc tb"><table class="lt"><thead><tr><th>#</th><th>검사 시각</th><th>생산일·조</th><th>결과</th><th>팔레트</th><th>불량원인</th>${MEAS.map(m => `<th>${m[0]}</th>`).join('')}</tr></thead><tbody>
+          ${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r[0])}</td><td>${esc(r[4].slice(5))} ${esc(r[5])}</td><td><span class="pill ${r[1] ? 'ok' : 'ng'}">${r[1] ? '양품' : '불량'}</span></td><td>${esc(r[2])}</td><td class="${r[3] >= 0 ? 'ngc' : ''}">${r[3] >= 0 ? esc(D.causes[r[3]]) : ''}</td>${r.slice(6).map(v => `<td>${v == null ? '<span class="muted">-</span>' : v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+          <p class="hint">측정값이 비어 있는(-) 공정은 그 앞 공정에서 불량이 나 측정하지 않은 것입니다.</p>`;
+      }
+      search();
+    }
+
+    render();
+    let rt = null;
+    const onResize = () => { clearTimeout(rt); rt = setTimeout(() => { if (root.isConnected && S.tab !== 'lot') render(); }, 150); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }
+
+  const CSS = `
+.ftv{--ink:#1e293b;--sub:#64748b;--faint:#94a3b8;--line:#e2e8f0;--bg:#f1f5f9;font-size:14px;color:var(--ink)}
+.ftv .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:14px}
+.ftv .ttl{font-size:15px;margin-right:6px}
+.ftv .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.ftv .seg button{padding:6px 12px;font-size:13px;color:var(--sub);background:#fff}
+.ftv .seg button[aria-pressed="true"]{background:#1e293b;color:#fff;font-weight:700}
+.ftv .seg.sm button{padding:4px 10px;font-size:12px}
+.ftv input[type=date],.ftv .lotf input{font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:9px;background:#fff}
+.ftv .lbl{font-size:12px;color:var(--faint)}.ftv .sp{flex:1}
+.ftv .story{display:grid;grid-template-columns:auto 1fr;gap:4px 28px;align-items:center;background:#fff;border:1px solid var(--line);border-left:5px solid #005eb8;border-radius:12px;padding:16px 20px;margin-bottom:14px}
+.ftv .big{font-size:42px;font-weight:900;line-height:1;color:#005eb8;font-variant-numeric:tabular-nums}
+.ftv .big small{font-size:16px;color:var(--sub);font-weight:500;margin-left:4px}
+.ftv .cap{font-size:13px;color:var(--sub);margin-top:4px}
+.ftv .facts{display:flex;flex-wrap:wrap;gap:6px 26px;font-size:13px;color:var(--sub)}
+.ftv .facts b{color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
+.ftv .dl{font-weight:700;margin-left:6px}.ftv .dl.up{color:#c8243f}.ftv .dl.dn{color:#0f7b52}
+.ftv .muted{color:var(--faint);font-weight:400}
+.ftv .g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
+.ftv .g2 .pn{margin-bottom:0}
+@media (max-width:1100px){.ftv .g2{grid-template-columns:minmax(0,1fr)}.ftv .g2 .pn{margin-bottom:14px}}
+.ftv .pn{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0;margin-bottom:14px}
+.ftv .ph{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.ftv .pn h2{font-size:15px;margin:0 0 2px;font-weight:700}
+.ftv .hint{font-size:12px;color:var(--faint);margin:0 0 10px}
+.ftv .ch svg{display:block}
+.ftv .ch text{font-size:11px;fill:#8a8984;font-variant-numeric:tabular-nums}
+.ftv .lg{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--sub);margin-top:6px}
+.ftv .lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.ftv .par{display:flex;flex-direction:column;gap:5px}
+.ftv .rt{display:grid;grid-template-columns:minmax(90px,150px) 1fr 66px 56px 70px;align-items:center;gap:8px;font-size:13px;border-radius:6px;padding:3px 4px;text-align:left;background:none;width:100%}
+.ftv button.rt{cursor:pointer}.ftv button.rt:hover,.ftv .rt[aria-pressed="true"]{background:#eef5fc}
+.ftv .rt .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ftv .trk{position:relative;display:block;height:14px;background:var(--bg);border-radius:4px;overflow:hidden}
+.ftv .fil{display:block;height:100%;border-radius:4px}
+.ftv .avg{position:absolute;top:-2px;bottom:-2px;border-left:2px dashed #52514e}
+.ftv .n{text-align:right;font-variant-numeric:tabular-nums}
+.ftv .pc{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.ftv .cm{text-align:right;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.ftv .flag{font-style:normal;font-size:11px;font-weight:700;color:#fff;background:#e34948;border-radius:4px;padding:0 5px;margin-left:4px}
+.ftv .sum{margin:6px 0 0;padding-left:18px;line-height:1.9;font-size:13px}
+.ftv .sc{overflow:auto}
+.ftv table.hm{border-collapse:separate;border-spacing:2px;font-size:11px;width:100%;min-width:640px}
+.ftv table.hm th{font-weight:500;color:var(--faint);padding:2px;text-align:center}
+.ftv table.hm td{height:26px;text-align:center;border-radius:3px;font-variant-numeric:tabular-nums;cursor:default}
+.ftv table.hm td.na{background:#f8fafc}
+.ftv .tb table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+.ftv .tb th{position:sticky;top:0;background:#f8fafc;color:var(--sub);font-weight:600;padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.ftv .tb td{padding:5px 8px;border-bottom:1px solid #f1f5f9;text-align:right;white-space:nowrap}
+.ftv .tb th:first-child,.ftv .tb td:first-child{text-align:left}
+.ftv details.tb summary{cursor:pointer;font-weight:700;font-size:13px}
+.ftv details.tb[open] summary{margin-bottom:8px}
+.ftv a[data-lot]{color:#005eb8;text-decoration:underline;font-family:ui-monospace,Consolas,monospace}
+.ftv .lotf{display:flex;gap:8px;margin-bottom:12px}.ftv .lotf input{width:240px;font-family:ui-monospace,Consolas,monospace;font-size:14px}
+.ftv .lotf button{padding:6px 16px;border-radius:9px;background:#1e293b;color:#fff;font-weight:700;font-size:13px}
+.ftv .lotsum{display:flex;flex-wrap:wrap;gap:6px 22px;align-items:center;font-size:13px;color:var(--sub);margin-bottom:10px}
+.ftv .lotsum b{color:var(--ink)}
+.ftv .pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 10px}
+.ftv .pill.ok{background:#e3f4ec;color:#0f7b52}.ftv .pill.ng{background:#fde8e8;color:#c8243f}
+.ftv td.ngc{color:#c8243f;font-weight:700}
+.ftv .empty{padding:14px;color:var(--faint);text-align:center;font-size:13px}
+.ftv .foot{font-size:11px;color:var(--faint);text-align:right}
+.ftv-tip{position:fixed;z-index:9999;pointer-events:none;display:none;background:#fff;border:1px solid #dcdbd5;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);padding:8px 10px;font-size:12px;color:#52514e;min-width:150px}
+.ftv-tip .td{margin-bottom:4px}.ftv-tip .tr{display:flex;align-items:center;gap:6px}
+.ftv-tip .tr i{width:12px;height:3px;border-radius:2px}.ftv-tip .tr b{color:#0b0b0b;font-size:13px;font-variant-numeric:tabular-nums}
+.ftv-frame{display:block;width:100%;border:0;border-radius:12px;background:#dfe3d6}`;
+  function style() {
+    if (document.getElementById('ftv-style')) return;
+    const el = document.createElement('style'); el.id = 'ftv-style'; el.textContent = CSS; document.head.appendChild(el);
+  }
+  return { mount, style };
+})();
+
+// 사이드바 FTIV → 현황판(iframe) / 세부데이터
+function FtivPanel({ view }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    FTIVD.style();
+    if (view !== 'detail') return;
+    const root = ref.current;
+    root.innerHTML = '<div class="ftv"><div class="empty">PLC 데이터 불러오는 중…</div></div>';
+    let alive = true, unmount = null;
+    ftivLoad('detail.js')
+      .then(() => { if (alive) unmount = FTIVD.mount(root.firstChild, window.FTIV_DETAIL); })
+      .catch(e => { if (alive) root.firstChild.innerHTML = `<div class="empty">${String(e.message || e)}</div>`; });
+    return () => { alive = false; if (unmount) unmount(); };
+  }, [view]);
+  if (view === 'board') {
+    return React.createElement("iframe", {
+      src: FTIV_BASE + 'index.html', title: 'FTIV 현황판', className: 'ftv-frame',
+      style: { height: 'calc(100vh - 200px)', minHeight: 600 }
+    });
+  }
+  return React.createElement("div", { ref });
+}
+// </FTIV-PANEL>
 
 // V141: 시작 로딩 진행 표시 — 단계(목록 → 파일) + 파일별 내려받기 %
 function LoadProgress({ prog }) {
@@ -7378,7 +7844,7 @@ function App() {
     grp_defect: 'octagon', defect: 'octagon', defecttype: 'bars',
     grp_rework: 'rotate', rework: 'rotate', reworktype: 'bars',
     downtime: 'pause', pcsmh: 'user', grp_cap: 'ruler', capacity: 'ruler', caputil: 'bars',
-    tool: 'wrench', lotftfr: 'box', grp_ftfr: 'check', ftfr: 'check', ftfrdetail: 'zoom',
+    tool: 'wrench', lotftfr: 'box', grp_ftfr: 'check', ftfr: 'check', ftfrdetail: 'zoom', grp_ftiv: 'sliders', ftivboard: 'grid', ftivdetail: 'bars',
     orgchart: 'org', validate: 'shield', formula: 'sliders', upload: 'folder', export: 'download'
   };
   const NavIcon = ({ id, size = 18 }) => React.createElement("svg", {
@@ -7489,6 +7955,14 @@ function App() {
       { id: 'ftfrdetail', icon: '🔬', label: 'FTFR(세부)' }
     ]
   }, {
+    id: 'grp_ftiv',
+    icon: '🛢️',
+    label: 'FTIV',
+    children: [
+      { id: 'ftivboard', icon: '📋', label: 'FTIV 현황판' },
+      { id: 'ftivdetail', icon: '🔬', label: 'FTIV 세부데이터' }
+    ]
+  }, {
     id: 'orgchart',
     icon: '🏢',
     label: '조직도'
@@ -7536,7 +8010,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-px bg-slate-100 rounded text-[11px] font-semibold text-slate-600 cursor-help hover:bg-slate-200 transition-colors tabular"
-  }, "V144"), React.createElement("div", {
+  }, "V145"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -22236,7 +22710,7 @@ function App() {
     }, Math.round(r.total).toLocaleString()), React.createElement("td", {
       className: `px-3 py-1.5 text-right font-mono font-bold ${ftfrText(r.ftfr)}`
     }, Math.round(r.ftfr).toLocaleString(), " ppm")))))))));
-  })(), activeTab === 'ftfrdetail' && (tcpData || feData) && (() => {
+  })(), activeTab === 'ftivboard' && React.createElement(FtivPanel, { view: 'board' }), activeTab === 'ftivdetail' && React.createElement(FtivPanel, { view: 'detail' }), activeTab === 'ftfrdetail' && (tcpData || feData) && (() => {
     const collectLogs = (year, month) => {
       const result = [];
       fdSections.forEach(sec => {
