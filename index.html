@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V147</title>
+  <title>MFG Report V148</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -331,6 +331,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V148',
+  d: '2026-10-26',
+  items: ['FTIV 세부데이터에 «원본데이터» 탭 추가 — 공유저장소에 저장된 PLC 검사 기록을 엑셀 열 그대로 보기(생산일·조, 시간대, 불량원인, 구분 계산 열 포함), 양/불·구분·불량원인·팔레트·MARKING 으로 걸러보기, 100건씩 쪽 넘김, CSV 내려받기', 'FTIV 데이터 받기가 중간에 끊기면 3번까지 다시 시도']
+}, {
   v: 'V147',
   d: '2026-10-24',
   items: ['FTIV 엑셀 올리기는 추가분만 — 이미 저장된 검사 기록(시각·MARKING·양불·P/L 같음)은 빼고 새 기록만 더해 다시 계산, 새 기록이 없으면 저장하지 않음. «교체 올리기»로 전체 다시 만들기도 가능', 'FTIV 세부데이터에 «원인별 트렌드»(OPR·OVR·코일조립 등 원인마다 불량률 그래프)와 «측정값 트렌드»(OPR·OVR 리크, 스프링 압력, 코일 저항, 프레셔드롭 등 일/주/월별 중앙값·10~90%·상위 1%와 판정 한계) 추가', '불량 클릭 → LOT 목록 — 트렌드 막대·원인 그래프·파레토·팔레트·재작업 수량, 현황판의 불량 칸을 누르면 해당 LOT 목록, LOT 을 누르면 검사 이력', '기간 필터가 하루 앞당겨지던 문제 수정 (90일 → 실제 91일)']
@@ -1527,7 +1531,14 @@ const FTIVSRC = (function () {
     let b = await __idb.get(key);
     if (!b) {
       step(`FTIV 데이터 받는 중… (${Math.round((+f.size || 0) / 1024 / 1024 * 10) / 10}MB)`);
-      const j = await (await fetch(gas + '?action=load&id=' + encodeURIComponent(f.id) + '&_=' + Date.now())).json();
+      // 시작할 때 TCP/FE 를 같이 받는 중이면 가끔 끊기므로 다른 백업처럼 3번까지 다시 시도
+      let j = null, err = null;
+      for (let k = 0; k < 3 && !j; k++) {
+        if (k) { step(`FTIV 데이터 다시 받는 중… (${k + 1}/3)`); await new Promise(r => setTimeout(r, 1500)); }
+        try { const r = await fetch(gas + '?action=load&id=' + encodeURIComponent(f.id) + '&_=' + Date.now()); if (!r.ok) throw new Error('HTTP ' + r.status); j = await r.json(); }
+        catch (e) { err = e; }
+      }
+      if (!j) throw err;
       step('압축 푸는 중…');
       b = await __normalizeBackup(j.data);
       if (!b || !b.data || !b.detail) throw new Error('FTIV 데이터 파일 형식이 맞지 않습니다');
@@ -1840,7 +1851,7 @@ const FTIVD = (function () {
       root.innerHTML = `
         <div class="bar">
           <b class="ttl">FTIV · PLC 세부데이터</b>
-          <div class="seg" data-g="tab">${[['trend', '품질 트렌드'], ['causes', '원인별 트렌드'], ['meas', '측정값 트렌드'], ['pattern', '불량 패턴'], ['pallet', '팔레트'], ['rework', '재작업'], ['lot', 'LOT 추적']].map(([k, t]) => `<button data-v="${k}" aria-pressed="${S.tab === k}">${t}</button>`).join('')}</div>
+          <div class="seg" data-g="tab">${[['trend', '품질 트렌드'], ['causes', '원인별 트렌드'], ['meas', '측정값 트렌드'], ['pattern', '불량 패턴'], ['pallet', '팔레트'], ['rework', '재작업'], ['lot', 'LOT 추적'], ['raw', '원본데이터']].map(([k, t]) => `<button data-v="${k}" aria-pressed="${S.tab === k}">${t}</button>`).join('')}</div>
           <span class="sp"></span>
           ${S.tab === 'lot' ? '' : `
           <div class="seg" data-g="range">${[['30', '30일'], ['90', '90일'], ['all', '전체'], ['custom', '기간 지정']].map(([k, t]) => `<button data-v="${k}" aria-pressed="${S.range === k}">${t}</button>`).join('')}</div>
@@ -1852,7 +1863,7 @@ const FTIVD = (function () {
       root.querySelectorAll('[data-g]').forEach(g => g.querySelectorAll('button').forEach(b => b.onclick = () => { S[g.dataset.g] = b.dataset.v; if (g.dataset.g === 'range' && b.dataset.v === 'custom' && !S.from) { [S.from, S.to] = p; } render(); }));
       root.querySelectorAll('[data-f]').forEach(inp => inp.onchange = () => { S[inp.dataset.f] = inp.value; render(); });
       const body = root.querySelector('.body');
-      ({ trend, causes, meas, pattern, pallet, rework, lot })[S.tab](body, p);
+      ({ trend, causes, meas, pattern, pallet, rework, lot, raw })[S.tab](body, p);
     }
     const unitSeg = (attr, cur) => `<div class="seg sm" ${attr}>${[['d', '일'], ['w', '주'], ['m', '월']].map(([k, tt]) => `<button data-v="${k}" aria-pressed="${cur === k}">${tt}</button>`).join('')}</div>`;
     const bucketUnits = (keys, i, unit, causeIdx) => { const [a, b] = bucketRange(keys[i], unit); return unitsIn([a, b], causeIdx); };
@@ -2110,6 +2121,64 @@ const FTIVD = (function () {
       search();
     }
 
+    // ⑨ 원본데이터: PLC 엑셀 그대로의 열 + 계산 열(생산일·조, 시간대, 원인, 구분). 기간·시프트·조건으로 걸러서 쪽 단위로 보여줌
+    const RAW_COLS = [['s', '생산시간'], ['res', '양/불'], ['pl', 'P/L'], ['mark', 'MARKING'], ['sp1', '스프링 압력1차'], ['sp2', '스프링 압력2차'], ['pole', '폴 조립'], ['coilasm', '코일 조립'], ['coilr', '코일 저항'],
+      ['hl1', '하우징 리크 #1'], ['hl2', '하우징 리크 #2'], ['opr', 'OPR 리크'], ['ovr', 'OVR 리크'], ['pd1f', '프레셔드롭#1 유량'], ['pd1p', '프레셔드롭#1 압력'], ['pd2f', '프레셔드롭#2 유량'], ['pd2p', '프레셔드롭#2 압력']];
+    const kindOf = t => t.dupGood ? '중복 양품' : t.retest ? (t.own ? '재검사' : '이전 대기품 재작업') : '최초';
+    const RF = Object.assign({ res: 'all', kind: 'all', cause: 'all', pl: 'all', q: '', page: 0, desc: true }, S.rf || {});
+    function raw(body, p) {
+      S.rf = RF;
+      const all = ctx.rows || [];
+      const pls = [...new Set(all.map(t => t.pl).filter(Boolean))].sort();
+      const q = RF.q.trim().toUpperCase();
+      const F = all.filter(t => inP(t.day, p) && shiftOkT(t)
+        && (RF.res === 'all' || (RF.res === 'ok' ? t.res === '양품' : t.res === '불량'))
+        && (RF.kind === 'all' || (RF.kind === 'first' ? !t.retest && !t.dupGood : RF.kind === 'retest' ? t.retest && !t.dupGood : t.dupGood))
+        && (RF.cause === 'all' || t.cause === RF.cause)
+        && (RF.pl === 'all' || t.pl === RF.pl)
+        && (!q || (t.mark || '').toUpperCase().includes(q)));
+      if (RF.desc) F.reverse();
+      const PER = 100, pages = Math.max(1, Math.ceil(F.length / PER));
+      RF.page = Math.min(RF.page, pages - 1);
+      const P = F.slice(RF.page * PER, RF.page * PER + PER);
+      const cell = (t, k) => { const v = k === 's' ? C.tsStr(t.s) : t[k]; return v == null ? '<span class="muted">-</span>' : esc(v); };
+      const sel = (k, opts) => `<select data-rf="${k}">${opts.map(([v, l]) => `<option value="${esc(v)}" ${RF[k] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+      body.innerHTML = `
+        <div class="pn"><div class="ph"><h2>원본데이터 <span class="muted">${fmt(F.length)}건 / 전체 ${fmt(all.length)}건</span></h2>
+          <button class="dl-btn" data-csv>CSV 내려받기 (${fmt(F.length)}건)</button></div>
+          <p class="hint">공유저장소에 저장된 PLC 검사 기록 그대로입니다. 오른쪽 회색 열(생산일·조, 시간대, 불량원인, 구분)은 현황판 계산에 쓴 값입니다. 위의 기간·시프트 선택이 같이 적용됩니다.</p>
+          <div class="rawf">
+            ${sel('res', [['all', '양/불 전체'], ['ok', '양품'], ['ng', '불량']])}
+            ${sel('kind', [['all', '구분 전체'], ['first', '최초 검사'], ['retest', '재검사'], ['dup', '중복 양품']])}
+            ${sel('cause', [['all', '불량원인 전체']].concat(D.causes.map(c => [c, c])))}
+            ${sel('pl', [['all', '팔레트 전체']].concat(pls.map(x => [x, x])))}
+            <input data-rq placeholder="MARKING 포함 검색" value="${esc(RF.q)}">
+            <button data-sort>${RF.desc ? '최신순 ▼' : '오래된순 ▲'}</button>
+            <span class="sp"></span>
+            <span class="pg"><button data-pg="-1" ${RF.page ? '' : 'disabled'}>◀</button> ${fmt(RF.page + 1)} / ${fmt(pages)} 쪽 <button data-pg="1" ${RF.page < pages - 1 ? '' : 'disabled'}>▶</button></span>
+          </div>
+          <div class="sc tb raw"><table><thead><tr><th>#</th>${RAW_COLS.map(c => `<th>${c[1]}</th>`).join('')}<th class="calc">생산일·조</th><th class="calc">시간대</th><th class="calc">불량원인</th><th class="calc">구분</th></tr></thead><tbody>
+          ${P.map((t, i) => `<tr class="${t.ng ? 'ngr' : ''}"><td>${fmt(RF.page * PER + i + 1)}</td>${RAW_COLS.map(([k]) => k === 'mark' && t.valid ? `<td><a href="#" data-lot="${esc(t.mark)}">${esc(t.mark)}</a></td>` : k === 'res' ? `<td><span class="pill ${t.res === '양품' ? 'ok' : 'ng'}">${esc(t.res)}</span></td>` : `<td>${cell(t, k)}</td>`).join('')}<td class="calc">${esc(t.day.slice(5))} ${t.shift}</td><td class="calc">${esc(C.WINDOWS[t.shift][t.win].join('~'))}</td><td class="calc ${t.ng ? 'ngc' : ''}">${esc(t.cause)}</td><td class="calc">${kindOf(t)}</td></tr>`).join('') || `<tr><td colspan="${RAW_COLS.length + 5}" class="empty">조건에 맞는 기록이 없습니다.</td></tr>`}
+          </tbody></table></div></div>`;
+      body.querySelectorAll('[data-rf]').forEach(s => s.onchange = () => { RF[s.dataset.rf] = s.value; RF.page = 0; render(); });
+      const qi = body.querySelector('[data-rq]');
+      qi.onkeydown = e => { if (e.key === 'Enter') { RF.q = qi.value; RF.page = 0; render(); } };
+      qi.onchange = () => { RF.q = qi.value; RF.page = 0; render(); };
+      body.querySelector('[data-sort]').onclick = () => { RF.desc = !RF.desc; RF.page = 0; render(); };
+      body.querySelectorAll('[data-pg]').forEach(b => b.onclick = () => { RF.page += +b.dataset.pg; render(); });
+      body.querySelectorAll('[data-lot]').forEach(a => a.onclick = e => { e.preventDefault(); showLotModal(a.dataset.lot, ctx); });
+      body.querySelector('[data-csv]').onclick = () => {
+        const head = RAW_COLS.map(c => c[1]).concat(['생산일', '조', '시간대', '불량원인', '구분']);
+        const q2 = v => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+        const lines = [head.join(',')].concat(F.map(t => RAW_COLS.map(([k]) => q2(k === 's' ? C.tsStr(t.s) : t[k])).concat([t.day, t.shift, C.WINDOWS[t.shift][t.win].join('~'), t.cause, kindOf(t)].map(q2)).join(',')));
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+        a.download = `FTIV_원본데이터_${p[0]}_${p[1]}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      };
+    }
+
     render();
     let rt = null;
     const onResize = () => { clearTimeout(rt); rt = setTimeout(() => { if (root.isConnected && S.tab !== 'lot') render(); }, 150); };
@@ -2198,6 +2267,15 @@ const FTIVD = (function () {
 .ftv-modal .chips{margin-bottom:10px}
 .ftv-modal .hint{font-size:12px;color:#94a3b8;margin:8px 0 0}
 .ftv-modal .muted{color:#94a3b8}
+.ftv .rawf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.ftv .rawf select,.ftv .rawf input,.ftv .rawf button,.ftv .dl-btn{font-size:12px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.ftv .rawf input{width:170px;font-family:ui-monospace,Consolas,monospace}
+.ftv .rawf button:disabled{opacity:.4;cursor:default}.ftv .rawf .pg{font-size:12px;color:var(--sub)}
+.ftv .dl-btn{background:#1e293b;color:#fff;border-color:#1e293b;font-weight:700}
+.ftv .tb.raw{max-height:calc(100vh - 330px);min-height:300px}
+.ftv .tb.raw td,.ftv .tb.raw th{font-size:12px;padding:4px 7px}
+.ftv .tb.raw .calc{background:#f8fafc;color:#64748b}.ftv .tb.raw th.calc{background:#eef1f5}
+.ftv .tb.raw tr.ngr td:not(.calc){background:#fff7f7}
 .ftv-frame{display:block;width:100%;border:0;border-radius:12px;background:#dfe3d6}
 .ftv .srcbar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--sub);background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px 8px 6px 12px;margin-bottom:10px}
 .ftv .srcbar b{color:var(--ink)}.ftv .srcbar .err{color:#c8243f;font-weight:700}.ftv .srcbar .ok{color:#0f7b52}
@@ -8536,7 +8614,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-px bg-slate-100 rounded text-[11px] font-semibold text-slate-600 cursor-help hover:bg-slate-200 transition-colors tabular"
-  }, "V147"), React.createElement("div", {
+  }, "V148"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
