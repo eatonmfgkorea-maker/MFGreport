@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V149</title>
+  <title>MFG Report V155S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -50,273 +50,294 @@
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   </style>
-<!-- ==================== MFG 구글 인증 (자기완결) ==================== -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- ==================== MFG 서버 인증 (이름+비밀번호, 자기완결) ==================== -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function() {
-  // ===== 앱 식별자 — 앱마다 이 값만 다르게 =====
-  var APP_KEY = 'MFGreport';
   var APP_NAME = 'MFG Report';
-
-  var AUTH_URL = 'https://script.google.com/macros/s/AKfycbwOwQs6I_uAdHh7MSr8rKHJcxoCWxUg8D9WSiOWJJvYs8hwME93RU72hD8-angmTJsT/exec';
-  var CLIENT_ID = '407676513996-mp5mqdqtdg1jjkmq2rqg7kf69drjatqc.apps.googleusercontent.com';
+  var APP_VER = 'V155S';
+  var SB_DEFAULT_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co';
+  var SB_DEFAULT_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
+  var CFG_KEY = 'mfg-sb-test-cfg', AUTH_KEY = 'mfg-sb-test-auth', LAST_EMAIL = 'mfg-sb-test-last-email';
   var PORTAL_URL = 'https://eatonmfgkorea-maker.github.io/MFGManagement/';
 
-  // 로그인 유지 기간 (한 번 로그인하면 이 기간 동안 다시 묻지 않음)
-  var SESSION_DAYS = 180;
-  // 권한은 페이지를 열 때마다 서버에서 재확인한다.
-  // 서버가 응답하지 않으면 기존 권한을 그대로 유지해 접속이 끊기지 않게 한다.
-
-  var K_EMAIL = 'mfg_g_email', K_NAME = 'mfg_g_name', K_ROLE = 'mfg_g_role';
-  var K_APPS = 'mfg_g_apps', K_EXP = 'mfg_g_exp', K_CHK = 'mfg_g_lastcheck';
-
-  function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-  function del(k) { try { localStorage.removeItem(k); } catch (e) {} }
-
-  function clearSession() {
-    [K_EMAIL, K_NAME, K_ROLE, K_APPS, K_EXP, K_CHK, 'mfg_guest', 'mfg_auth_user'].forEach(del);
+  function getCfg() { return { url: SB_DEFAULT_URL, key: SB_DEFAULT_KEY }; }   // 서버 주소 고정
+  var ALLOW_GUEST = true;   // 게스트(로그인 없이 보기 전용) 허용 여부 — MFG Report만
+  var GUEST_KEY = 'mfgsb_guest';
+  function isGuestFlag() { try { if (localStorage.getItem(GUEST_KEY) === '1') return true; } catch (e) {} try { return sessionStorage.getItem(GUEST_KEY) === '1'; } catch (e) { return false; } }
+  function setGuestFlag(on) {
+    try { if (on) localStorage.setItem(GUEST_KEY, '1'); else localStorage.removeItem(GUEST_KEY); } catch (e) {}
+    try { if (on) sessionStorage.setItem(GUEST_KEY, '1'); else sessionStorage.removeItem(GUEST_KEY); } catch (e) {}
   }
-
-  function savedApps() {
-    try { return JSON.parse(get(K_APPS) || '[]'); } catch (e) { return []; }
-  }
-
-  // 저장된 세션이 유효하고 이 앱 권한이 있는가
-  function hasValidSession() {
-    // 로그인 없이 들어온 게스트 (구글 계정 없음)
-    if (get('mfg_guest') === '1' && !get(K_EMAIL)) return true;
-    var email = get(K_EMAIL);
-    var exp = parseInt(get(K_EXP) || '0', 10);
-    if (!email || !exp || Date.now() > exp) return false;
-    if (get(K_ROLE) === 'admin') return true;
-    return savedApps().indexOf(APP_KEY) !== -1;
-  }
-
-  // 전역으로 로그인 정보 제공 (앱에서 필요하면 사용)
-  function publish() {
-    window.MFG_USER = {
-      email: get(K_EMAIL) || '',
-      name: get(K_NAME) || '',
-      role: get(K_ROLE) || 'user',
-      apps: savedApps(),
-      isAdmin: get(K_ROLE) === 'admin',
-      isGuest: get(K_ROLE) === 'guest',
-      logout: function() { clearSession(); location.reload(); }
+  // 로그인 정보는 IndexedDB에 저장 — localStorage(5MB)는 같은 사이트의 여러 앱이 나눠 써서 꽉 차면 로그인이 저장되지 않음
+  var authStore = (function() {
+    var dbp = null;
+    function db() {
+      if (!dbp) dbp = new Promise(function(res, rej) {
+        var r = indexedDB.open('mfg_sb_auth', 1);
+        r.onupgradeneeded = function() { r.result.createObjectStore('kv'); };
+        r.onsuccess = function() { res(r.result); };
+        r.onerror = function() { rej(r.error); };
+      });
+      return dbp;
+    }
+    function run(mode, fn) {
+      return db().then(function(d) { return new Promise(function(res, rej) {
+        var t = d.transaction('kv', mode), q = fn(t.objectStore('kv'));
+        t.oncomplete = function() { res(q ? q.result : undefined); };
+        t.onerror = function() { rej(t.error); };
+      }); });
+    }
+    function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    return {
+      getItem: function(k) { return run('readonly', function(s) { return s.get(k); }).then(function(v) { return v != null ? v : lsGet(k); }, function() { return lsGet(k); }); },
+      setItem: function(k, v) { try { localStorage.setItem(k, v); } catch (e) {} return run('readwrite', function(s) { return s.put(v, k); }).catch(function() {}); },
+      removeItem: function(k) { try { localStorage.removeItem(k); } catch (e) {} return run('readwrite', function(s) { return s.delete(k); }).catch(function() {}); }
     };
+  })();
+  var cfg = getCfg(), client = null;
+  try { client = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: AUTH_KEY, storage: authStore } }); } catch (e) { console.error('서버 연결 초기화 실패', e); }
+  window.MFG_SB = client; window.MFG_USER = null;
+  if (ALLOW_GUEST && isGuestFlag()) window.MFG_USER = { email: '', name: '게스트', role: 'guest', isAdmin: false, isGuest: true, logout: function() { setGuestFlag(false); location.reload(); } };
+  var resolveReady; window.__sbReady = new Promise(function(r) { resolveReady = r; });
+  var errText = function(e) { if (!e) return '알 수 없는 오류'; var m = e.message || e.error_description || String(e); return /invalid login credentials/i.test(m) ? '이름 또는 비밀번호가 올바르지 않습니다.' : m; };
+  // 이름 → 내부 로그인 주소 (SQL login_email과 같은 규칙). '@'가 있으면 그대로
+  function idToEmail(id) {
+    id = String(id || '').trim();
+    if (id.indexOf('@') >= 0) return id.toLowerCase();
+    var b = new TextEncoder().encode(id), h = '';
+    for (var i = 0; i < b.length; i++) h += (b[i] < 16 ? '0' : '') + b[i].toString(16);
+    return 'u-' + h + '@mfg.local';
   }
+  function esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
-  function saveSession(d) {
-    // 역할이 guest면 기존 게스트 모드 플래그를 켜고, 아니면 끈다
-    if ((d.role || 'user') === 'guest') {
-      set('mfg_guest', '1');
-      set('mfg_auth_user', d.email || 'guest');
-    } else {
-      del('mfg_guest');
-      set('mfg_auth_user', d.email || '');
-    }
-    set(K_EMAIL, d.email || '');
-    set(K_NAME, d.name || '');
-    set(K_ROLE, d.role || 'user');
-    set(K_APPS, JSON.stringify(d.apps || []));
-    set(K_EXP, String(Date.now() + SESSION_DAYS * 86400000));
-    set(K_CHK, String(Date.now()));
-  }
-
-  function call(params, cb) {
-    var qs = Object.keys(params).map(function(k) {
-      return k + '=' + encodeURIComponent(params[k]);
-    }).join('&');
-    var tries = 0;
-    function go() {
-      tries++;
-      fetch(AUTH_URL + '?' + qs + '&_=' + Date.now())
-        .then(function(r) {
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          return r.json();
-        })
-        .then(function(d) { cb(d, null); })
-        .catch(function(e) {
-          if (tries < 3) { setTimeout(go, 1500 * tries); }
-          else { cb(null, e); }
-        });
-    }
-    go();
-  }
-
-  // 권한 재확인 — 서버가 «권한 없음»이라 답하면 즉시 차단,
-  // 서버가 응답하지 않으면(장애) 기존 세션을 그대로 유지한다.
-  function recheck() {
-    var email = get(K_EMAIL);
-    if (!email) return;
-    call({ action: 'checkAccess', app: APP_KEY, email: email }, function(d, err) {
-      if (err || !d) return;                 // 서버 장애 → 기존 권한 유지
-      if (d.ok) {                            // 여전히 접근 가능 → 최신 정보로 갱신
-        if (d.email) { saveSession(d); publish(); }
-        return;
-      }
-      // 서버가 명확히 거부 (권한 회수 · 차단 · 승인 취소)
-      clearSession();
-      var why = d.status === 'blocked' ? '계정이 차단되었습니다.'
-              : d.status === 'noapp' ? '이 앱의 접근 권한이 해제되었습니다.'
-              : '접근 권한이 없습니다.';
-      try { sessionStorage.setItem('mfg_revoked', why); } catch (e) {}
-      location.reload();
-    });
-  }
-
-  // ===== 이미 로그인된 경우 =====
-  if (hasValidSession()) {
-    if (!get(K_EMAIL)) {
-      // 익명 게스트 — 서버 확인 없이 제한 모드로 사용
-      set('mfg_guest', '1');
-      set('mfg_auth_user', 'guest');
-      window.MFG_USER = { email: '', name: '게스트', role: 'guest', apps: [],
-        isAdmin: false, isGuest: true,
-        logout: function() { clearSession(); location.reload(); } };
-      return;
-    }
-    if (get(K_ROLE) === 'guest') { set('mfg_guest', '1'); }
-    else { del('mfg_guest'); }
-    set('mfg_auth_user', get(K_EMAIL) || '');
-    publish();
-    recheck();
-    return;
-  }
-
-  // ===== 로그인 화면 =====
-  var css = 'font-family:Pretendard,"Malgun Gothic",-apple-system,sans-serif;';
+  function $(id) { return document.getElementById(id); }
+  var inp = 'width:100%;padding:0.6rem 0.75rem;border-radius:0.5rem;border:1px solid #475569;background:#0b1220;color:#e2e8f0;font-size:0.9rem;box-sizing:border-box;';
+  var btn = 'width:100%;padding:0.65rem;border:0;border-radius:0.5rem;background:#2563eb;color:#fff;font-weight:600;font-size:0.95rem;cursor:pointer;';
 
   function overlay() {
+    if ($('mfgAuthOverlay')) return;
     var div = document.createElement('div');
     div.id = 'mfgAuthOverlay';
-    div.style.cssText = 'position:fixed;inset:0;background:#f4f6f8;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;' + css;
+    div.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,26,0.96);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;font-family:Pretendard,"Malgun Gothic",-apple-system,sans-serif;';
     div.innerHTML =
-      '<div style="background:#fff;border:1px solid #e3e7eb;border-radius:12px;padding:2rem;width:100%;max-width:24rem;text-align:center;">' +
-        '<div style="display:inline-flex;align-items:center;justify-content:center;width:3.5rem;height:3.5rem;border-radius:1rem;background:#005eb8;margin-bottom:1rem;">' +
-          '<svg style="width:1.75rem;height:1.75rem;color:#fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>' +
-        '</div>' +
-        '<h2 style="font-size:1.35rem;font-weight:700;color:#111827;margin:0;">' + APP_NAME + '</h2>' +
-        '<p style="font-size:0.9rem;color:#5b6573;margin:0.5rem 0 1.5rem;">승인된 구글 계정으로 로그인하세요</p>' +
-        '<div id="mfgGsiBtn" style="display:flex;justify-content:center;min-height:44px;"></div>' +
-        '<div id="mfgAuthMsg" style="display:none;font-size:0.85rem;margin-top:1rem;padding:0.6rem 0.8rem;border-radius:0.5rem;line-height:1.6;word-break:break-all;"></div>' +
-        '<div style="margin-top:1.1rem;padding-top:1rem;border-top:1px solid #eef1f4;">' +
-          '<button id="mfgGuestBtn" style="width:100%;padding:0.6rem;background:#fff;color:#111827;font-weight:600;border:1px solid #cfd5dc;border-radius:6px;cursor:pointer;font-size:0.9rem;">게스트로 둘러보기</button>' +
-          '<p style="font-size:0.8rem;color:#6b7280;margin:0.6rem 0 0;">게스트는 일부 화면만 조회할 수 있습니다</p>' +
-        '</div>' +
-        '<div style="margin-top:1rem;padding-top:0.9rem;border-top:1px solid #eef1f4;">' +
-          '<a href="' + PORTAL_URL + '" style="font-size:0.85rem;color:#005eb8;text-decoration:none;">← 메인 포털로 돌아가기</a>' +
+      '<div style="background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:1rem;padding:2rem;width:100%;max-width:24rem;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);text-align:center;">' +
+        '<h2 style="font-size:1.3rem;font-weight:bold;color:#fff;margin:0;">' + APP_NAME + '</h2>' +
+        '<div style="display:inline-block;margin:0.4rem 0 0.2rem;padding:1px 10px;border-radius:6px;background:#fff;color:#111827;font-size:0.75rem;font-weight:800;letter-spacing:1px;">' + APP_VER + '</div>' +
+        '<p id="mfgAuthSub" style="font-size:0.85rem;color:#94a3b8;margin:0.5rem 0 1.25rem;">이름과 비밀번호를 입력하세요</p>' +
+        '<form id="mfgLoginForm" style="display:flex;flex-direction:column;gap:0.5rem;text-align:left;">' +
+          '<input id="mfgEmail" type="text" placeholder="이름" autocomplete="username" style="' + inp + '">' +
+          '<input id="mfgPw" type="password" placeholder="비밀번호" autocomplete="current-password" style="' + inp + '">' +
+          '<button id="mfgLoginBtn" type="submit" style="' + btn + 'margin-top:0.25rem;">로그인</button>' +
+        '</form>' +
+        (ALLOW_GUEST ? '<button id="mfgGuestBtn" type="button" style="width:100%;margin-top:0.6rem;padding:0.6rem;border:1px solid #475569;border-radius:0.5rem;background:transparent;color:#cbd5e1;font-size:0.9rem;cursor:pointer;">게스트로 둘러보기</button><div style="font-size:0.75rem;color:#64748b;margin-top:0.35rem;">게스트는 일부 화면만 조회할 수 있습니다</div>' : '') +
+        '<div id="mfgAuthMsg" style="display:none;font-size:0.85rem;margin-top:1rem;padding:0.6rem 0.8rem;border-radius:0.5rem;line-height:1.6;word-break:break-all;text-align:left;"></div>' +
+        '<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.08);">' +
+          '<a href="' + PORTAL_URL + '" style="font-size:0.8rem;color:#94a3b8;text-decoration:none;">← 메인 포털로 돌아가기</a>' +
         '</div>' +
       '</div>';
     document.body.appendChild(div);
     document.body.style.overflow = 'hidden';
+    try { var last = localStorage.getItem(LAST_EMAIL) || ''; $('mfgEmail').value = /@mfg\.local$/.test(last) ? '' : last; } catch (e) {}
+    $('mfgLoginForm').addEventListener('submit', function(ev) { ev.preventDefault(); doLogin(); });
+    if ($('mfgGuestBtn')) $('mfgGuestBtn').addEventListener('click', function() { setGuestFlag(true); enterGuest(); });
+    ($('mfgEmail').value ? $('mfgPw') : $('mfgEmail')).focus();
   }
-
+  function removeOverlay() { var el = $('mfgAuthOverlay'); if (el) el.remove(); document.body.style.overflow = ''; }
   function msg(text, kind) {
-    var el = document.getElementById('mfgAuthMsg');
-    if (!el) return;
-    el.style.display = 'block';
-    el.innerHTML = text;
-    if (kind === 'err') { el.style.background = '#ffedea'; el.style.color = '#831c1e'; }
-    else if (kind === 'ok') { el.style.background = '#dcfae5'; el.style.color = '#04250e'; }
-    else { el.style.background = '#eef5fc'; el.style.color = '#00417f'; }
+    var el = $('mfgAuthMsg'); if (!el) return;
+    el.style.display = 'block'; el.innerHTML = text;
+    if (kind === 'err') { el.style.background = 'rgba(239,68,68,0.12)'; el.style.color = '#fca5a5'; }
+    else if (kind === 'ok') { el.style.background = 'rgba(16,185,129,0.12)'; el.style.color = '#6ee7b7'; }
+    else { el.style.background = 'rgba(59,130,246,0.12)'; el.style.color = '#93c5fd'; }
   }
 
-  function decodeJwt(t) {
-    try {
-      var b = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      return JSON.parse(decodeURIComponent(atob(b).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join('')));
-    } catch (e) { return null; }
+  function enterGuest() {
+    window.MFG_USER = { email: '', name: '게스트', role: 'guest', isAdmin: false, isGuest: true, logout: function() { setGuestFlag(false); location.reload(); } };
+    removeOverlay();
+    ensureGear();
+    resolveReady(window.MFG_USER);
   }
-
-  function onCredential(resp) {
-    var p = decodeJwt(resp && resp.credential);
-    if (!p || !p.email) { msg('구글 로그인 정보를 읽지 못했습니다.', 'err'); return; }
-    msg('구글 계정 확인 중... <span style="color:#5b6573;font-size:0.8rem;">(처음 한 번만 몇 초 걸립니다)</span>', 'info');
-    var _t0 = Date.now();
-    var _tick = setInterval(function() {
-      var sec = Math.round((Date.now() - _t0) / 1000);
-      if (sec >= 3) {
-        msg('구글 계정 확인 중... ' + sec + '초<br><span style="color:#5b6573;font-size:0.8rem;">처음 로그인은 몇 초 걸립니다. 잠시만 기다려 주세요.</span>', 'info');
+  function myAccount() {
+    return client.rpc('my_account').then(function(r) {
+      if (r.error && /my_account|PGRST202|function/i.test((r.error.code || '') + ' ' + (r.error.message || ''))) {   // SQL 실행 전 호환
+        return client.rpc('my_role').then(function(r2) { if (r2.error) throw r2.error; return r2.data ? { role: r2.data, login_id: '', must_change: false } : null; });
       }
-    }, 1000);
-    call({ action: 'checkAccess', app: APP_KEY, credential: resp.credential }, function(d, err) {
-      clearInterval(_tick);
-      if (err) {
-        msg('인증 서버에 연결하지 못했습니다.<br><span style="color:#5b6573;font-size:0.8rem;">' +
-            String(err.message || err) + '</span>', 'err');
-        return;
-      }
-      if (d && d.ok) {
-        saveSession(d);
-        publish();
-        msg('로그인 성공', 'ok');
-        setTimeout(function() {
-          var el = document.getElementById('mfgAuthOverlay');
-          if (el) el.remove();
-          document.body.style.overflow = '';
-          location.reload();
-        }, 400);
-        return;
-      }
-      var reason = (d && d.reason) || '접근 권한이 없습니다.';
-      var extra = '';
-      if (d && d.status === 'pending') {
-        extra = '<br><span style="color:#5b6573;font-size:0.8rem;">관리자 승인 후 이용할 수 있습니다.</span>';
-      } else if (d && d.status === 'noapp') {
-        extra = '<br><span style="color:#5b6573;font-size:0.8rem;">' + APP_NAME + ' 접근 권한을 요청하세요.</span>';
-      }
-      msg('<b>' + (p.email) + '</b><br>' + reason + extra, 'err');
+      if (r.error) throw r.error;
+      return r.data || null;
     });
   }
-
-  function initGsi() {
-    var n = 0;
-    var iv = setInterval(function() {
-      n++;
-      if (window.google && google.accounts && google.accounts.id) {
-        clearInterval(iv);
-        try {
-          google.accounts.id.initialize({ client_id: CLIENT_ID, callback: onCredential });
-          google.accounts.id.renderButton(document.getElementById('mfgGsiBtn'),
-            { theme: 'filled_blue', size: 'large', shape: 'pill', width: 280, text: 'signin_with' });
-        } catch (e) {
-          msg('구글 로그인 버튼을 표시하지 못했습니다.', 'err');
-        }
-      }
-      if (n > 60) { clearInterval(iv); msg('구글 로그인 모듈을 불러오지 못했습니다. 네트워크를 확인하세요.', 'err'); }
-    }, 250);
+  function finishLogin(email, pw) {
+    return myAccount().then(function(a) {
+      if (!a || !a.role) { return client.auth.signOut().then(function() { throw { message: '승인되지 않은 계정입니다. 관리자에게 요청하세요.' }; }); }
+      setGuestFlag(false);
+      window.MFG_USER = { email: email, name: a.login_id || email, role: a.role, isAdmin: a.role === 'admin', logout: logout };
+      if (a.must_change) return firstPwChange(pw);
+      enterApp();
+    });
   }
-
-  function start() {
+  function enterApp() {
+    removeOverlay();
+    ensureGear();
+    resolveReady(window.MFG_USER);
+  }
+  // 처음 접속(또는 비밀번호 초기화 후): 본인 비밀번호로 바꿔야 앱이 열림
+  function firstPwChange(oldPw) {
     overlay();
-    initGsi();
-    var gb = document.getElementById('mfgGuestBtn');
-    if (gb) gb.addEventListener('click', function() {
-      clearSession();
-      set('mfg_guest', '1');
-      set('mfg_auth_user', 'guest');
-      var el = document.getElementById('mfgAuthOverlay');
-      if (el) el.remove();
-      document.body.style.overflow = '';
-      location.reload();
+    var f = $('mfgLoginForm'); if (!f) return;
+    if ($('mfgGuestBtn')) { $('mfgGuestBtn').nextSibling && $('mfgGuestBtn').nextSibling.remove(); $('mfgGuestBtn').remove(); }
+    $('mfgAuthSub').innerHTML = '<b style="color:#fff;">' + esc(window.MFG_USER.name) + '</b>님, 처음 접속입니다.<br>사용할 비밀번호로 바꿔 주세요.';
+    f.innerHTML =
+      (oldPw ? '' : '<input id="mfgPwOld" type="password" placeholder="받은 초기 비밀번호" autocomplete="current-password" style="' + inp + '">') +
+      '<input id="mfgPwNew" type="password" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" style="' + inp + '">' +
+      '<input id="mfgPwNew2" type="password" placeholder="새 비밀번호 확인" autocomplete="new-password" style="' + inp + '">' +
+      '<button id="mfgLoginBtn" type="submit" style="' + btn + 'margin-top:0.25rem;">비밀번호 변경</button>' +
+      '<button id="mfgPwCancel" type="button" style="width:100%;padding:0.5rem;border:0;background:none;color:#94a3b8;font-size:0.8rem;cursor:pointer;">다른 이름으로 로그인</button>';
+    var fresh = f.cloneNode(true); f.parentNode.replaceChild(fresh, f); f = fresh;   // 로그인 submit 핸들러 제거
+    $('mfgAuthMsg').style.display = 'none';
+    $('mfgPwCancel').addEventListener('click', function() { client.auth.signOut().then(function() { location.reload(); }, function() { location.reload(); }); });
+    f.addEventListener('submit', function(ev) {
+      ev.preventDefault();
+      var o = oldPw || ($('mfgPwOld') && $('mfgPwOld').value) || '', n = $('mfgPwNew').value || '', n2 = $('mfgPwNew2').value || '';
+      if (!oldPw && !o) { msg('초기 비밀번호를 입력하세요.', 'err'); return; }
+      if (n.length < 6) { msg('새 비밀번호는 6자 이상이어야 합니다.', 'err'); return; }
+      if (n !== n2) { msg('새 비밀번호 확인이 다릅니다.', 'err'); return; }
+      $('mfgLoginBtn').disabled = true; msg('변경 중...', 'info');
+      client.rpc('change_my_password', { p_old: o, p_new: n }).then(function(r) {
+        if (r.error) throw r.error;
+        msg('비밀번호를 바꿨습니다.', 'ok');
+        setTimeout(enterApp, 400);
+      }).catch(function(e) { msg(errText(e), 'err'); var b = $('mfgLoginBtn'); if (b) b.disabled = false; });
     });
-    try {
-      var rv = sessionStorage.getItem('mfg_revoked');
-      if (rv) { sessionStorage.removeItem('mfg_revoked'); msg(rv + '<br><span style="color:#5b6573;font-size:0.8rem;">관리자에게 문의하세요.</span>', 'err'); }
-    } catch (e) {}
+    ($('mfgPwOld') || $('mfgPwNew')).focus();
+  }
+  function doLogin() {
+    var id = ($('mfgEmail').value || '').trim(), pw = $('mfgPw').value || '';
+    if (!id || !pw) { msg('이름과 비밀번호를 입력하세요.', 'err'); return; }
+    var em = idToEmail(id);
+    if (!client) { msg('서버에 연결하지 못했습니다. 새로고침해 보세요.', 'err'); return; }
+    $('mfgLoginBtn').disabled = true; msg('확인 중...', 'info');
+    client.auth.signInWithPassword({ email: em, password: pw }).then(function(r) {
+      if (r.error) throw r.error;
+      try { localStorage.setItem(LAST_EMAIL, id); } catch (e) {}
+      return finishLogin(em, pw);
+    }).catch(function(e) { msg(errText(e), 'err'); })
+      .then(function() { var b = $('mfgLoginBtn'); if (b) b.disabled = false; });
+  }
+  function logout() {
+    if (!confirm('로그아웃 하시겠습니까?')) return;
+    var p = client ? client.auth.signOut() : Promise.resolve();
+    p.then(function() { location.reload(); }, function() { location.reload(); });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
+  // ===== ⚙️ 계정 (로그아웃 · 승인 사용자 관리) =====
+  function ensureGear() {
+    if ($('mfgGear')) return;
+    var g = document.createElement('button');
+    g.id = 'mfgGear'; g.type = 'button'; g.title = '계정 / 로그아웃'; g.textContent = '⚙️';
+    g.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:9000;width:38px;height:38px;border-radius:50%;border:1px solid #cbd5e1;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;font-size:18px;line-height:1;';
+    g.addEventListener('click', openSettings);
+    document.body.appendChild(g);
   }
+  function openSettings() {
+    if ($('mfgCfgModal')) return;
+    var u = window.MFG_USER;
+    var inpL = inp.replace('#0b1220', '#fff').replace('#e2e8f0', '#1e293b').replace('#475569', '#cbd5e1');
+    var sbtn = 'padding:0.3rem 0.7rem;border:1px solid #cbd5e1;border-radius:0.4rem;background:#fff;cursor:pointer;font-size:0.82rem;';
+    var m = document.createElement('div');
+    m.id = 'mfgCfgModal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;font-family:Pretendard,"Malgun Gothic",-apple-system,sans-serif;';
+    m.innerHTML =
+      '<div style="background:#fff;border-radius:0.9rem;padding:1.25rem 1.4rem;width:100%;max-width:30rem;max-height:92vh;overflow:auto;color:#1e293b;font-size:0.9rem;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;"><b style="font-size:1.05rem;">⚙️ 계정</b><button id="mfgCfgClose" type="button" style="border:0;background:none;font-size:1.2rem;cursor:pointer;">✕</button></div>' +
+        (u ? '<div style="display:flex;justify-content:space-between;align-items:center;gap:0.4rem;padding:0.6rem 0.75rem;background:#f1f5f9;border-radius:0.5rem;margin-bottom:0.9rem;"><span>' + (u.isGuest ? '게스트 <span style="color:#64748b;font-size:0.8rem;">(보기 전용)</span>' : esc(u.name || u.email) + ' <span style="color:#64748b;font-size:0.8rem;">(' + (u.isAdmin ? '관리자' : '사용자') + ')</span>') + '</span><span style="display:flex;gap:0.3rem;">' +
+          (u.isGuest ? '' : '<button id="mfgPwBtn" type="button" style="' + sbtn + '">비밀번호 변경</button>') +
+          '<button id="mfgLogoutBtn" type="button" style="' + sbtn + '">' + (u.isGuest ? '로그인하기' : '로그아웃') + '</button></span></div>' : '') +
+        (u && !u.isGuest ? '<form id="mfgPwForm" style="display:none;flex-direction:column;gap:0.4rem;margin-bottom:0.9rem;">' +
+          '<input id="mfgPwCur" type="password" placeholder="현재 비밀번호" autocomplete="current-password" style="' + inpL + '">' +
+          '<input id="mfgPwN1" type="password" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" style="' + inpL + '">' +
+          '<input id="mfgPwN2" type="password" placeholder="새 비밀번호 확인" autocomplete="new-password" style="' + inpL + '">' +
+          '<button type="submit" style="' + btn + '">변경</button><div id="mfgPwMsg" style="font-size:0.82rem;"></div></form>' : '') +
+        (u && u.isAdmin ? '<div style="font-weight:600;margin-bottom:0.3rem;">사용자</div><div id="mfgApprList" style="border:1px solid #e2e8f0;border-radius:0.5rem;max-height:16rem;overflow:auto;margin-bottom:0.5rem;"></div>' +
+          '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;"><input id="mfgNewId" placeholder="이름" style="' + inpL + 'flex:1 1 6rem;"><input id="mfgNewPw" placeholder="초기 비밀번호" style="' + inpL + 'flex:1 1 6rem;"><select id="mfgApprRole" style="border:1px solid #cbd5e1;border-radius:0.5rem;padding:0 0.4rem;"><option value="user">사용자</option><option value="admin">관리자</option></select><button id="mfgApprAdd" type="button" style="' + btn + 'width:auto;padding:0.45rem 0.8rem;">추가</button></div>' +
+          '<div id="mfgAdmMsg" style="font-size:0.8rem;color:#64748b;margin-top:0.5rem;">초기 비밀번호를 알려주면, 처음 로그인할 때 본인 비밀번호로 바꾸게 됩니다.</div>' : '') +
+      '</div>';
+    document.body.appendChild(m);
+    $('mfgCfgClose').addEventListener('click', function() { m.remove(); });
+    m.addEventListener('click', function(ev) { if (ev.target === m) m.remove(); });
+    if ($('mfgLogoutBtn')) $('mfgLogoutBtn').addEventListener('click', u && u.isGuest ? u.logout : logout);
+    if ($('mfgPwBtn')) {
+      $('mfgPwBtn').addEventListener('click', function() { var f = $('mfgPwForm'); f.style.display = f.style.display === 'none' ? 'flex' : 'none'; if (f.style.display === 'flex') $('mfgPwCur').focus(); });
+      $('mfgPwForm').addEventListener('submit', function(ev) {
+        ev.preventDefault();
+        var o = $('mfgPwCur').value, n = $('mfgPwN1').value, n2 = $('mfgPwN2').value, out = $('mfgPwMsg');
+        var say = function(t, ok) { out.textContent = t; out.style.color = ok ? '#059669' : '#dc2626'; };
+        if (n.length < 6) return say('새 비밀번호는 6자 이상이어야 합니다.');
+        if (n !== n2) return say('새 비밀번호 확인이 다릅니다.');
+        client.rpc('change_my_password', { p_old: o, p_new: n }).then(function(r) {
+          if (r.error) return say(errText(r.error));
+          say('비밀번호를 바꿨습니다.', true); $('mfgPwCur').value = $('mfgPwN1').value = $('mfgPwN2').value = '';
+        });
+      });
+    }
+    if (u && u.isAdmin) {
+      var amsg = function(t, ok) { var el = $('mfgAdmMsg'); if (el) { el.textContent = t; el.style.color = ok ? '#059669' : '#dc2626'; } };
+      var list = function() {
+        client.from('approved_users').select('email,role,login_id,must_change').order('login_id').then(function(r) {
+          var el = $('mfgApprList'); if (!el) return;
+          if (r.error) { el.innerHTML = '<div style="padding:0.5rem;color:#dc2626;">' + esc(errText(r.error)) + '</div>'; return; }
+          el.innerHTML = (r.data || []).map(function(x) {
+            var me = x.email === u.email;
+            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:0.4rem;padding:0.35rem 0.6rem;border-bottom:1px solid #f1f5f9;"><span>' + esc(x.login_id || x.email) +
+              ' <span style="color:#64748b;font-size:0.78rem;">' + (x.role === 'admin' ? '관리자' : '사용자') + (x.must_change ? ' · 첫 로그인 전' : '') + '</span></span><span style="display:flex;gap:0.6rem;">' +
+              '<button type="button" data-reset="' + esc(x.email) + '" data-name="' + esc(x.login_id || x.email) + '" style="border:0;background:none;color:#2563eb;cursor:pointer;font-size:0.82rem;">비밀번호 초기화</button>' +
+              (me ? '' : '<button type="button" data-del="' + esc(x.email) + '" data-name="' + esc(x.login_id || x.email) + '" style="border:0;background:none;color:#dc2626;cursor:pointer;font-size:0.82rem;">삭제</button>') + '</span></div>';
+          }).join('') || '<div style="padding:0.5rem;color:#64748b;">없음</div>';
+          el.querySelectorAll('button[data-reset]').forEach(function(b) {
+            b.addEventListener('click', function() {
+              var pw = prompt(b.getAttribute('data-name') + ' — 새 초기 비밀번호 (6자 이상):');
+              if (!pw) return;
+              client.rpc('admin_reset_password', { p_email: b.getAttribute('data-reset'), p_password: pw }).then(function(r2) {
+                if (r2.error) amsg('초기화 실패: ' + errText(r2.error)); else amsg(b.getAttribute('data-name') + ' 비밀번호를 초기화했습니다. 다음 로그인 때 본인 비밀번호로 바꾸게 됩니다.', true);
+                list();
+              });
+            });
+          });
+          el.querySelectorAll('button[data-del]').forEach(function(b) {
+            b.addEventListener('click', function() {
+              if (!confirm(b.getAttribute('data-name') + ' 계정을 삭제하시겠습니까?')) return;
+              client.rpc('admin_delete_user', { p_email: b.getAttribute('data-del') }).then(function(r2) { if (r2.error) amsg('삭제 실패: ' + errText(r2.error)); else amsg('삭제했습니다.', true); list(); });
+            });
+          });
+        });
+      };
+      list();
+      $('mfgApprAdd').addEventListener('click', function() {
+        var id = ($('mfgNewId').value || '').trim(), pw = $('mfgNewPw').value || '', role = $('mfgApprRole').value;
+        if (id.length < 2) { amsg('이름을 입력하세요.'); return; }
+        if (pw.length < 6) { amsg('초기 비밀번호는 6자 이상이어야 합니다.'); return; }
+        client.rpc('admin_create_user', { p_id: id, p_password: pw, p_role: role }).then(function(r) {
+          if (r.error) { amsg('추가 실패: ' + errText(r.error)); return; }
+          $('mfgNewId').value = ''; $('mfgNewPw').value = '';
+          amsg(id + ' 추가했습니다. 초기 비밀번호를 알려주세요.', true); list();
+        });
+      });
+    }
+  }
+
+  function boot() {
+    if (!client) { overlay(); msg('서버에 연결하지 못했습니다. 새로고침해 보세요.', 'err'); return; }
+    client.auth.getSession().then(function(r) {
+      var s = r && r.data && r.data.session;
+      if (s && s.user && s.user.email) return finishLogin(String(s.user.email).toLowerCase(), '');
+      if (ALLOW_GUEST && isGuestFlag()) { enterGuest(); return; }
+      overlay();
+    }).catch(function(e) { overlay(); msg(errText(e), 'err'); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 </script>
-<!-- ==================== /MFG 구글 인증 ==================== -->
+<!-- ==================== /MFG 서버 인증 ==================== -->
 </head>
 <body class="bg-slate-50 min-h-screen">
   <div id="root"></div>
@@ -331,6 +352,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V155S',
+  d: '2026-10-27',
+  items: ['서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', 'FTIV 데이터와 생산계획 엑셀은 Google 공유저장소 그대로 사용']
+}, {
   v: 'V149',
   d: '2026-10-29',
   items: ['조직도 인쇄: 지금 펼쳐진 조직도를 A3 한 장에 맞춰 인쇄 (모양에 따라 가로/세로 자동, 상단에 기준일 표시) — 인쇄 창에서 "PDF로 저장"하면 PDF 한 장']
@@ -593,21 +618,190 @@ async function __gzipToB64(obj) {
 }
 // 시작할 때 목록에서 받을 파일 종류 — GAS 가 이 이름으로 시작하는 파일만 골라서 돌려줌 (폴더 전체 훑기 방지)
 const GAS_LIST_PREFIX = 'tcp-backup-,fe-backup-,mfg-settings-,plan-xlsx,fe-plan-auto';
-let __pruneLast = 0;
-function __pruneSettings(gasUrl) {
-  // 10분에 한 번만 — 서버(GAS prune)가 최신 30개를 남기고 오래된 설정 파일을 휴지통으로
-  if (Date.now() - __pruneLast < 10 * 60 * 1000) return;
-  __pruneLast = Date.now();
-  fetch(gasUrl + '?action=prune&prefix=mfg-settings-&keep=30&max=40&_=' + Date.now()).catch(() => {});
+// ===================== MFG Report — 서버(Supabase) 읽기/저장 =====================
+//  · TCP·FE 데이터: prod_logs(건별) + prod_state(키별) 를 읽어 기존 백업 JSON 모양으로 조립
+//  · 처음 한 번은 전체를 6쪽씩 동시에 받고, 받은 내용은 이 PC(IndexedDB)에 보관 → 다음부터는 바뀐 것만
+//  · MFG Report 설정: prod_state section='MFG' 에 키별 저장 (바뀐 키만)
+//  · 60초마다/창 복귀 시 변경분만 받아 반영
+const SB_MFG_SECTION = 'MFG';
+const SB_LOG_KINDS = { production: 'productionLogs', downtime: 'downtimeLogs', defect: 'defectLogs', rework: 'reworkLogs' };
+const SB_CACHE_MAX_AGE = 3 * 24 * 3600 * 1000;   // 보관본이 3일보다 오래되면 전체 다시 받기
+const __sbCanon = v => JSON.stringify(v, (k, val) => (val && typeof val === 'object' && !Array.isArray(val)) ? Object.keys(val).sort().reduce((o, kk) => { o[kk] = val[kk]; return o; }, {}) : val);
+const __sbErr = e => (e && (e.message || e.error_description || (typeof e === 'string' ? e : JSON.stringify(e)))) || '오류';
+const __sbMaxTs = (rows, cur) => rows.reduce((m, r) => (r.updated_at && r.updated_at > m ? r.updated_at : m), cur || '1970-01-01T00:00:00Z');
+const __sbUrl = () => (window.MFG_SB && window.MFG_SB.supabaseUrl) || '';
+// 섹션별 캐시: logs Map(kind:id → data), state {key → data}, lastPull
+const __sbCache = { TCP: null, FE: null, MFG: null };
+const __sbSaveT = {};
+function __sbCacheSave(section) {
+  clearTimeout(__sbSaveT[section]);
+  __sbSaveT[section] = setTimeout(() => {
+    const c = __sbCache[section]; if (!c) return;
+    try { __idb.set('sbsec:' + section, { v: 1, url: __sbUrl(), logs: Array.from(c.logs.entries()), state: c.state, lastPull: c.lastPull, savedAt: Date.now() }); } catch (e) {}
+  }, 800);
 }
-async function __postSettings(gasUrl, payload) {
-  let filename = payload.filename, data = payload.data;
-  if (typeof CompressionStream !== 'undefined') {
-    try { data = await __gzipToB64(payload.data); filename = filename.replace(/\.json$/, '.json.gz'); } catch { data = payload.data; filename = payload.filename; }
+// 1,000건씩 나눠 받되 6쪽씩 동시에 (순서가 바뀌지 않는 기본키 순으로 나눔)
+async function __sbFetchAll(table, section, mod, onPage) {
+  const client = window.MFG_SB; if (!client) throw new Error('서버 연결 없음');
+  const PAGE = 1000, PAR = 4;
+  const cols = table === 'prod_logs' ? 'kind,id,data,updated_at,deleted_at' : 'key,data,updated_at';
+  const q = (from, withCount) => {
+    let x = client.from(table).select(cols, withCount ? { count: 'exact' } : undefined).eq('section', section);
+    x = mod ? mod(x) : x;
+    x = table === 'prod_logs' ? x.order('kind', { ascending: true }).order('id', { ascending: true }) : x.order('key', { ascending: true });
+    return x.range(from, from + PAGE - 1);
+  };
+  // 한 쪽이 실패하면 1초·2초 쉬고 3번까지 다시
+  const qr = async (from, withCount) => { let last; for (let t = 0; t < 3; t++) { if (t) await new Promise(r => setTimeout(r, 1000 * t)); const r = await q(from, withCount); if (!r.error) return r; last = r; } return last; };
+  const first = await qr(0, true);
+  if (first.error) throw first.error;
+  const out = (first.data || []).slice();
+  let total = first.count;
+  if (onPage) onPage(out.length, total || out.length);
+  if (total == null) {   // 개수를 못 받으면 차례로
+    for (let f = PAGE; out.length === f; f += PAGE) { const r = await qr(f); if (r.error) throw r.error; out.push(...(r.data || [])); if (onPage) onPage(out.length, out.length); if (!r.data || r.data.length < PAGE) break; }
+    return out;
   }
-  const res = await fetch(gasUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ filename, data }) });
-  __pruneSettings(gasUrl);
-  return res;
+  const offs = []; for (let f = PAGE; f < total; f += PAGE) offs.push(f);
+  let i = 0;
+  const worker = async () => { while (i < offs.length) { const f = offs[i++]; const r = await qr(f); if (r.error) throw r.error; out.push(...(r.data || [])); if (onPage) onPage(out.length, total); } };
+  await Promise.all(Array.from({ length: Math.min(PAR, offs.length) }, worker));
+  return out;
+}
+function __sbBuildData(c) {
+  const d = { productionLogs: [], downtimeLogs: [], defectLogs: [], reworkLogs: [], processDefectLogs: [] };
+  c.logs.forEach((data, key) => { const kind = key.slice(0, key.indexOf(':')); const arr = SB_LOG_KINDS[kind]; if (arr) d[arr].push(data); });
+  Object.keys(c.state).forEach(k => { d[k] = c.state[k]; });
+  d.savedAt = Date.now();
+  return d;
+}
+// 섹션 받기 → 백업 JSON 모양. 보관본이 있으면 바뀐 것만.
+async function __sbLoadSection(section, onProg) {
+  if (window.__sbReady) await window.__sbReady;
+  if (onProg) onProg({ st: 'req', pct: 0 });
+  let cached = null;
+  try { cached = await __idb.get('sbsec:' + section); } catch (e) {}
+  if (cached && cached.v === 1 && cached.url === __sbUrl() && cached.lastPull && Date.now() - (cached.savedAt || 0) < SB_CACHE_MAX_AGE) {
+    __sbCache[section] = { logs: new Map(cached.logs || []), state: cached.state || {}, lastPull: cached.lastPull };
+    if (onProg) onProg({ st: 'down', pct: 60, cache: true, kb: Math.round((cached.logs || []).length * 0.4) });
+    try {
+      const r = await __sbPullSection(section);
+      const c = __sbCache[section];
+      if (onProg) onProg({ st: 'done', pct: 100, cache: true, delta: r ? r.changed : 0, kb: Math.round(c.logs.size * 0.4) });
+      if (!r) __sbCacheSave(section);   // savedAt 갱신
+      if (c.logs.size === 0 && Object.keys(c.state).length === 0) return null;
+      return __sbBuildData(c);
+    } catch (e) { console.warn('변경분 받기 실패 — 전체 다시 받기', e); __sbCache[section] = null; }
+  }
+  const logs = await __sbFetchAll('prod_logs', section, q => q.is('deleted_at', null), (n, t) => { if (onProg) onProg({ st: 'down', pct: Math.min(99, Math.round(n / Math.max(1, t) * 100)), kb: Math.round(t * 0.4) }); });
+  const states = await __sbFetchAll('prod_state', section);
+  const c = { logs: new Map(), state: {}, lastPull: '1970-01-01T00:00:00Z' };
+  logs.forEach(r => c.logs.set(r.kind + ':' + r.id, r.data));
+  states.forEach(r => { c.state[r.key] = r.data; });
+  c.lastPull = __sbMaxTs(logs.concat(states), c.lastPull);
+  __sbCache[section] = c;
+  __sbCacheSave(section);
+  if (onProg) onProg({ st: 'done', pct: 100, kb: Math.round(logs.length * 0.4) });
+  if (logs.length === 0 && states.length === 0) return null;   // 아직 아무것도 안 올라온 섹션
+  return __sbBuildData(c);
+}
+// 섹션 변경분 받기 → 바뀐 게 있으면 새 데이터 객체, 없으면 null
+async function __sbPullSection(section) {
+  const c = __sbCache[section]; if (!c) return null;
+  const logs = section === SB_MFG_SECTION ? [] : await __sbFetchAll('prod_logs', section, q => q.gt('updated_at', c.lastPull));
+  const states = await __sbFetchAll('prod_state', section, q => q.gt('updated_at', c.lastPull));
+  let changed = 0; const changedKeys = [];
+  logs.forEach(r => { const key = r.kind + ':' + r.id; if (r.deleted_at) { if (c.logs.delete(key)) changed++; } else { const prev = c.logs.get(key); if (prev === undefined || __sbCanon(prev) !== __sbCanon(r.data)) { c.logs.set(key, r.data); changed++; } } });
+  states.forEach(r => { if (__sbCanon(c.state[r.key]) !== __sbCanon(r.data)) { c.state[r.key] = r.data; changed++; changedKeys.push(r.key); } });
+  c.lastPull = __sbMaxTs(logs.concat(states), c.lastPull);
+  if (changed && section !== SB_MFG_SECTION) __sbCacheSave(section);
+  return changed ? { data: __sbBuildData(c), changed, changedKeys } : null;
+}
+// Google 공유저장소의 최신 MFG Report 설정을 서버로 (처음 한 번만 — 서버에 _googleImport 표시를 남김)
+const SB_GOOGLE_GAS = 'https://script.google.com/macros/s/AKfycbxLFrxbAaBt1bBa3SUdDY9wY48tvt85mEDaj3tiKhyw_R7oJCC9GbOWLfWbdSohnQtB/exec';
+async function __sbImportGoogleSettings(onProg) {
+  const client = window.MFG_SB;
+  if (onProg) onProg({ st: 'down', pct: 20, cache: false });
+  const lj = await (await fetch(SB_GOOGLE_GAS + '?action=list&prefix=mfg-settings-&_=' + Date.now())).json();
+  const files = ((lj && lj.files) || []).filter(f => f && f.name && +f.size > 0).sort((a, b) => new Date(b.modified) - new Date(a.modified));
+  let data = null, used = null;
+  for (const f of files.slice(0, 4)) {
+    try {
+      const j = await (await fetch(SB_GOOGLE_GAS + '?action=load&id=' + encodeURIComponent(f.id) + '&_=' + Date.now())).json();
+      const d = j && j.ok ? await __normalizeBackup(j.data) : null;
+      if (d && typeof d === 'object') { data = d; used = f; break; }
+    } catch (e) { console.warn('Google 설정 읽기 실패', f.name, e); }
+  }
+  if (onProg) onProg({ st: 'down', pct: 70 });
+  const me = (window.MFG_USER && window.MFG_USER.email) || '';
+  const now = new Date().toISOString();
+  const rows = [];
+  if (data) Object.entries(data).forEach(([k, v]) => { if (k === 'version' || k === 'exportedAt' || v === undefined || v === null) return; rows.push({ section: SB_MFG_SECTION, key: k, data: v, updated_at: now, updated_by: me }); });
+  rows.push({ section: SB_MFG_SECTION, key: '_googleImport', data: { at: now, file: used ? used.name : null, keys: rows.length, cut: 'final' }, updated_at: now, updated_by: me });
+  const { error } = await client.from('prod_state').upsert(rows, { onConflict: 'section,key' });
+  if (error) throw error;
+  console.log('Google 설정 가져옴:', used ? used.name : '(없음)', rows.length - 1, '개 항목');
+  return rows;
+}
+// MFG Report 설정 읽기 (키별 → 하나의 객체) — 작아서 매번 전체
+async function __sbLoadMfgSettings(onProg) {
+  if (window.__sbReady) await window.__sbReady;
+  if (onProg) onProg({ st: 'req', pct: 0 });
+  let states = await __sbFetchAll('prod_state', SB_MFG_SECTION);
+  // 원본 주소 전환 때 한 번 더: Google에 마지막으로 저장된 설정을 가져옴 (cut:'final' 표시 후로는 다시 안 함)
+  const __imp = states.find(r => r.key === '_googleImport');
+  if (!(__imp && __imp.data && __imp.data.cut === 'final') && !(window.MFG_USER && window.MFG_USER.isGuest)) {
+    try { await __sbImportGoogleSettings(onProg); states = await __sbFetchAll('prod_state', SB_MFG_SECTION); }
+    catch (e) { console.warn('Google 설정 가져오기 실패 — 서버에 있는 설정만 사용', e); }
+  }
+  const c = { logs: new Map(), state: {}, lastPull: '1970-01-01T00:00:00Z' };
+  states.forEach(r => { if (r.key !== '_googleImport') c.state[r.key] = r.data; });
+  c.lastPull = __sbMaxTs(states, c.lastPull);
+  __sbCache.MFG = c;
+  if (onProg) onProg({ st: 'done', pct: 100, kb: Math.round(JSON.stringify(c.state).length / 1024) });
+  if (!states.length) return null;
+  return { ...c.state, version: 8 };
+}
+// MFG Report 설정 저장 — 기존 __postSettings(gasUrl, payload) 호출을 그대로 받아 바뀐 키만 서버에
+async function __postSettings(gasUrl, payload) {
+  const client = window.MFG_SB; if (!client) throw new Error('서버 연결 없음');
+  if (window.__sbReady) await window.__sbReady;
+  if (window.MFG_USER && window.MFG_USER.isGuest) return { ok: true, json: async () => ({ ok: true, name: '(게스트 — 저장하지 않음)' }) };
+  const me = (window.MFG_USER && window.MFG_USER.email) || '';
+  const c = __sbCache.MFG || (__sbCache.MFG = { logs: new Map(), state: {}, lastPull: '1970-01-01T00:00:00Z' });
+  const now = new Date().toISOString();
+  const rows = [];
+  Object.entries(payload.data || {}).forEach(([k, v]) => {
+    if (k === 'version' || k === 'exportedAt' || v === undefined) return;
+    if (c.state[k] !== undefined && __sbCanon(c.state[k]) === __sbCanon(v)) return;
+    rows.push({ section: SB_MFG_SECTION, key: k, data: v === null ? {} : v, updated_at: now, updated_by: me });
+  });
+  if (rows.length) {
+    const { error } = await client.from('prod_state').upsert(rows, { onConflict: 'section,key' });
+    if (error) throw error;
+    rows.forEach(r => { c.state[r.key] = r.data; });
+    __sbMfgDriveBackup(c.state);
+  }
+  return { ok: true, json: async () => ({ ok: true, name: '서버 (' + rows.length + '개 항목 저장)' }) };
+}
+
+// 백업: MFG Report 설정을 Google 공유저장소에 백업 파일로 남김 — 모든 PC 통틀어 3시간에 1개, 최근 60개 보관
+let __sbMfgBkAt = 0;
+async function __sbMfgDriveBackup(state) {
+  if (Date.now() - __sbMfgBkAt < 30 * 60000) return;   // 이 PC는 30분에 한 번만 확인
+  __sbMfgBkAt = Date.now();
+  try {
+    const pre = 'mfg-settings-';
+    const lj = await (await fetch(SB_GOOGLE_GAS + '?action=list&prefix=' + pre + '&limit=3&_=' + Date.now())).json();
+    const newest = ((lj && lj.files) || []).map(f => new Date(f.modified).getTime()).filter(x => x > 0).sort((a, b) => b - a)[0] || 0;
+    if (Date.now() - newest < 3 * 3600000) return;
+    const data = { version: 8, exportedAt: new Date().toISOString(), source: 'server', ...state };
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const gz = typeof CompressionStream !== 'undefined';
+    await fetch(SB_GOOGLE_GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ filename: pre + ts + (gz ? '.json.gz' : '.json'), data: gz ? await __gzipToB64(data) : data }) });
+    console.log('공유저장소 설정 백업 완료', pre + ts);
+    fetch(SB_GOOGLE_GAS + '?action=prune&prefix=' + pre + '&keep=60&max=100').catch(() => {});
+  } catch (e) { console.warn('공유저장소 설정 백업 실패 (다음에 다시 시도)', e); __sbMfgBkAt = Date.now() - 20 * 60000; }
 }
 const __idb = {
   _db: null,
@@ -615,7 +809,7 @@ const __idb = {
     if (this._db) return this._db;
     return new Promise(resolve => {
       try {
-        const req = indexedDB.open('mfgreport_cache', 1);
+        const req = indexedDB.open('mfgreport_cache_sb', 1);
         req.onupgradeneeded = e => {
           const db = e.target.result;
           if (!db.objectStoreNames.contains('backups')) db.createObjectStore('backups');
@@ -2364,13 +2558,13 @@ function LoadProgress({ prog }) {
   React.useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 500); return () => clearInterval(t); }, []);
   const sec = Math.max(0, Math.round((Date.now() - (prog.t0 || Date.now())) / 1000));
   const rows = [['tcp', 'TCP 생산 데이터'], ['fe', 'FE 생산 데이터'], ['set', 'MFG Report 설정']];
-  const stText = r => r.st === 'wait' ? '대기' : r.st === 'req' ? '공유저장소 응답 기다리는 중…' : r.st === 'down' ? `내려받는 중 ${r.pct}%` : r.st === 'parse' ? '압축 푸는 중…' : r.st === 'done' ? (r.cache ? '완료 (이전에 받아둔 파일)' : '완료') : r.st === 'fail' ? '실패' : '';
+  const stText = r => r.st === 'wait' ? '대기' : r.st === 'req' ? '서버 확인 중…' : r.st === 'down' ? (r.cache ? '바뀐 것만 받는 중…' : `받는 중 ${r.pct}%`) : r.st === 'parse' ? '압축 푸는 중…' : r.st === 'done' ? (r.cache ? (r.delta ? `완료 (바뀐 ${r.delta}건만 받음)` : '완료 (바뀐 것 없음)') : '완료') : r.st === 'fail' ? ('실패' + (r.err ? ': ' + r.err : '')) : '';
   const color = r => r.st === 'done' ? 'bg-emerald-500' : r.st === 'fail' ? 'bg-rose-400' : 'bg-indigo-500';
   const width = r => r.st === 'done' || r.st === 'parse' ? 100 : r.st === 'down' ? r.pct : r.st === 'req' ? 4 : 0;
   return React.createElement("div", { className: "mx-auto mt-4 text-left", style: { maxWidth: 420 } },
     React.createElement("div", { className: "flex items-center gap-2 text-sm mb-3" },
       React.createElement("span", { className: prog.step === 'list' ? 'text-indigo-600 font-semibold' : 'text-emerald-600' }, prog.step === 'list' ? '⏳' : '✓'),
-      React.createElement("span", { className: "text-slate-700" }, prog.step === 'list' ? '공유저장소 파일 목록 확인 중…' : `파일 목록 확인 완료 (${prog.nFiles}개)`)),
+      React.createElement("span", { className: "text-slate-700" }, prog.step === 'list' ? '서버 연결 중…' : '서버 연결됨')),
     rows.map(([k, label]) => { const r = prog[k] || { st: 'wait', pct: 0 };
       return React.createElement("div", { key: k, className: "mb-2.5" },
         React.createElement("div", { className: "flex justify-between text-xs mb-1" },
@@ -2378,7 +2572,7 @@ function LoadProgress({ prog }) {
           React.createElement("span", { className: r.st === 'done' ? 'text-emerald-600' : r.st === 'fail' ? 'text-rose-500' : 'text-slate-500' }, stText(r))),
         React.createElement("div", { className: "h-2 bg-slate-100 rounded-full overflow-hidden" },
           React.createElement("div", { className: color(r) + ' h-full rounded-full transition-all duration-200' + (r.st === 'req' ? ' animate-pulse' : ''), style: { width: width(r) + '%' } }))); }),
-    React.createElement("p", { className: "text-[11px] text-slate-400 mt-3" }, `${sec}초 경과 · 공유저장소가 파일을 준비하는 동안은 막대가 멈춰 보일 수 있습니다. 10초 넘게 그대로면 새로고침(Ctrl+F5) 해 보세요.`));
+    React.createElement("p", { className: "text-[11px] text-slate-400 mt-3" }, `${sec}초 경과 · 이 PC에서 처음 열 때만 전체를 받고, 다음부터는 바뀐 것만 받습니다.`));
 }
 
 function ValidationPanel({
@@ -2397,7 +2591,7 @@ function ValidationPanel({
   const [openDropdown, setOpenDropdown] = useState(null);
   // V108: 현황판 대조
   const [boardRes, setBoardRes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_board_check') || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem('mfgsb_board_check') || '{}') || {}; } catch { return {}; }
   });
   const [boardBusy, setBoardBusy] = useState('');
   const [boardDate, setBoardDate] = useState('');
@@ -3145,7 +3339,7 @@ rw = 비가동요인에 «Rework (98 → 18)» 같은 표기가 있을 때만, �
             findings: [{ level: 'unread', field: '판독', text: '사진 판독 실패: ' + String(e.message || e).slice(0, 60) }] };
         }
         setBoardRes({ ...next });
-        try { localStorage.setItem('mfg_board_check', JSON.stringify(next)); } catch {}
+        try { localStorage.setItem('mfgsb_board_check', JSON.stringify(next)); } catch {}
       }
       setBoardBusy('');
     } catch (e) {
@@ -3642,7 +3836,7 @@ rw = 비가동요인에 «Rework (98 → 18)» 같은 표기가 있을 때만, �
         className: "px-3 py-1.5 text-sm rounded-lg font-semibold " + (boardBusy ? 'bg-slate-200 text-slate-500' : 'bg-sky-600 text-white hover:bg-sky-700') },
         boardBusy ? '진행 중…' : '대조 시작'),
       Object.keys(boardRes || {}).length > 0 && React.createElement("button", {
-        onClick: () => { if (confirm('저장된 대조 결과를 모두 지울까요?')) { setBoardRes({}); try { localStorage.removeItem('mfg_board_check'); } catch {} } },
+        onClick: () => { if (confirm('저장된 대조 결과를 모두 지울까요?')) { setBoardRes({}); try { localStorage.removeItem('mfgsb_board_check'); } catch {} } },
         className: "px-2 py-1.5 text-xs rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" }, "결과 지우기")),
     boardBusy && React.createElement("div", { className: "px-5 py-2 text-xs text-sky-700 bg-sky-50 border-b border-sky-100" }, "", boardBusy),
     boardSummary.length === 0 ? React.createElement("div", { className: "py-10 text-center text-slate-400 text-sm" },
@@ -4071,14 +4265,14 @@ function App() {
 
   const [h52Data, setH52Data] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_52h_data') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_52h_data') || '{}');
     } catch {
       return {};
     }
   });
   const [h52Config, setH52Config] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_52h_config') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_52h_config') || '{}');
     } catch {
       return {};
     }
@@ -4139,7 +4333,7 @@ function App() {
     '2026-12-25': '성탄절'
   };
   const h52OpenDb = () => new Promise((res, rej) => {
-    const r = indexedDB.open('mfg_h52_files', 1);
+    const r = indexedDB.open('mfg_h52_files_sb', 1);
     r.onupgradeneeded = () => r.result.createObjectStore('h');
     r.onsuccess = () => res(r.result);
     r.onerror = () => rej(r.error);
@@ -4275,7 +4469,7 @@ function App() {
         roster: newRoster
       };
       try {
-        localStorage.setItem('mfg_52h_data', JSON.stringify(next));
+        localStorage.setItem('mfgsb_52h_data', JSON.stringify(next));
       } catch (err) {
         alert('저장 공간 부족: 데이터가 너무 큽니다.');
       }
@@ -4346,7 +4540,7 @@ function App() {
   const [lotFtfrTo, setLotFtfrTo] = useState('');
   const [lotFtfrNotes, setLotFtfrNotes] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_lotftfr_notes') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_lotftfr_notes') || '{}');
     } catch {
       return {};
     }
@@ -4357,14 +4551,14 @@ function App() {
     [key]: !prev[key]
   }));
   const updateLotFtfrNote = (key, value) => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1') return;
+    if (typeof localStorage !== 'undefined' && !!(window.MFG_USER && window.MFG_USER.isGuest)) return;
     setLotFtfrNotes(prev => {
       const next = {
         ...prev
       };
       if (value === '' || value === undefined || value === null) delete next[key];else next[key] = value;
       try {
-        localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(next));
+        localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -4800,7 +4994,7 @@ function App() {
   const [oeeMonth, setOeeMonth] = useState(new Date().getMonth() + 1);
   const [oeeManual, setOeeManual] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_oee_manual') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_oee_manual') || '{}');
     } catch {
       return {};
     }
@@ -4815,14 +5009,14 @@ function App() {
   const [prdEndDate, setPrdEndDate] = useState(_prNow.toISOString().split('T')[0]);
   const [prodReportNotes, setProdReportNotes] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_prod_report_notes') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_prod_report_notes') || '{}');
     } catch {
       return {};
     }
   });
   const [moduleQuantities, setModuleQuantities] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_module_quantities') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_module_quantities') || '{}');
     } catch {
       return {};
     }
@@ -4835,7 +5029,7 @@ function App() {
       const n = parseFloat(value);
       if (!n || n <= 0) delete next[date];else next[date] = n;
       try {
-        localStorage.setItem('mfg_module_quantities', JSON.stringify(next));
+        localStorage.setItem('mfgsb_module_quantities', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -4848,7 +5042,7 @@ function App() {
     return 0;
   };
   const setUccModule = (date, value) => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1') return;
+    if (typeof localStorage !== 'undefined' && !!(window.MFG_USER && window.MFG_USER.isGuest)) return;
     const n = parseFloat(value);
     const valid = !isNaN(n) && n > 0;
     setModuleQuantities(prev => {
@@ -4857,7 +5051,7 @@ function App() {
       };
       if (valid) next[date] = n;else delete next[date];
       try {
-        localStorage.setItem('mfg_module_quantities', JSON.stringify(next));
+        localStorage.setItem('mfgsb_module_quantities', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -4868,7 +5062,7 @@ function App() {
       const key = `uccmod|${date}`;
       if (valid) next[key] = String(n);else delete next[key];
       try {
-        localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(next));
+        localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -4876,7 +5070,7 @@ function App() {
   const [uccCollapsed, setUccCollapsed] = useState(false);
   const [dtOverrides, setDtOverrides] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_dt_overrides') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_dt_overrides') || '{}');
     } catch {
       return {};
     }
@@ -4888,7 +5082,7 @@ function App() {
       };
       next[key] = text || '';
       try {
-        localStorage.setItem('mfg_dt_overrides', JSON.stringify(next));
+        localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -4900,7 +5094,7 @@ function App() {
       };
       delete next[key];
       try {
-        localStorage.setItem('mfg_dt_overrides', JSON.stringify(next));
+        localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -4918,12 +5112,12 @@ function App() {
   const [cuCalOpen, setCuCalOpen] = useState(false);
   const [cuMode, setCuMode] = useState('year');   // year=월별, five=5년
   const [cuOverrides, setCuOverrides] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_cu_workdays') || '{}'); } catch (e) { return {}; }
+    try { return JSON.parse(localStorage.getItem('mfgsb_cu_workdays') || '{}'); } catch (e) { return {}; }
   });
   // 연도별 CT 데이터 { '2027': {groups:[], items:[]}, ... }
   const [cuDataByYear, setCuDataByYear] = useState(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem('mfg_cu_ctdata') || 'null');
+      const raw = JSON.parse(localStorage.getItem('mfgsb_cu_ctdata') || 'null');
       if (!raw) return {};
       // 구버전(단일 데이터) → 현재 연도+1 로 이관
       if (raw.groups || raw.items) return { [String(new Date().getFullYear() + 1)]: raw };
@@ -4933,24 +5127,24 @@ function App() {
   const [cuMsg, setCuMsg] = useState('');
   const [productionPlan, setProductionPlan] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_production_plan') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_production_plan') || '{}');
     } catch {
       return {};
     }
   });
   // ===== Production Review 상태 =====
-  const [reviewChanges, setReviewChanges] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_changes') || '[]'); } catch { return []; } });
-  const [reviewTargets, setReviewTargets] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_targets') || '{}'); } catch { return {}; } });
-  const [reviewNotes, setReviewNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_notes') || '{}'); } catch { return {}; } });
-  const [reviewHolidays, setReviewHolidays] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_holidays') || '{}'); } catch { return {}; } });
-  const saveReviewChanges = next => { setReviewChanges(next); try { localStorage.setItem('mfg_review_changes', JSON.stringify(next)); } catch {} };
-  const saveReviewTargets = next => { setReviewTargets(next); try { localStorage.setItem('mfg_review_targets', JSON.stringify(next)); } catch {} };
-  const saveReviewNotes = next => { setReviewNotes(next); try { localStorage.setItem('mfg_review_notes', JSON.stringify(next)); } catch {} };
-  const saveReviewHolidays = next => { setReviewHolidays(next); try { localStorage.setItem('mfg_review_holidays', JSON.stringify(next)); } catch {} };
-  const [reviewJig, setReviewJig] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_jig') || '{}'); } catch { return {}; } });
-  const [reviewJigNotes, setReviewJigNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_jignotes') || '{}'); } catch { return {}; } });
-  const saveReviewJig = next => { setReviewJig(next); try { localStorage.setItem('mfg_review_jig', JSON.stringify(next)); } catch {} };
-  const saveReviewJigNotes = next => { setReviewJigNotes(next); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(next)); } catch {} };
+  const [reviewChanges, setReviewChanges] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_changes') || '[]'); } catch { return []; } });
+  const [reviewTargets, setReviewTargets] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_targets') || '{}'); } catch { return {}; } });
+  const [reviewNotes, setReviewNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_notes') || '{}'); } catch { return {}; } });
+  const [reviewHolidays, setReviewHolidays] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_holidays') || '{}'); } catch { return {}; } });
+  const saveReviewChanges = next => { setReviewChanges(next); try { localStorage.setItem('mfgsb_review_changes', JSON.stringify(next)); } catch {} };
+  const saveReviewTargets = next => { setReviewTargets(next); try { localStorage.setItem('mfgsb_review_targets', JSON.stringify(next)); } catch {} };
+  const saveReviewNotes = next => { setReviewNotes(next); try { localStorage.setItem('mfgsb_review_notes', JSON.stringify(next)); } catch {} };
+  const saveReviewHolidays = next => { setReviewHolidays(next); try { localStorage.setItem('mfgsb_review_holidays', JSON.stringify(next)); } catch {} };
+  const [reviewJig, setReviewJig] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_jig') || '{}'); } catch { return {}; } });
+  const [reviewJigNotes, setReviewJigNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_jignotes') || '{}'); } catch { return {}; } });
+  const saveReviewJig = next => { setReviewJig(next); try { localStorage.setItem('mfgsb_review_jig', JSON.stringify(next)); } catch {} };
+  const saveReviewJigNotes = next => { setReviewJigNotes(next); try { localStorage.setItem('mfgsb_review_jignotes', JSON.stringify(next)); } catch {} };
   const [prSubTab, setPrSubTab] = useState('calendar');
   const [prSection, setPrSection] = useState('TCP');
   const [prMonth, setPrMonth] = useState('');
@@ -4958,15 +5152,15 @@ function App() {
   const [prLine, setPrLine] = useState('전체');
   const [prShowItems, setPrShowItems] = useState(true);
   const [prSummary, setPrSummary] = useState(false);
-  const [reviewLineMap, setReviewLineMap] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_linemap') || '{}'); } catch { return {}; } });
-  const [reviewAch, setReviewAch] = useState(() => { try { return JSON.parse(localStorage.getItem('mfg_review_ach') || '{}'); } catch { return {}; } });
-  const saveReviewAch = next => { setReviewAch(next); try { localStorage.setItem('mfg_review_ach', JSON.stringify(next)); } catch {} };
-  const saveReviewLineMap = next => { setReviewLineMap(next); try { localStorage.setItem('mfg_review_linemap', JSON.stringify(next)); } catch {} };
+  const [reviewLineMap, setReviewLineMap] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_linemap') || '{}'); } catch { return {}; } });
+  const [reviewAch, setReviewAch] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_ach') || '{}'); } catch { return {}; } });
+  const saveReviewAch = next => { setReviewAch(next); try { localStorage.setItem('mfgsb_review_ach', JSON.stringify(next)); } catch {} };
+  const saveReviewLineMap = next => { setReviewLineMap(next); try { localStorage.setItem('mfgsb_review_linemap', JSON.stringify(next)); } catch {} };
   const [prYear, setPrYear] = useState(new Date().getFullYear());
   const [prSelMonth, setPrSelMonth] = useState(new Date().getMonth() + 1);
   const [planItemMapping, setPlanItemMapping] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_plan_mapping') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_plan_mapping') || '{}');
     } catch {
       return {};
     }
@@ -5284,23 +5478,23 @@ function App() {
   };
   // V105: 조직도 데이터 (MFG Report 설정 백업에 함께 저장)
   const [orgData, setOrgData] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_org_data') || 'null'); } catch { return null; }
+    try { return JSON.parse(localStorage.getItem('mfgsb_org_data') || 'null'); } catch { return null; }
   });
   React.useEffect(() => {
     if (!orgData) return;
-    try { localStorage.setItem('mfg_org_data', JSON.stringify(orgData)); } catch {}
+    try { localStorage.setItem('mfgsb_org_data', JSON.stringify(orgData)); } catch {}
   }, [orgData]);
   // V109: FE 계획엑셀 실적
   const [feActual, setFeActual] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_fe_actual') || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem('mfgsb_fe_actual') || '{}') || {}; } catch { return {}; }
   });
   // V107: TCP 순번 시트 기반 인원/잔업 정보
   const [tcpSeqInfo, setTcpSeqInfo] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_tcp_seq2') || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem('mfgsb_tcp_seq2') || '{}') || {}; } catch { return {}; }
   });
   const readFePlanRaw = () => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || 'null');
+      return JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || 'null');
     } catch {
       return null;
     }
@@ -5374,7 +5568,7 @@ function App() {
         next[key] = value;
       }
       try {
-        localStorage.setItem('mfg_prod_report_notes', JSON.stringify(next));
+        localStorage.setItem('mfgsb_prod_report_notes', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5480,7 +5674,7 @@ function App() {
     setCuOverrides(prev => {
       const n = { ...prev };
       if (next === cuBaseType(cuYear, dt)) delete n[k]; else n[k] = next;
-      try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(n)); } catch (e) {}
+      try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(n)); } catch (e) {}
       return n;
     });
   };
@@ -5663,13 +5857,13 @@ function App() {
   const [ftfrSection, setFtfrSection] = useState('TCP');
   // FTFR 연도별 Target (TCP/FE 각각). localStorage 저장
   const [ftfrTargets, setFtfrTargets] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfg_ftfr_targets') || '{}'); } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem('mfgsb_ftfr_targets') || '{}'); } catch { return {}; }
   });
   const [ftfrShowTargetEdit, setFtfrShowTargetEdit] = useState(false);
   const setFtfrTarget = (section, year, val) => {
     setFtfrTargets(prev => {
       const next = { ...prev, [`${section}_${year}`]: val };
-      try { localStorage.setItem('mfg_ftfr_targets', JSON.stringify(next)); } catch {}
+      try { localStorage.setItem('mfgsb_ftfr_targets', JSON.stringify(next)); } catch {}
       return next;
     });
   };
@@ -5763,7 +5957,7 @@ function App() {
   const [fdViewMode, setFdViewMode] = useState('month');
   const [ftfrConfig, setFtfrConfig] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_ftfr_config') || '{}');
+      return JSON.parse(localStorage.getItem('mfgsb_ftfr_config') || '{}');
     } catch {
       return {};
     }
@@ -5772,12 +5966,12 @@ function App() {
   const saveFtfrConfig = next => {
     setFtfrConfig(next);
     try {
-      localStorage.setItem('mfg_ftfr_config', JSON.stringify(next));
+      localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(next));
     } catch {}
   };
   const [achPlanData, setAchPlanData] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfg_ach_plan') || '{"tcp":{},"fe":{}}');
+      return JSON.parse(localStorage.getItem('mfgsb_ach_plan') || '{"tcp":{},"fe":{}}');
     } catch {
       return {
         tcp: {},
@@ -5802,7 +5996,7 @@ function App() {
   const saveAchPlanData = next => {
     setAchPlanData(next);
     try {
-      localStorage.setItem('mfg_ach_plan', JSON.stringify(next));
+      localStorage.setItem('mfgsb_ach_plan', JSON.stringify(next));
     } catch {}
   };
   const DEFAULT_FORMULAS = {
@@ -5902,7 +6096,7 @@ function App() {
   };
   const [formulaConfig, setFormulaConfig] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('mfg_formula_config') || 'null');
+      const saved = JSON.parse(localStorage.getItem('mfgsb_formula_config') || 'null');
       return migrateFormula(saved || DEFAULT_FORMULAS);
     } catch {
       return DEFAULT_FORMULAS;
@@ -5911,7 +6105,7 @@ function App() {
   const saveFormulaConfig = next => {
     setFormulaConfig(next);
     try {
-      localStorage.setItem('mfg_formula_config', JSON.stringify(next));
+      localStorage.setItem('mfgsb_formula_config', JSON.stringify(next));
     } catch {}
   };
   const resetFormulaConfig = () => {
@@ -6061,13 +6255,13 @@ function App() {
       const modSig = targets.map(t => (t.modified || '') + '#' + (t.name || '')).join('|');
       if (silent && modSig) {
         try {
-          const sigStore = JSON.parse(localStorage.getItem('mfg_plan_file_mod') || '{}');
+          const sigStore = JSON.parse(localStorage.getItem('mfgsb_plan_file_mod') || '{}');
           let hasLocal = false;
           if (type === 'tcp') {
-            const pp = JSON.parse(localStorage.getItem('mfg_production_plan') || '{}');
-            hasLocal = Object.keys(pp).some(k => k.indexOf('TCP|') === 0) && localStorage.getItem('mfg_tcp_seq_v') === '2';   // V127: 순번 파서 수정 → 한 번 재파싱
+            const pp = JSON.parse(localStorage.getItem('mfgsb_production_plan') || '{}');
+            hasLocal = Object.keys(pp).some(k => k.indexOf('TCP|') === 0) && localStorage.getItem('mfgsb_tcp_seq_v') === '2';   // V127: 순번 파서 수정 → 한 번 재파싱
           } else {
-            const fr = JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || 'null');
+            const fr = JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || 'null');
             hasLocal = !!(fr && Array.isArray(fr.rows) && fr.rows.length > 0);
           }
           if (sigStore[type] === modSig && hasLocal) {
@@ -6122,9 +6316,9 @@ function App() {
       // V100: 대상 파일 전부 적용 성공 시에만 서명 저장 → 다음 자동로드부터 미변경 시 생략
       if (okCount === targets.length) {
         try {
-          const s = JSON.parse(localStorage.getItem('mfg_plan_file_mod') || '{}');
+          const s = JSON.parse(localStorage.getItem('mfgsb_plan_file_mod') || '{}');
           s[type] = modSig;
-          localStorage.setItem('mfg_plan_file_mod', JSON.stringify(s));
+          localStorage.setItem('mfgsb_plan_file_mod', JSON.stringify(s));
         } catch {}
       }
       return lastMod || true;
@@ -6202,7 +6396,7 @@ function App() {
   const saveOeeManual = next => {
     setOeeManual(next);
     try {
-      localStorage.setItem('mfg_oee_manual', JSON.stringify(next));
+      localStorage.setItem('mfgsb_oee_manual', JSON.stringify(next));
     } catch {}
   };
   const driveSave = async () => {
@@ -6277,19 +6471,19 @@ function App() {
         if (d.oeeManual !== undefined) {
           setOeeManual(d.oeeManual || {});
           try {
-            localStorage.setItem('mfg_oee_manual', JSON.stringify(d.oeeManual || {}));
+            localStorage.setItem('mfgsb_oee_manual', JSON.stringify(d.oeeManual || {}));
           } catch {}
         }
         if (d.ftfrConfig !== undefined) {
           setFtfrConfig(d.ftfrConfig || {});
           try {
-            localStorage.setItem('mfg_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
+            localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
           } catch {}
         }
         if (d.formulaConfig !== undefined) {
           setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
           try {
-            localStorage.setItem('mfg_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
+            localStorage.setItem('mfgsb_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
           } catch {}
         }
         if (d.achPlanData !== undefined) {
@@ -6298,7 +6492,7 @@ function App() {
             fe: {}
           });
           try {
-            localStorage.setItem('mfg_ach_plan', JSON.stringify(d.achPlanData || {
+            localStorage.setItem('mfgsb_ach_plan', JSON.stringify(d.achPlanData || {
               tcp: {},
               fe: {}
             }));
@@ -6307,64 +6501,64 @@ function App() {
         if (d.prodReportNotes !== undefined) {
           setProdReportNotes(d.prodReportNotes || {});
           try {
-            localStorage.setItem('mfg_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
+            localStorage.setItem('mfgsb_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
           } catch {}
         }
         if (d.lotFtfrNotes !== undefined) {
           setLotFtfrNotes(d.lotFtfrNotes || {});
           try {
-            localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
+            localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
           } catch {}
         }
         if (d.moduleQuantities !== undefined) {
           setModuleQuantities(d.moduleQuantities || {});
           try {
-            localStorage.setItem('mfg_module_quantities', JSON.stringify(d.moduleQuantities || {}));
+            localStorage.setItem('mfgsb_module_quantities', JSON.stringify(d.moduleQuantities || {}));
           } catch {}
         }
         if (d.dtOverrides !== undefined) {
           setDtOverrides(d.dtOverrides || {});
           try {
-            localStorage.setItem('mfg_dt_overrides', JSON.stringify(d.dtOverrides || {}));
+            localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(d.dtOverrides || {}));
           } catch {}
         }
-        if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { localStorage.setItem('mfg_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
-        if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfg_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
-        if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfg_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
-        if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfg_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
-        if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfg_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
-        if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
-        if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfg_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
-        if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfg_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
+        if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { localStorage.setItem('mfgsb_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
+        if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfgsb_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
+        if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfgsb_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
+        if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfgsb_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
+        if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfgsb_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
+        if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfgsb_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
+        if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfgsb_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
+        if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfgsb_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
         if (d.orgData !== undefined && d.orgData) setOrgData(d.orgData);
         if (d.productionPlan !== undefined) {
           setProductionPlan(d.productionPlan || {});
           try {
-            localStorage.setItem('mfg_production_plan', JSON.stringify(d.productionPlan || {}));
+            localStorage.setItem('mfgsb_production_plan', JSON.stringify(d.productionPlan || {}));
           } catch {}
         }
         if (d.planItemMapping !== undefined) {
           setPlanItemMapping(d.planItemMapping || {});
           try {
-            localStorage.setItem('mfg_plan_mapping', JSON.stringify(d.planItemMapping || {}));
+            localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(d.planItemMapping || {}));
           } catch {}
           if (d.fePlanRaw) {
             try {
-              localStorage.setItem('mfg_fe_plan_raw', JSON.stringify(d.fePlanRaw));
+              localStorage.setItem('mfgsb_fe_plan_raw', JSON.stringify(d.fePlanRaw));
             } catch {}
           }
         }
         if (d.cuOverrides !== undefined) {
           setCuOverrides(d.cuOverrides || {});
-          try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
+          try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
         }
         if (d.cuDataByYear !== undefined && d.cuDataByYear) {
           setCuDataByYear(d.cuDataByYear);
-          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
+          try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
         } else if (d.cuData !== undefined && d.cuData) {
           const mig = { [String(new Date().getFullYear() + 1)]: d.cuData };
           setCuDataByYear(mig);
-          try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(mig)); } catch {}
+          try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(mig)); } catch {}
         }
         setShowDriveLoad(false);
         alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성률 계획 데이터가 복원되었습니다');
@@ -6409,105 +6603,14 @@ function App() {
     (async () => {
       setAutoLoadStatus('loading');
       try {
-        const listRes = await fetch(GAS_URL + '?action=list&prefix=' + GAS_LIST_PREFIX + '&_=' + Date.now());
-        const listResult = await listRes.json();
-        if (listResult && listResult.ok) gasListRef.current = listResult; // V100: 계획 자동로드와 목록 공유
+        if (window.__sbReady) await window.__sbReady;
         if (cancelled) return;
-        if (!listResult.ok || !listResult.files || listResult.files.length === 0) {
-          setAutoLoadStatus('failed');
-          return;
-        }
-        const files = listResult.files;
-        setLoadProg(p => ({ ...p, step: 'files', nFiles: files.length }));
-        // V135: 0바이트(저장 중 실패) 파일 제외
-        const __nonEmpty = f => !(f.size === 0 || f.size === '0');
-        const pickList = prefix => {
-          const matches = files.filter(f => (f.name || '').toLowerCase().startsWith(prefix) && __nonEmpty(f));
-          const byModified = (a, b) => {
-            const ta = a.modified ? new Date(a.modified).getTime() : 0;
-            const tb = b.modified ? new Date(b.modified).getTime() : 0;
-            if (tb !== ta) return tb - ta;
-            return (b.name || '').localeCompare(a.name || '');
-          };
-          const gz = matches.filter(f => (f.name || '').toLowerCase().endsWith('.json.gz')).sort(byModified);
-          const plain = matches.filter(f => !(f.name || '').toLowerCase().endsWith('.json.gz')).sort(byModified);
-          return gz.concat(plain).slice(0, 4);
-        };
-        const pickLatest = prefix => {
-          const matches = files.filter(f => (f.name || '').toLowerCase().startsWith(prefix) && __nonEmpty(f));
-          if (matches.length === 0) return null;
-          const byModified = (a, b) => {
-            const ta = a.modified ? new Date(a.modified).getTime() : 0;
-            const tb = b.modified ? new Date(b.modified).getTime() : 0;
-            if (tb !== ta) return tb - ta;
-            return (b.name || '').localeCompare(a.name || '');
-          };
-          // 압축본(.json.gz) 우선 — 있으면 그 중 최신. 없을 때만 비압축(.json) 최신으로 폴백
-          const gz = matches.filter(f => (f.name || '').toLowerCase().endsWith('.json.gz'));
-          if (gz.length > 0) return gz.sort(byModified)[0];
-          return matches.sort(byModified)[0];
-        };
-        const latestTcp = pickLatest('tcp-backup-');
-        const latestFe = pickLatest('fe-backup-');
-        // V135: 최신 파일 로드 실패 시 그다음 최신 파일로 자동 대체
-        const loadFirstOk = async (list, prefix) => {
-          for (const f of (list || [])) {
-            const d = await loadOne(f, prefix);
-            if (d) return d;
-            console.warn('[MFGreport] 백업 로드 실패, 이전 파일로 대체:', f.name);
-          }
-          return null;
-        };
-        const loadOne = async (file, prefix) => {
-          if (!file) return null;
-          const cacheKey = prefix + ':' + file.id;
-          const kb = Math.round((+file.size || 0) / 1024);
-          const cached = await __idb.get(cacheKey);
-          if (cached) {
-            __idb.prune(prefix, cacheKey);
-            setProg(prefix, { st: 'done', pct: 100, kb, cache: true });
-            return cached;
-          }
-          try {
-            setProg(prefix, { st: 'req', pct: 0, kb });
-            const r = await fetch(GAS_URL + '?action=load&id=' + encodeURIComponent(file.id));
-            // V141: 받은 바이트 수로 진행률 표시 (파일 크기는 목록에서 받은 size 기준)
-            let text;
-            if (r.body && r.body.getReader) {
-              const reader = r.body.getReader();
-              const total = (+file.size || 0) + 24;
-              const chunks = []; let got = 0;
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                chunks.push(value); got += value.length;
-                setProg(prefix, { st: 'down', pct: total > 0 ? Math.min(99, Math.round(got / total * 100)) : 0 });
-              }
-              const all = new Uint8Array(got); let off = 0;
-              for (const c of chunks) { all.set(c, off); off += c.length; }
-              text = new TextDecoder().decode(all);
-            } else {
-              text = await r.text();
-            }
-            setProg(prefix, { st: 'parse', pct: 100 });
-            const j = JSON.parse(text);
-            const raw = j.ok && j.data != null ? j.data : null;
-            const data = await __normalizeBackup(raw);
-            if (data) {
-              await __idb.set(cacheKey, data);
-              __idb.prune(prefix, cacheKey);
-            }
-            setProg(prefix, { st: data ? 'done' : 'fail', pct: 100 });
-            return data;
-          } catch {
-            setProg(prefix, { st: 'fail' });
-            return null;
-          }
-        };
-        const latestSettingsP = pickLatest('mfg-settings-');
-        const __tcpP = loadFirstOk(pickList('tcp-backup-'), 'tcp');
-        const __feP = loadFirstOk(pickList('fe-backup-'), 'fe');
-        const __setP = loadFirstOk(pickList('mfg-settings-'), 'set');
+        setLoadProg(p => ({ ...p, step: 'files', nFiles: 3 }));
+        const __sbFail = (k, name) => e => { console.error(name + ' 불러오기 실패', e); setProg(k, { st: 'fail', err: __sbErr(e) }); window.__sbLoadErr = (window.__sbLoadErr ? window.__sbLoadErr + ' / ' : '') + name + ': ' + __sbErr(e); return null; };
+        window.__sbLoadErr = '';
+        const __tcpP = __sbLoadSection('TCP', st => setProg('tcp', st)).catch(__sbFail('tcp', 'TCP'));
+        const __feP = __sbLoadSection('FE', st => setProg('fe', st)).catch(__sbFail('fe', 'FE'));
+        const __setP = __sbLoadMfgSettings(st => setProg('set', st)).catch(__sbFail('set', '설정'));
         let tcpLoaded = false,
           feLoaded = false;
         __tcpP.then(d => {
@@ -6529,19 +6632,19 @@ function App() {
             if (d.oeeManual !== undefined) {
               setOeeManual(d.oeeManual || {});
               try {
-                localStorage.setItem('mfg_oee_manual', JSON.stringify(d.oeeManual || {}));
+                localStorage.setItem('mfgsb_oee_manual', JSON.stringify(d.oeeManual || {}));
               } catch {}
             }
             if (d.ftfrConfig !== undefined) {
               setFtfrConfig(d.ftfrConfig || {});
               try {
-                localStorage.setItem('mfg_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
+                localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
               } catch {}
             }
             if (d.formulaConfig !== undefined) {
               setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
               try {
-                localStorage.setItem('mfg_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
+                localStorage.setItem('mfgsb_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
               } catch {}
             }
             if (d.achPlanData !== undefined) {
@@ -6550,7 +6653,7 @@ function App() {
                 fe: {}
               });
               try {
-                localStorage.setItem('mfg_ach_plan', JSON.stringify(d.achPlanData || {
+                localStorage.setItem('mfgsb_ach_plan', JSON.stringify(d.achPlanData || {
                   tcp: {},
                   fe: {}
                 }));
@@ -6559,35 +6662,35 @@ function App() {
             if (d.prodReportNotes !== undefined) {
               setProdReportNotes(d.prodReportNotes || {});
               try {
-                localStorage.setItem('mfg_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
+                localStorage.setItem('mfgsb_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
               } catch {}
             }
             if (d.lotFtfrNotes !== undefined) {
               setLotFtfrNotes(d.lotFtfrNotes || {});
               try {
-                localStorage.setItem('mfg_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
+                localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
               } catch {}
             }
             if (d.moduleQuantities !== undefined) {
               setModuleQuantities(d.moduleQuantities || {});
               try {
-                localStorage.setItem('mfg_module_quantities', JSON.stringify(d.moduleQuantities || {}));
+                localStorage.setItem('mfgsb_module_quantities', JSON.stringify(d.moduleQuantities || {}));
               } catch {}
             }
             if (d.dtOverrides !== undefined) {
               setDtOverrides(d.dtOverrides || {});
               try {
-                localStorage.setItem('mfg_dt_overrides', JSON.stringify(d.dtOverrides || {}));
+                localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(d.dtOverrides || {}));
               } catch {}
             }
-            if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { localStorage.setItem('mfg_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
-            if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfg_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
-            if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfg_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
-            if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfg_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
-            if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfg_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
-            if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfg_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
-            if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfg_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
-            if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfg_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
+            if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { localStorage.setItem('mfgsb_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
+            if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfgsb_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
+            if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfgsb_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
+            if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfgsb_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
+            if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfgsb_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
+            if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfgsb_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
+            if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfgsb_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
+            if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfgsb_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
             if (d.orgData !== undefined && d.orgData) setOrgData(d.orgData);
         if (d.orgData !== undefined && d.orgData) setOrgData(d.orgData);
             if (d.productionPlan !== undefined) {
@@ -6595,35 +6698,35 @@ function App() {
               setProductionPlan(prev => {
                 const merged = { ...(prev || {}), ...(d.productionPlan || {}) };
                 try {
-                  localStorage.setItem('mfg_production_plan', JSON.stringify(merged));
+                  localStorage.setItem('mfgsb_production_plan', JSON.stringify(merged));
                 } catch {}
                 return merged;
               });
             }
             if (d.cuOverrides !== undefined) {
               setCuOverrides(d.cuOverrides || {});
-              try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
+              try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
             }
             if (d.cuDataByYear !== undefined && d.cuDataByYear) {
               setCuDataByYear(d.cuDataByYear);
-              try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
+              try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
             } else if (d.cuData !== undefined && d.cuData) {
               const mig = { [String(new Date().getFullYear() + 1)]: d.cuData };
               setCuDataByYear(mig);
-              try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(mig)); } catch {}
+              try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(mig)); } catch {}
             }
             if (d.planItemMapping !== undefined) {
               // 자동로드는 병합: 직접 연결해둔 매칭이 지워지지 않도록 보존
               setPlanItemMapping(prev => {
                 const merged = { ...(prev || {}), ...(d.planItemMapping || {}) };
                 try {
-                  localStorage.setItem('mfg_plan_mapping', JSON.stringify(merged));
+                  localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(merged));
                 } catch {}
                 return merged;
               });
               if (d.fePlanRaw) {
                 try {
-                  localStorage.setItem('mfg_fe_plan_raw', JSON.stringify(d.fePlanRaw));
+                  localStorage.setItem('mfgsb_fe_plan_raw', JSON.stringify(d.fePlanRaw));
                 } catch {}
               }
             }
@@ -6640,6 +6743,32 @@ function App() {
       cancelled = true;
     };
   }, []);
+  // 서버 변경분 반영 — TCP·FE 입력, 다른 사람이 바꾼 MFG Report 설정 (60초마다 · 창 복귀 시)
+  React.useEffect(() => {
+    if (autoLoadStatus !== 'done' && autoLoadStatus !== 'failed') return;
+    let busy = false;
+    const tick = async () => {
+      if (busy || document.visibilityState !== 'visible') return;
+      busy = true;
+      try {
+        const [t, f, m] = await Promise.all([__sbPullSection('TCP'), __sbPullSection('FE'), __sbPullSection('MFG')]);
+        if (t) setTcpDataMerged(t.data);
+        if (f) setFeDataMerged(f.data);
+        if (m && m.changedKeys.length) {
+          autoBackupSkipRef.current = true;   // 받은 설정을 그대로 다시 저장하지 않음
+          const d = m.data;
+          const S = { oeeManual: setOeeManual, ftfrConfig: setFtfrConfig, achPlanData: setAchPlanData, prodReportNotes: setProdReportNotes, lotFtfrNotes: setLotFtfrNotes, moduleQuantities: setModuleQuantities, dtOverrides: setDtOverrides, reviewChanges: setReviewChanges, reviewTargets: setReviewTargets, reviewNotes: setReviewNotes, reviewHolidays: setReviewHolidays, reviewJig: setReviewJig, reviewJigNotes: setReviewJigNotes, reviewLineMap: setReviewLineMap, reviewAch: setReviewAch, orgData: setOrgData, cuOverrides: setCuOverrides, cuDataByYear: setCuDataByYear };
+          m.changedKeys.forEach(k => { if (S[k] && d[k] !== undefined) S[k](d[k]); });
+          if (m.changedKeys.includes('formulaConfig')) setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
+          if (m.changedKeys.includes('productionPlan')) setProductionPlan(prev => ({ ...(prev || {}), ...(d.productionPlan || {}) }));
+        }
+      } catch (e) { console.warn('서버 변경 확인 실패', e); } finally { busy = false; }
+    };
+    const iv = setInterval(tick, 60000);
+    const onVis = () => { if (document.visibilityState === 'visible') tick(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, [autoLoadStatus]);
   const handleFileUpload = (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -6710,7 +6839,7 @@ function App() {
         const seq = parseTcpSeq(wb);
         if (seq && Object.keys(seq).length) {
           setTcpSeqInfo(seq);
-          try { localStorage.setItem('mfg_tcp_seq2', JSON.stringify(seq)); localStorage.setItem('mfg_tcp_seq_v', '2'); localStorage.removeItem('mfg_tcp_seq'); } catch {}
+          try { localStorage.setItem('mfgsb_tcp_seq2', JSON.stringify(seq)); localStorage.setItem('mfgsb_tcp_seq_v', '2'); localStorage.removeItem('mfgsb_tcp_seq'); } catch {}
           try { console.log('[TCP seq]', Object.keys(seq).length + '건'); } catch {}
         }
       } catch (e) {}
@@ -6734,7 +6863,7 @@ function App() {
         if (matched) autoMap[key] = matched;
       });
       setPlanItemMapping(autoMap);
-      try { localStorage.setItem('mfg_plan_mapping', JSON.stringify(autoMap)); } catch {}
+      try { localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(autoMap)); } catch {}
       const unmapped = parts.filter(p => !autoMap[`TCP|${p}`]);
       const converted = {};
       Object.entries(plan).forEach(([k, qty]) => {
@@ -6750,7 +6879,7 @@ function App() {
           const next = {};
           Object.entries(prev).forEach(([k, v]) => { if (!k.startsWith('TCP|')) next[k] = v; });
           Object.assign(next, converted);
-          try { localStorage.setItem('mfg_production_plan', JSON.stringify(next)); } catch {}
+          try { localStorage.setItem('mfgsb_production_plan', JSON.stringify(next)); } catch {}
           return next;
         });
       }
@@ -6777,9 +6906,9 @@ function App() {
         const act = parseFeActual(wb);
         if (act && Object.keys(act).length) {
           let prev = {};
-          try { prev = JSON.parse(localStorage.getItem('mfg_fe_actual') || '{}') || {}; } catch {}
+          try { prev = JSON.parse(localStorage.getItem('mfgsb_fe_actual') || '{}') || {}; } catch {}
           const merged = Object.assign({}, prev, act);
-          localStorage.setItem('mfg_fe_actual', JSON.stringify(merged));
+          localStorage.setItem('mfgsb_fe_actual', JSON.stringify(merged));
           setFeActual(merged);
         }
       } catch (e) {}
@@ -6793,7 +6922,7 @@ function App() {
         if (rawRows.length) {
           const lotMaps = extractLotMaps(wb);
           let prev = {};
-          try { prev = JSON.parse(localStorage.getItem('mfg_fe_plan_raw') || '{}') || {}; } catch {}
+          try { prev = JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || '{}') || {}; } catch {}
           const prevRows = Array.isArray(prev.rows) ? prev.rows : [];
           const newMonths = new Set(rawRows.map(r => String(r.date || '').slice(0, 7)));
           const kept = prevRows.filter(r => !newMonths.has(String(r.date || '').slice(0, 7)));
@@ -6804,7 +6933,7 @@ function App() {
           const prevAssign = Array.isArray(prev.icvAssign) ? prev.icvAssign : [];
           const keptAssign = prevAssign.filter(k => !newMonths.has(String(k).split('|')[1].slice(0, 7)));
           const icvAssign = Array.from(new Set(keptAssign.concat(assignNew)));
-          localStorage.setItem('mfg_fe_plan_raw', JSON.stringify({ rows: merged, file: fileName, uploadedAt: new Date().toISOString(), revMap, lineCodes, icvAssign }));
+          localStorage.setItem('mfgsb_fe_plan_raw', JSON.stringify({ rows: merged, file: fileName, uploadedAt: new Date().toISOString(), revMap, lineCodes, icvAssign }));
         }
       } catch (e) {}
       const __fpm = planItemMappingRef.current || {};
@@ -6830,7 +6959,7 @@ function App() {
             if (!uploadedMonths.has(m)) next[k] = v;
           });
           Object.assign(next, converted);
-          try { localStorage.setItem('mfg_production_plan', JSON.stringify(next)); } catch {}
+          try { localStorage.setItem('mfgsb_production_plan', JSON.stringify(next)); } catch {}
           return next;
         });
       }
@@ -7873,7 +8002,7 @@ function App() {
         built.__fromDefault = true;
         setFtfrConfig(built);
         try {
-          localStorage.setItem('mfg_ftfr_config', JSON.stringify(built));
+          localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(built));
         } catch {}
       }
       h52DefaultApplied.current = true;
@@ -8591,7 +8720,7 @@ function App() {
     icon: '📤',
     label: '데이터 출력'
   }];
-  const isGuest = typeof localStorage !== 'undefined' && localStorage.getItem('mfg_guest') === '1';
+  const isGuest = typeof localStorage !== 'undefined' && !!(window.MFG_USER && window.MFG_USER.isGuest);
   const GUEST_TABS = ['dashboard', 'oee', 'oeedetail', 'quantity', 'defect', 'rework', 'downtime', 'tool', 'lotftfr', 'export'];
   // V134: 게스트는 펼침 메뉴 안의 허용 화면을 꺼내서 단일 메뉴로 표시
   const visibleTabs = isGuest ? TABS.flatMap(t => t.children ? t.children.filter(k => GUEST_TABS.includes(k.id)) : (GUEST_TABS.includes(t.id) ? [t] : [])) : TABS;
@@ -8618,7 +8747,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-px bg-slate-100 rounded text-[11px] font-semibold text-slate-600 cursor-help hover:bg-slate-200 transition-colors tabular"
-  }, "V149"), React.createElement("div", {
+  }, "V155S"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -8872,10 +9001,7 @@ function App() {
     }, React.createElement("button", {
       onClick: () => driveLoadFile(f.id),
       className: "px-3 py-1 bg-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700"
-    }, "복원"), React.createElement("button", {
-      onClick: () => driveDeleteFile(f.id, f.name),
-      className: "px-3 py-1 bg-red-500 text-white rounded text-xs font-bold hover:bg-red-600"
-    }, "삭제"))))))));
+    }, "복원"))))))));
   })(), effTab === 'dashboard' && (tcpData || feData) && React.createElement("div", {
     className: "space-y-5 mfg-legacy"
   }, React.createElement("div", {
@@ -13907,7 +14033,7 @@ function App() {
           if (!g.length && !it.length) { setCuMsg('CT그룹 · 아이템 시트를 찾지 못했습니다.'); return; }
           setCuDataByYear(prev => {
             const n = { ...prev, [String(cuYear)]: { groups: g, items: it } };
-            try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(n)); } catch (x) {}
+            try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(n)); } catch (x) {}
             return n;
           });
           setCuMsg(`${cuYear}년 · CT그룹 ${g.length}건 · 아이템 ${it.length}건 반영. 잠시 후 공유저장소에 자동 저장됩니다.`);
@@ -13985,7 +14111,7 @@ function App() {
               if (!window.confirm(`${src}년 CT 데이터를 ${cuYear}년으로 복사할까요?`)) return;
               setCuDataByYear(prev => {
                 const n = { ...prev, [String(cuYear)]: JSON.parse(JSON.stringify(prev[src])) };
-                try { localStorage.setItem('mfg_cu_ctdata', JSON.stringify(n)); } catch (e) {}
+                try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(n)); } catch (e) {}
                 return n;
               });
               setCuMsg(`${src}년 데이터를 ${cuYear}년으로 복사했습니다.`);
@@ -14033,7 +14159,7 @@ function App() {
                 setCuOverrides(prev => {
                   const n = { ...prev };
                   Object.keys(n).forEach(k => { if (k.slice(0, 4) === String(cuYear)) delete n[k]; });
-                  try { localStorage.setItem('mfg_cu_workdays', JSON.stringify(n)); } catch (e) {}
+                  try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(n)); } catch (e) {}
                   return n;
                 });
               },
@@ -19484,7 +19610,7 @@ function App() {
             };
             toReset.forEach(k => delete next[k]);
             try {
-              localStorage.setItem('mfg_dt_overrides', JSON.stringify(next));
+              localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -19625,7 +19751,7 @@ function App() {
             };
             if (e.target.value) next[`TCP|${part}`] = e.target.value;else delete next[`TCP|${part}`];
             try {
-              localStorage.setItem('mfg_plan_mapping', JSON.stringify(next));
+              localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -19664,7 +19790,7 @@ function App() {
             });
             Object.assign(next, converted);
             try {
-              localStorage.setItem('mfg_production_plan', JSON.stringify(next));
+              localStorage.setItem('mfgsb_production_plan', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -19739,7 +19865,7 @@ function App() {
             };
             if (e.target.value) next[`FE|${pno}`] = e.target.value;else delete next[`FE|${pno}`];
             try {
-              localStorage.setItem('mfg_plan_mapping', JSON.stringify(next));
+              localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -19785,7 +19911,7 @@ function App() {
             });
             Object.assign(next, converted);
             try {
-              localStorage.setItem('mfg_production_plan', JSON.stringify(next));
+              localStorage.setItem('mfgsb_production_plan', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -19802,7 +19928,7 @@ function App() {
         if (confirm('저장된 모든 생산계획을 삭제하시겠습니까?')) {
           setProductionPlan({});
           try {
-            localStorage.setItem('mfg_production_plan', '{}');
+            localStorage.setItem('mfgsb_production_plan', '{}');
           } catch {}
           alert('생산계획이 삭제되었습니다.');
         }
@@ -20912,7 +21038,7 @@ function App() {
     const updateH52Config = next => {
       setH52Config(next);
       try {
-        localStorage.setItem('mfg_52h_config', JSON.stringify(next));
+        localStorage.setItem('mfgsb_52h_config', JSON.stringify(next));
       } catch {}
     };
     return React.createElement("div", null, React.createElement("div", {
@@ -26045,7 +26171,7 @@ function App() {
     className: "text-lg font-semibold text-slate-700 mb-2"
   }, "데이터를 먼저 업로드해주세요"), React.createElement("p", {
     className: "text-xs text-slate-500 mb-4"
-  }, "자동 복원이 실패했거나 백업 파일이 없습니다"), React.createElement("button", {
+  }, window.__sbLoadErr ? "서버에서 불러오지 못했습니다 — " + window.__sbLoadErr + " (새로고침하면 다시 시도)" : "서버에 아직 데이터가 없습니다"), React.createElement("button", {
     onClick: () => setActiveTab('upload'),
     className: "mt-2 px-5 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
   }, "데이터 업로드"))), showFtfrConfig && (() => {
