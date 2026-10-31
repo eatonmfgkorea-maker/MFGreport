@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V156S</title>
+  <title>MFG Report V157S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -55,7 +55,7 @@
 <script>
 (function() {
   var APP_NAME = 'MFG Report';
-  var APP_VER = 'V156S';
+  var APP_VER = 'V157S';
   var SB_DEFAULT_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co';
   var SB_DEFAULT_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
   var CFG_KEY = 'mfg-sb-test-cfg', AUTH_KEY = 'mfg-sb-test-auth', LAST_EMAIL = 'mfg-sb-test-last-email';
@@ -323,9 +323,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V156S',
-  d: '2026-10-27',
-  items: ['서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', 'FTIV 데이터와 생산계획 엑셀은 Google 공유저장소 그대로 사용']
+  v: 'V157S',
+  d: '2026-10-31',
+  items: ['서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', 'FTIV 데이터와 생산계획 엑셀은 Google 공유저장소 그대로 사용']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -6299,6 +6299,47 @@ function App() {
       return false;
     }
   };
+  // 서버판: 파이썬이 계획 엑셀을 읽어 서버(PLAN)에 올린 결과를 바로 적용 — 엑셀 내려받기·읽기 없음
+  //  반환 [tcp, fe]: 파일 시각(적용함) | true(바뀐 것 없음) | false(적용 실패) | null(서버에 없음 → 공유저장소 엑셀로)
+  const loadPlanFromServer = async () => {
+    const client = window.MFG_SB;
+    if (!client) return [null, null];
+    try {
+      if (window.__sbReady) await window.__sbReady;
+      const { data: heads, error } = await client.from('prod_state').select('key,updated_at').eq('section', 'PLAN');
+      if (error || !heads) return [null, null];
+      const at = {}; heads.forEach(h => { at[h.key] = h.updated_at; });
+      let sig = {}; try { sig = JSON.parse(localStorage.getItem('mfgsb_plan_srv_sig') || '{}') || {}; } catch (e) {}
+      const hasLocal = k => {
+        try {
+          if (k === 'tcp') return Object.keys(JSON.parse(localStorage.getItem('mfgsb_production_plan') || '{}')).some(x => x.indexOf('TCP|') === 0) && localStorage.getItem('mfgsb_tcp_seq_v') === '2';
+          const fr = JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || 'null');
+          return !!(fr && Array.isArray(fr.rows) && fr.rows.length > 0);
+        } catch (e) { return false; }
+      };
+      const out = { tcp: at.tcp ? true : null, fe: at.fe ? true : null };
+      const need = ['tcp', 'fe'].filter(k => at[k] && !(sig[k] === at[k] && hasLocal(k)));
+      planSkipRef.current.tcp = !!at.tcp && need.indexOf('tcp') < 0;
+      planSkipRef.current.fe = !!at.fe && need.indexOf('fe') < 0;
+      if (need.length) {
+        const { data: rows, error: e2 } = await client.from('prod_state').select('key,data,updated_at').eq('section', 'PLAN').in('key', need);
+        if (e2) throw e2;
+        (rows || []).forEach(row => {
+          if (need.indexOf(row.key) < 0) return;
+          const d = row.data || {};
+          let ok = false, saved = 0, why = '';
+          if (row.key === 'tcp') { const r = applyTcpParsed(d, true); ok = !!(r && r.ok); saved = (r && r.saved) || 0; why = (r && r.reason) || ''; }
+          else if (row.key === 'fe') { (d.files || []).forEach(f => { const r = applyFeParsed(f, f.file, true); if (r && r.ok) { ok = true; saved += r.saved || 0; } else why = (r && r.reason) || why; }); }
+          planSavedRef.current[row.key] = saved;
+          if (ok) { sig[row.key] = row.updated_at; out[row.key] = d.fileMod || row.updated_at; }
+          else { planErrRef.current[row.key] = '서버 계획 적용 실패' + (why ? ':' + why : ''); out[row.key] = false; }
+        });
+        try { localStorage.setItem('mfgsb_plan_srv_sig', JSON.stringify(sig)); } catch (e) {}
+      }
+      return [out.tcp, out.fe];
+    } catch (e) { console.warn('서버 생산계획 불러오기 실패', e); return [null, null]; }
+  };
+  window.__mfgPlanFromServer = loadPlanFromServer;
   // Production 보고/리뷰 탭 진입 시 생산계획 자동 로드 (1회, 조용히)
   const planAutoLoadedRef = React.useRef(false);
   const planSkipRef = React.useRef({ tcp: false, fe: false }); // V100: 파일 미변경으로 생략됐는지 표시용
@@ -6329,16 +6370,19 @@ function App() {
       check(tries);
     });
     const t = setTimeout(async () => {
-      // V100: 초기 자동로드에서 받은 파일 목록 재사용(목록 중복 조회 제거) — 없을 때만 새로 조회
-      let sharedList = gasListRef.current;
-      if (!sharedList) {
-        try { sharedList = await (await fetch(GAS_URL + '?action=list&prefix=' + GAS_LIST_PREFIX + '&_=' + Date.now())).json(); } catch (e) {}
+      // 서버판: 서버에 올라온 계획 결과를 먼저 사용. 서버에 아직 없을 때만 예전처럼 공유저장소 엑셀을 받아 읽음
+      let [okTcp, okFe] = await loadPlanFromServer();
+      if (okTcp === null || okFe === null) {
+        let sharedList = gasListRef.current;
+        if (!sharedList) {
+          try { sharedList = await (await fetch(GAS_URL + '?action=list&prefix=' + GAS_LIST_PREFIX + '&_=' + Date.now())).json(); } catch (e) {}
+        }
+        const __r = await Promise.all([
+          okTcp === null ? loadPlanFromDrive('tcp', true, sharedList) : okTcp,
+          okFe === null ? loadPlanFromDrive('fe', true, sharedList) : okFe
+        ]);
+        okTcp = __r[0]; okFe = __r[1];
       }
-      // V100: TCP·FE 동시 로드 — 다운로드는 병렬, 파싱은 함수 내부 잠금으로 순차(메모리 안전)
-      const [okTcp, okFe] = await Promise.all([
-        loadPlanFromDrive('tcp', true, sharedList),
-        loadPlanFromDrive('fe', true, sharedList)
-      ]);
       // 이미 저장된 계획이 있으면(화면에 데이터 있음) 그것도 성공으로 간주
       const hasPlan = Object.keys(productionPlan || {}).length > 0;
       if (okTcp || okFe || hasPlan) {
@@ -6723,6 +6767,7 @@ function App() {
       busy = true;
       try {
         const [t, f, m] = await Promise.all([__sbPullSection('TCP'), __sbPullSection('FE'), __sbPullSection('MFG')]);
+        if (planAutoLoadedRef.current && window.__mfgPlanFromServer) window.__mfgPlanFromServer();
         if (t) setTcpDataMerged(t.data);
         if (f) setFeDataMerged(f.data);
         if (m && m.changedKeys.length) {
@@ -6803,11 +6848,18 @@ function App() {
     : XLSX.read(bytes, { cellDates: false, cellFormula: false, bookVBA: false, sheets: FE_PLAN_SHEETS });
   // ── 계획 워크북 처리(파싱·매칭·저장) 독립 함수: DOM input 없이 자동로드/수동 공용 ──
   const applyTcpPlanWb = (wb, __silent) => {
+    let __parsed;
+    try { __parsed = parseTcpPlan(wb); } catch (err) { if (!__silent) alert('TCP 파싱 오류: ' + err.message); return { ok: false, saved: 0, reason: '예외:' + String(err.message || '').slice(0, 30) }; }
+    try { __parsed.seq = parseTcpSeq(wb); } catch (e) {}
+    return applyTcpParsed(__parsed, __silent);
+  };
+  // 읽은 결과(엑셀 직접 · 파이썬이 서버에 올린 것)를 화면에 적용
+  const applyTcpParsed = (__parsed, __silent) => {
     try {
-      const { plan, parts: __rawParts } = parseTcpPlan(wb);
+      const { plan, parts: __rawParts } = __parsed;
       // V107: 순번 시트에서 인원/잔업 정보 추출
       try {
-        const seq = parseTcpSeq(wb);
+        const seq = __parsed.seq;
         if (seq && Object.keys(seq).length) {
           setTcpSeqInfo(seq);
           try { localStorage.setItem('mfgsb_tcp_seq2', JSON.stringify(seq)); localStorage.setItem('mfgsb_tcp_seq_v', '2'); localStorage.removeItem('mfgsb_tcp_seq'); } catch {}
@@ -6871,10 +6923,17 @@ function App() {
     }
   };
   const applyFePlanWb = (wb, fileName, __silent) => {
+    let __p;
+    try { __p = parseFePlan(wb); } catch (err) { if (!__silent) alert('FE 파싱 오류: ' + err.message); return { ok: false, saved: 0, reason: '예외:' + String(err.message || '').slice(0, 30) }; }
+    try { __p.actual = parseFeActual(wb); } catch (e) { __p.actual = {}; }
+    try { __p.rows = parseFePlanRaw(wb); __p.lot = extractLotMaps(wb); __p.assign = parseIcvAssign(wb); } catch (e) { __p.rows = []; }
+    return applyFeParsed(__p, fileName, __silent);
+  };
+  const applyFeParsed = (__p, fileName, __silent) => {
     try {
-      const { plan, items } = parseFePlan(wb);
+      const { plan, items } = __p;
       try {
-        const act = parseFeActual(wb);
+        const act = __p.actual;
         if (act && Object.keys(act).length) {
           let prev = {};
           try { prev = JSON.parse(localStorage.getItem('mfgsb_fe_actual') || '{}') || {}; } catch {}
@@ -6889,9 +6948,9 @@ function App() {
         return { ok: false, saved: 0, reason: '계획0건' };
       }
       try {
-        const rawRows = parseFePlanRaw(wb);
+        const rawRows = __p.rows || [];
         if (rawRows.length) {
-          const lotMaps = extractLotMaps(wb);
+          const lotMaps = __p.lot || { revMap: {}, lineCodes: {} };
           let prev = {};
           try { prev = JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || '{}') || {}; } catch {}
           const prevRows = Array.isArray(prev.rows) ? prev.rows : [];
@@ -6900,7 +6959,7 @@ function App() {
           const merged = kept.concat(rawRows);
           const revMap = Object.assign({}, prev.revMap || {}, lotMaps.revMap);
           const lineCodes = Object.assign({}, prev.lineCodes || {}, lotMaps.lineCodes);
-          const assignNew = parseIcvAssign(wb);
+          const assignNew = __p.assign || [];
           const prevAssign = Array.isArray(prev.icvAssign) ? prev.icvAssign : [];
           const keptAssign = prevAssign.filter(k => !newMonths.has(String(k).split('|')[1].slice(0, 7)));
           const icvAssign = Array.from(new Set(keptAssign.concat(assignNew)));
@@ -8718,7 +8777,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-px bg-slate-100 rounded text-[11px] font-semibold text-slate-600 cursor-help hover:bg-slate-200 transition-colors tabular"
-  }, "V156S"), React.createElement("div", {
+  }, "V157S"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
