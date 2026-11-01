@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V161S</title>
+  <title>MFG Report V162S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -55,7 +55,7 @@
 <script>
 (function() {
   var APP_NAME = 'MFG Report';
-  var APP_VER = 'V161S';
+  var APP_VER = 'V162S';
   var SB_DEFAULT_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co';
   var SB_DEFAULT_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
   var CFG_KEY = 'mfg-sb-test-cfg', AUTH_KEY = 'mfg-sb-test-auth', LAST_EMAIL = 'mfg-sb-test-last-email';
@@ -323,9 +323,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V161S',
+  v: 'V162S',
   d: '2026-11-01',
-  items: ['서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -601,7 +601,33 @@ const __sbCanon = v => JSON.stringify(v, (k, val) => (val && typeof val === 'obj
 const __sbErr = e => (e && (e.message || e.error_description || (typeof e === 'string' ? e : JSON.stringify(e)))) || '오류';
 const __sbMaxTs = (rows, cur) => rows.reduce((m, r) => (r.updated_at && r.updated_at > m ? r.updated_at : m), cur || '1970-01-01T00:00:00Z');
 const __sbUrl = () => (window.MFG_SB && window.MFG_SB.supabaseUrl) || '';
-// 섹션별 캐시: logs Map(kind:id → data), state {key → data}, lastPull
+// 세 갈래 합치기: base(마지막으로 받은 서버본) · mine(이 PC) · theirs(지금 서버본)
+//  한쪽만 바꾼 칸은 바뀐 쪽, 둘 다 같은 칸을 다르게 바꾸면 이 PC 값(conf에 기록)
+//  객체는 칸별로, 항목 목록(인원·라인·아이템 등)은 id/이름별로 합침
+function __sbMerge3(b, m, t, path, conf) {
+  const C = v => v === undefined ? '\u0000' : __sbCanon(v);
+  const cb = C(b), cm = C(m), ct = C(t);
+  if (cm === cb) return t;
+  if (ct === cb || cm === ct) return m;
+  const isObj = x => !!x && typeof x === 'object' && !Array.isArray(x);
+  if (isObj(m) && isObj(t) && (b === undefined || isObj(b))) {
+    const bb = b || {}, out = {};
+    new Set([...Object.keys(m), ...Object.keys(t), ...Object.keys(bb)]).forEach(k => { const v = __sbMerge3(bb[k], m[k], t[k], path + '.' + k, conf); if (v !== undefined) out[k] = v; });
+    return out;
+  }
+  const idOk = (x, f) => Array.isArray(x) && x.every(e => isObj(e) && e[f] != null && typeof e[f] !== 'object') && new Set(x.map(e => String(e[f]))).size === x.length;
+  const f = ['id', 'name', 'item', 'key'].find(f => idOk(m, f) && idOk(t, f) && (b === undefined || idOk(b, f)));   // 목록 항목을 구별하는 칸
+  if (f) {
+    const mp = x => new Map((x || []).map(e => [String(e[f]), e]));
+    const bm = mp(b), mm = mp(m), tm = mp(t), out = [];
+    const ids = [...mm.keys()]; tm.forEach((v, k) => { if (!mm.has(k)) ids.push(k); });
+    ids.forEach(id => { const v = __sbMerge3(bm.get(id), mm.get(id), tm.get(id), path + '[' + id + ']', conf); if (v !== undefined) out.push(v); });
+    return out;
+  }
+  if (conf) conf.push(path);
+  return m;
+}
+// 섹션별 캐시: logs Map(kind:id → data), state {key → data}, at {key → 서버 updated_at}, lastPull
 const __sbCache = { TCP: null, FE: null, MFG: null };
 const __sbSaveT = {};
 function __sbCacheSave(section) {
@@ -685,10 +711,15 @@ async function __sbPullSection(section) {
   const states = await __sbFetchAll('prod_state', section, q => q.gt('updated_at', since));
   let changed = 0; const changedKeys = [];
   logs.forEach(r => { const key = r.kind + ':' + r.id; if (r.deleted_at) { if (c.logs.delete(key)) changed++; } else { const prev = c.logs.get(key); if (prev === undefined || __sbCanon(prev) !== __sbCanon(r.data)) { c.logs.set(key, r.data); changed++; } } });
-  states.forEach(r => { if (__sbCanon(c.state[r.key]) !== __sbCanon(r.data)) { c.state[r.key] = r.data; changed++; changedKeys.push(r.key); } });
+  const prev = {};
+  c.at = c.at || {};
+  states.forEach(r => {
+    if (!c.at[r.key] || r.updated_at > c.at[r.key]) c.at[r.key] = r.updated_at;
+    if (__sbCanon(c.state[r.key]) !== __sbCanon(r.data)) { prev[r.key] = c.state[r.key]; c.state[r.key] = r.data; changed++; changedKeys.push(r.key); }
+  });
   c.lastPull = __sbMaxTs(logs.concat(states), c.lastPull);
   if (changed && section !== SB_MFG_SECTION) __sbCacheSave(section);
-  return changed ? { data: __sbBuildData(c), changed, changedKeys } : null;
+  return changed ? { data: __sbBuildData(c), changed, changedKeys, prev } : null;
 }
 // Google 공유저장소의 최신 MFG Report 설정을 서버로 (처음 한 번만 — 서버에 _googleImport 표시를 남김)
 const SB_GOOGLE_GAS = 'https://script.google.com/macros/s/AKfycbxLFrxbAaBt1bBa3SUdDY9wY48tvt85mEDaj3tiKhyw_R7oJCC9GbOWLfWbdSohnQtB/exec';
@@ -727,8 +758,8 @@ async function __sbLoadMfgSettings(onProg) {
     try { await __sbImportGoogleSettings(onProg); states = await __sbFetchAll('prod_state', SB_MFG_SECTION); }
     catch (e) { console.warn('Google 설정 가져오기 실패 — 서버에 있는 설정만 사용', e); }
   }
-  const c = { logs: new Map(), state: {}, lastPull: '1970-01-01T00:00:00Z' };
-  states.forEach(r => { if (r.key !== '_googleImport') c.state[r.key] = r.data; });
+  const c = { logs: new Map(), state: {}, at: {}, lastPull: '1970-01-01T00:00:00Z' };
+  states.forEach(r => { if (r.key !== '_googleImport') { c.state[r.key] = r.data; c.at[r.key] = r.updated_at; } });
   c.lastPull = __sbMaxTs(states, c.lastPull);
   __sbCache.MFG = c;
   if (onProg) onProg({ st: 'done', pct: 100, kb: Math.round(JSON.stringify(c.state).length / 1024) });
@@ -740,21 +771,40 @@ async function __postSettings(gasUrl, payload) {
   const client = window.MFG_SB; if (!client) throw new Error('서버 연결 없음');
   if (window.__sbReady) await window.__sbReady;
   if (window.MFG_USER && window.MFG_USER.isGuest) return { ok: true, json: async () => ({ ok: true, name: '(게스트 — 저장하지 않음)' }) };
-  const me = (window.MFG_USER && window.MFG_USER.email) || '';
-  const c = __sbCache.MFG || (__sbCache.MFG = { logs: new Map(), state: {}, lastPull: '1970-01-01T00:00:00Z' });
-  const now = new Date().toISOString();
+  const c = __sbCache.MFG || (__sbCache.MFG = { logs: new Map(), state: {}, at: {}, lastPull: '1970-01-01T00:00:00Z' });
+  c.at = c.at || {};
   const rows = [];
   Object.entries(payload.data || {}).forEach(([k, v]) => {
     if (k === 'version' || k === 'exportedAt' || v === undefined) return;
     if (c.state[k] !== undefined && __sbCanon(c.state[k]) === __sbCanon(v)) return;
-    rows.push({ section: SB_MFG_SECTION, key: k, data: v === null ? {} : v, updated_at: now, updated_by: me });
+    rows.push({ key: k, data: v === null ? {} : v });
   });
-  if (rows.length) {
-    const { error } = await client.from('prod_state').upsert(rows, { onConflict: 'section,key' });
-    if (error) throw error;
-    rows.forEach(r => { c.state[r.key] = r.data; });
-    __sbMfgDriveBackup(c.state);
+  // 키별로 "내가 본 버전"일 때만 저장, 그 사이 다른 PC가 바꿨으면 합쳐서 다시 저장
+  const merged = {}, mergedKeys = [], confs = [];
+  for (const r of rows) {
+    let base = c.state[r.key], mine = r.data, data = mine, at = c.at[r.key] || null, done = false;
+    for (let i = 0; i < 4 && !done; i++) {
+      const { data: res, error } = await client.rpc('save_state', { p_section: SB_MFG_SECTION, p_key: r.key, p_data: data, p_base: at });
+      if (error && (error.code === 'PGRST202' || /save_state/.test(error.message || ''))) {   // 서버에 합쳐 저장 기능(SQL)이 아직 없으면 예전 방식
+        const me = (window.MFG_USER && window.MFG_USER.email) || '';
+        const { error: e2 } = await client.from('prod_state').upsert({ section: SB_MFG_SECTION, key: r.key, data, updated_by: me }, { onConflict: 'section,key' });
+        if (e2) throw e2; c.state[r.key] = data; done = true; break;
+      }
+      if (error) throw error;
+      if (res && res.ok) { c.state[r.key] = data; c.at[r.key] = res.updated_at; done = true; break; }
+      const theirs = res.data, conf = [];
+      data = base === undefined ? theirs : __sbMerge3(base, mine, theirs, r.key, conf);
+      if (conf.length) confs.push(r.key + ' ' + conf.length + '칸');
+      base = theirs; mine = data; at = res.updated_at;
+      c.state[r.key] = theirs; c.at[r.key] = at;
+      merged[r.key] = data; if (!mergedKeys.includes(r.key)) mergedKeys.push(r.key);
+      if (__sbCanon(data) === __sbCanon(theirs)) done = true;
+    }
+    if (!done) throw new Error(r.key + ' 저장 충돌이 계속됨 — 잠시 후 다시');
   }
+  if (mergedKeys.length && window.__sbApplyMfg) window.__sbApplyMfg(mergedKeys, merged, payload.data || {});
+  if (mergedKeys.length) console.log('다른 PC 변경과 합쳐 저장:', mergedKeys.join(', '), confs.length ? '(같은 칸은 이 PC 값: ' + confs.join(', ') + ')' : '');
+  if (rows.length) __sbMfgDriveBackup(c.state);
   return { ok: true, json: async () => ({ ok: true, name: '서버 (' + rows.length + '개 항목 저장)' }) };
 }
 
@@ -6808,6 +6858,16 @@ function App() {
   React.useEffect(() => {
     if (autoLoadStatus !== 'done' && autoLoadStatus !== 'failed') return;
     let busy = false;
+    // 설정 반영 도우미: 이 PC에서 아직 저장 안 된 변경이 있으면 서버본과 합쳐서 반영 (합친 결과는 자동 저장이 다시 올림)
+    const S = { oeeManual: setOeeManual, ftfrConfig: setFtfrConfig, achPlanData: setAchPlanData, prodReportNotes: setProdReportNotes, lotFtfrNotes: setLotFtfrNotes, moduleQuantities: setModuleQuantities, dtOverrides: setDtOverrides, reviewChanges: setReviewChanges, reviewTargets: setReviewTargets, reviewNotes: setReviewNotes, reviewHolidays: setReviewHolidays, reviewJig: setReviewJig, reviewJigNotes: setReviewJigNotes, reviewLineMap: setReviewLineMap, reviewAch: setReviewAch, orgData: setOrgData, cuOverrides: setCuOverrides, cuDataByYear: setCuDataByYear };
+    const __mergeSet = (k, base, val) => S[k](cur => (base !== undefined && cur !== undefined && __sbCanon(cur) !== __sbCanon(base)) ? __sbMerge3(base, cur, val, k, []) : val);
+    window.__sbApplyMfg = (keys, dd, sent) => keys.forEach(k => {
+      if (dd[k] === undefined) return;
+      if (S[k]) __mergeSet(k, sent ? sent[k] : undefined, dd[k]);
+      else if (k === 'formulaConfig') setFormulaConfig(migrateFormula(dd[k] || DEFAULT_FORMULAS));
+      else if (k === 'productionPlan') setProductionPlan(dd[k] || {});
+      else if (k === 'planItemMapping') setPlanItemMapping(dd[k] || {});
+    });
     const tick = async () => {
       if (busy || document.visibilityState !== 'visible') return;
       busy = true;
@@ -6817,10 +6877,8 @@ function App() {
         if (t) setTcpDataMerged(t.data);
         if (f) setFeDataMerged(f.data);
         if (m && m.changedKeys.length) {
-          autoBackupSkipRef.current = true;   // 받은 설정을 그대로 다시 저장하지 않음
           const d = m.data;
-          const S = { oeeManual: setOeeManual, ftfrConfig: setFtfrConfig, achPlanData: setAchPlanData, prodReportNotes: setProdReportNotes, lotFtfrNotes: setLotFtfrNotes, moduleQuantities: setModuleQuantities, dtOverrides: setDtOverrides, reviewChanges: setReviewChanges, reviewTargets: setReviewTargets, reviewNotes: setReviewNotes, reviewHolidays: setReviewHolidays, reviewJig: setReviewJig, reviewJigNotes: setReviewJigNotes, reviewLineMap: setReviewLineMap, reviewAch: setReviewAch, orgData: setOrgData, cuOverrides: setCuOverrides, cuDataByYear: setCuDataByYear };
-          m.changedKeys.forEach(k => { if (S[k] && d[k] !== undefined) S[k](d[k]); });
+          m.changedKeys.forEach(k => { if (S[k] && d[k] !== undefined) __mergeSet(k, m.prev ? m.prev[k] : undefined, d[k]); });
           if (m.changedKeys.includes('formulaConfig')) setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
           if (m.changedKeys.includes('productionPlan')) setProductionPlan(prev => ({ ...(prev || {}), ...(d.productionPlan || {}) }));
         }
@@ -8828,7 +8886,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-px bg-slate-100 rounded text-[11px] font-semibold text-slate-600 cursor-help hover:bg-slate-200 transition-colors tabular"
-  }, "V161S"), React.createElement("div", {
+  }, "V162S"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
