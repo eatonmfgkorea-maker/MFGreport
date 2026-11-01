@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V160S</title>
+  <title>MFG Report V161S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -55,7 +55,7 @@
 <script>
 (function() {
   var APP_NAME = 'MFG Report';
-  var APP_VER = 'V160S';
+  var APP_VER = 'V161S';
   var SB_DEFAULT_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co';
   var SB_DEFAULT_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
   var CFG_KEY = 'mfg-sb-test-cfg', AUTH_KEY = 'mfg-sb-test-auth', LAST_EMAIL = 'mfg-sb-test-last-email';
@@ -323,9 +323,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V160S',
-  d: '2026-10-31',
-  items: ['서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  v: 'V161S',
+  d: '2026-11-01',
+  items: ['서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -679,8 +679,10 @@ async function __sbLoadSection(section, onProg) {
 // 섹션 변경분 받기 → 바뀐 게 있으면 새 데이터 객체, 없으면 null
 async function __sbPullSection(section) {
   const c = __sbCache[section]; if (!c) return null;
-  const logs = section === SB_MFG_SECTION ? [] : await __sbFetchAll('prod_logs', section, q => q.gt('updated_at', c.lastPull));
-  const states = await __sbFetchAll('prod_state', section, q => q.gt('updated_at', c.lastPull));
+  // 5분 겹쳐 받기 (동시 저장 누락 방지, 이미 받은 건 내용 비교로 건너뜀)
+  const since = new Date(Math.max(0, Date.parse(c.lastPull) - 5 * 60000)).toISOString();
+  const logs = section === SB_MFG_SECTION ? [] : await __sbFetchAll('prod_logs', section, q => q.gt('updated_at', since));
+  const states = await __sbFetchAll('prod_state', section, q => q.gt('updated_at', since));
   let changed = 0; const changedKeys = [];
   logs.forEach(r => { const key = r.kind + ':' + r.id; if (r.deleted_at) { if (c.logs.delete(key)) changed++; } else { const prev = c.logs.get(key); if (prev === undefined || __sbCanon(prev) !== __sbCanon(r.data)) { c.logs.set(key, r.data); changed++; } } });
   states.forEach(r => { if (__sbCanon(c.state[r.key]) !== __sbCanon(r.data)) { c.state[r.key] = r.data; changed++; changedKeys.push(r.key); } });
@@ -8826,7 +8828,7 @@ function App() {
     className: "relative group ml-1.5 inline-block align-middle"
   }, React.createElement("span", {
     className: "px-1.5 py-px bg-slate-100 rounded text-[11px] font-semibold text-slate-600 cursor-help hover:bg-slate-200 transition-colors tabular"
-  }, "V160S"), React.createElement("div", {
+  }, "V161S"), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
