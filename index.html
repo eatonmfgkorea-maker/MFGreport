@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V162S</title>
+  <title>MFG Report V163S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -55,7 +55,7 @@
 <script>
 (function() {
   var APP_NAME = 'MFG Report';
-  var APP_VER = 'V162S';
+  var APP_VER = 'V163S';
   var SB_DEFAULT_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co';
   var SB_DEFAULT_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
   var CFG_KEY = 'mfg-sb-test-cfg', AUTH_KEY = 'mfg-sb-test-auth', LAST_EMAIL = 'mfg-sb-test-last-email';
@@ -309,6 +309,18 @@
 })();
 </script>
 <!-- ==================== /MFG 서버 인증 ==================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style id="mfgSideCss">
+.mfg-side { font-family: 'Gothic A1', 'Malgun Gothic', -apple-system, sans-serif; color: #141414; }
+.mfg-side .mnv { display: flex; align-items: center; gap: 8px; width: 100%; height: 24px; padding: 0; border: 0; background: transparent; font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; color: #141414; }
+.mfg-side .mnv:hover, .mfg-side .mnk:hover { color: #D63A0E; }
+.mfg-side .mnk { display: block; width: 100%; height: 22px; padding: 0; border: 0; background: transparent; font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; color: #4A4843; }
+.mfg-side .msq { width: 6px; height: 6px; flex: none; }
+.mfg-side .mgh { display: flex; justify-content: space-between; align-items: baseline; border-top: 3px solid #141414; padding: 4px 0 2px; }
+.mfg-side .mgh b { font-size: 15px; font-weight: 900; letter-spacing: -0.02em; }
+.mfg-side .mgh span { font-size: 11px; font-weight: 700; color: #D63A0E; }
+</style>
 </head>
 <body class="bg-slate-50 min-h-screen">
   <div id="root"></div>
@@ -323,9 +335,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V162S',
+  v: 'V163S',
   d: '2026-11-01',
-  items: ['설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -8872,21 +8884,19 @@ function App() {
     style: { background: 'var(--ground)' }
   }, React.createElement("aside", {
     id: "mfgSide",
-    className: "w-64 flex-shrink-0 flex flex-col no-print h-screen bg-white border-r",
-    style: { borderColor: 'var(--border)' }
+    className: "w-64 flex-shrink-0 flex flex-col no-print h-screen mfg-side",
+    style: { background: '#ECEAE5', borderRight: '2px solid #141414' }
   }, React.createElement("div", {
-    className: "px-4 pt-5 pb-4"
+    className: "px-5 pt-4 pb-2"
   }, React.createElement("div", {
-    className: "flex items-center gap-2.5"
-  }, React.createElement(MfgMark, null), React.createElement("div", {
-    className: "min-w-0"
-  }, React.createElement("div", {
-    className: "text-[15px] font-bold text-slate-900 leading-tight flex items-center"
-  }, "MFG Report", React.createElement("span", {
-    className: "relative group ml-1.5 inline-block align-middle"
+    className: "flex justify-between items-center",
+    style: { fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', paddingBottom: 8, borderBottom: '2px solid #141414' }
+  }, React.createElement("span", null, "EATON"), React.createElement("span", {
+    className: "relative group inline-block"
   }, React.createElement("span", {
-    className: "px-1.5 py-px bg-slate-100 rounded text-[11px] font-semibold text-slate-600 cursor-help hover:bg-slate-200 transition-colors tabular"
-  }, "V162S"), React.createElement("div", {
+    className: "cursor-help tabular",
+    style: { letterSpacing: 0 }
+  }, (VERSION_NOTES[0] && VERSION_NOTES[0].v) || ''), React.createElement("div", {
     className: "hidden group-hover:block absolute left-0 top-full mt-2 w-[380px] max-h-[70vh] overflow-y-auto p-4 bg-slate-900 border border-slate-600 rounded-xl shadow-2xl z-[9999] text-left cursor-default"
   }, React.createElement("div", {
     className: "text-[11px] font-bold text-indigo-300 mb-3 pb-2 border-b border-slate-700"
@@ -8907,9 +8917,11 @@ function App() {
   }, React.createElement("span", {
     className: "absolute left-0 text-slate-600"
   }, "\u2022"), it)))))))), React.createElement("div", {
-    className: "text-xs text-slate-500 mt-0.5 truncate"
-  }, "Eaton \ud3c9\ud0dd \u00b7 \uc0dd\uc0b0 \ub9ac\ud3ec\ud2b8")))), React.createElement("nav", {
-    className: "flex-1 pb-4 px-2 space-y-px overflow-y-auto"
+    style: { fontSize: 40, lineHeight: 0.95, fontWeight: 900, letterSpacing: '-0.05em', paddingTop: 6 }
+  }, "MFG"), React.createElement("div", {
+    style: { fontSize: 16, fontWeight: 900, letterSpacing: '-0.02em' }
+  }, "Report")), React.createElement("nav", {
+    className: "flex-1 pb-4 px-5 overflow-y-auto"
   }, (() => {
     const alerts = {};
     try {
@@ -8936,56 +8948,73 @@ function App() {
         }
       });
     } catch {}
-    return visibleTabs.map(tab => {
-      // V115: 하위 메뉴가 있는 탭 (New OEE) — 클릭 시 아래로 펼쳐짐
+    const __ACC = '#D63A0E';
+    const __GROUPS = [
+      ['Overview', '개요', ['dashboard', 'grp_prod', 'prodreport', 'prodreview']],
+      ['OEE', '설비효율', ['oee', 'oeedetail', 'oeecompare', 'oeesim', 'oldoee']],
+      ['Production', '생산', ['grp_qty', 'quantity', 'qdetail', 'downtime', 'pcsmh', 'grp_cap', 'capacity', 'caputil', 'tool']],
+      ['Quality', '품질', ['grp_defect', 'defect', 'defecttype', 'grp_rework', 'rework', 'reworktype', 'lotftfr', 'grp_ftfr', 'ftfr', 'ftfrdetail', 'grp_ftiv', 'ftivboard', 'ftivdetail']],
+      ['Admin', '관리', ['orgchart', 'validate', 'formula', 'upload', 'export']]
+    ];
+    const __known = new Set([].concat.apply([], __GROUPS.map(g => g[2])));
+    const __rest = visibleTabs.filter(t => !__known.has(t.id));
+    const __groups = __GROUPS.concat(__rest.length ? [['More', '기타', __rest.map(t => t.id)]] : []);
+    const __tab = tab => {
       if (tab.children) {
         const kids = tab.children;
         const inGroup = kids.some(k => k.id === activeTab) || activeTab === tab.id;
         const openNow = inGroup && !navCollapsed[tab.id];
         return React.createElement("div", { key: tab.id },
           React.createElement("button", {
+            type: "button",
             onClick: () => {
-              // V134: 펼침 메뉴 — 닫혀 있으면 펼치고 첫 화면으로, 펼쳐져 있으면 접기
               if (inGroup) { setNavCollapsed(p => ({ ...p, [tab.id]: !p[tab.id] })); return; }
               setNavCollapsed(p => ({ ...p, [tab.id]: false })); setActiveTab(kids[0].id);
             },
             "aria-expanded": openNow,
-            className: `mfg-nav-btn w-full h-9 flex items-center gap-2.5 px-2.5 rounded-md text-left ${inGroup ? 'text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`
+            className: "mnv mfg-nav-btn",
+            style: { fontWeight: inGroup ? 900 : 500 }
           },
-            React.createElement(NavIcon, { id: tab.id }),
-            React.createElement("span", { className: "text-sm font-medium truncate" }, tab.label),
-            React.createElement("svg", { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", className: "ml-auto text-slate-400 transition-transform", style: { transform: openNow ? 'rotate(90deg)' : 'none' }, "aria-hidden": "true" }, React.createElement("path", { d: "M9 6l6 6-6 6" }))),
-          openNow && React.createElement("div", { className: "mb-1 ml-[19px] pl-3 border-l border-slate-200 space-y-px" },
+            React.createElement("span", { className: "msq", style: { background: 'transparent' } }),
+            React.createElement("span", { className: "flex-1 truncate" }, tab.label),
+            React.createElement("span", { style: { fontSize: 13, color: openNow ? '#141414' : '#8C887F' } }, openNow ? '−' : '+')),
+          openNow && React.createElement("div", { style: { paddingLeft: 14, paddingBottom: 2 } },
             kids.map(k => {
               const on = activeTab === k.id;
               return React.createElement("button", {
-                key: k.id,
+                key: k.id, type: "button",
                 onClick: () => setActiveTab(k.id),
                 "aria-current": on ? 'page' : undefined,
-                className: `mfg-nav-btn w-full h-8 flex items-center px-2.5 rounded-md text-left text-[13px] ${on ? 'text-slate-900 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`,
-                style: on ? { background: 'var(--active)' } : {}
-              }, React.createElement("span", { className: "truncate" }, k.label));
+                className: "mnk mfg-nav-btn truncate",
+                style: on ? { color: __ACC, fontWeight: 900 } : {}
+              }, '— ' + k.label);
             })));
       }
       const isActive = activeTab === tab.id;
       const hasAlert = tab.id === 'defect' && alerts.defect || tab.id === 'oee' && alerts.oee;
       return React.createElement("button", {
-        key: tab.id,
+        key: tab.id, type: "button",
         onClick: () => setActiveTab(tab.id),
         "aria-current": isActive ? 'page' : undefined,
-        className: `mfg-nav-btn w-full h-9 flex items-center gap-2.5 px-2.5 rounded-md text-left ${isActive ? 'text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`,
-        style: isActive ? { background: 'var(--active)' } : {}
-      }, React.createElement(NavIcon, { id: tab.id }), React.createElement("span", {
-        className: `text-sm truncate ${isActive ? 'font-semibold' : 'font-medium'}`
-      }, tab.label), hasAlert && React.createElement("span", {
-        className: "ml-auto w-1.5 h-1.5 rounded-full",
-        style: { background: 'var(--negative)' },
-        title: tab.id === 'defect' ? '이번 달 최종불량 1,000개 초과' : 'OEE 70% 미만 라인 있음'
-      }));
+        className: "mnv mfg-nav-btn",
+        style: isActive ? { color: __ACC, fontWeight: 900 } : { fontWeight: 500 }
+      }, React.createElement("span", { className: "msq", style: { background: isActive ? __ACC : 'transparent' } }),
+         React.createElement("span", { className: "flex-1 truncate" }, tab.label),
+         hasAlert && React.createElement("span", {
+           style: { width: 7, height: 7, borderRadius: '50%', background: 'var(--negative)', flex: 'none' },
+           title: tab.id === 'defect' ? '이번 달 최종불량 1,000개 초과' : 'OEE 70% 미만 라인 있음'
+         }));
+    };
+    return __groups.map(([en, ko, ids]) => {
+      const tabs = visibleTabs.filter(t => ids.includes(t.id));
+      if (!tabs.length) return null;
+      return React.createElement("div", { key: en, style: { marginBottom: 9 } },
+        React.createElement("div", { className: "mgh" }, React.createElement("b", null, en), React.createElement("span", null, ko)),
+        tabs.map(__tab));
     });
   })()), React.createElement("div", {
-    className: "px-4 py-3 border-t space-y-1.5",
-    style: { borderColor: 'var(--rule)' }
+    className: "mx-5 py-3 space-y-1.5",
+    style: { borderTop: '3px solid #141414' }
   }, React.createElement("div", {
     className: "text-xs font-medium text-slate-500 flex items-center justify-between mb-1"
   }, React.createElement("span", null, "데이터 상태"), autoLoadStatus === 'loading' && React.createElement("span", {
