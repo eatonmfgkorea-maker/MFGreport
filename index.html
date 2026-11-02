@@ -1,9 +1,24 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+<script>
+(function () {
+  var mem = {};
+  try {
+    var del = [];
+    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('mfg_') === 0) del.push(k); }
+    del.forEach(function (k) { localStorage.removeItem(k); });
+    if (del.length) console.log('예전 MFG Report(구글판) 브라우저 저장 정리:', del.length + '개');
+  } catch (e) {}
+  window.__lsGet = function (k) { if (Object.prototype.hasOwnProperty.call(mem, k)) return mem[k]; try { return localStorage.getItem(k); } catch (e) { return null; } };
+  window.__lsSet = function (k, v) { v = String(v); mem[k] = v; try { localStorage.setItem(k, v); } catch (e) { console.warn('브라우저 저장공간 부족 — 이 화면에서만 보관:', k, Math.round(v.length / 1024) + 'KB'); } };
+  window.__lsDel = function (k) { delete mem[k]; try { localStorage.removeItem(k); } catch (e) {} };
+})();
+</script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V163S</title>
+  <title>MFG Report V164S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -55,7 +70,7 @@
 <script>
 (function() {
   var APP_NAME = 'MFG Report';
-  var APP_VER = 'V163S';
+  var APP_VER = 'V164S';
   var SB_DEFAULT_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co';
   var SB_DEFAULT_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
   var CFG_KEY = 'mfg-sb-test-cfg', AUTH_KEY = 'mfg-sb-test-auth', LAST_EMAIL = 'mfg-sb-test-last-email';
@@ -335,9 +350,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V163S',
+  v: 'V164S',
   d: '2026-11-01',
-  items: ['왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -2670,7 +2685,7 @@ function ValidationPanel({
   const [openDropdown, setOpenDropdown] = useState(null);
   // V108: 현황판 대조
   const [boardRes, setBoardRes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfgsb_board_check') || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(__lsGet('mfgsb_board_check') || '{}') || {}; } catch { return {}; }
   });
   const [boardBusy, setBoardBusy] = useState('');
   const [boardDate, setBoardDate] = useState('');
@@ -3418,7 +3433,7 @@ rw = 비가동요인에 «Rework (98 → 18)» 같은 표기가 있을 때만, �
             findings: [{ level: 'unread', field: '판독', text: '사진 판독 실패: ' + String(e.message || e).slice(0, 60) }] };
         }
         setBoardRes({ ...next });
-        try { localStorage.setItem('mfgsb_board_check', JSON.stringify(next)); } catch {}
+        try { __lsSet('mfgsb_board_check', JSON.stringify(next)); } catch {}
       }
       setBoardBusy('');
     } catch (e) {
@@ -3915,7 +3930,7 @@ rw = 비가동요인에 «Rework (98 → 18)» 같은 표기가 있을 때만, �
         className: "px-3 py-1.5 text-sm rounded-lg font-semibold " + (boardBusy ? 'bg-slate-200 text-slate-500' : 'bg-sky-600 text-white hover:bg-sky-700') },
         boardBusy ? '진행 중…' : '대조 시작'),
       Object.keys(boardRes || {}).length > 0 && React.createElement("button", {
-        onClick: () => { if (confirm('저장된 대조 결과를 모두 지울까요?')) { setBoardRes({}); try { localStorage.removeItem('mfgsb_board_check'); } catch {} } },
+        onClick: () => { if (confirm('저장된 대조 결과를 모두 지울까요?')) { setBoardRes({}); try { __lsDel('mfgsb_board_check'); } catch {} } },
         className: "px-2 py-1.5 text-xs rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200" }, "결과 지우기")),
     boardBusy && React.createElement("div", { className: "px-5 py-2 text-xs text-sky-700 bg-sky-50 border-b border-sky-100" }, "", boardBusy),
     boardSummary.length === 0 ? React.createElement("div", { className: "py-10 text-center text-slate-400 text-sm" },
@@ -4344,14 +4359,14 @@ function App() {
 
   const [h52Data, setH52Data] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_52h_data') || '{}');
+      return JSON.parse(__lsGet('mfgsb_52h_data') || '{}');
     } catch {
       return {};
     }
   });
   const [h52Config, setH52Config] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_52h_config') || '{}');
+      return JSON.parse(__lsGet('mfgsb_52h_config') || '{}');
     } catch {
       return {};
     }
@@ -4548,7 +4563,7 @@ function App() {
         roster: newRoster
       };
       try {
-        localStorage.setItem('mfgsb_52h_data', JSON.stringify(next));
+        __lsSet('mfgsb_52h_data', JSON.stringify(next));
       } catch (err) {
         alert('저장 공간 부족: 데이터가 너무 큽니다.');
       }
@@ -4619,7 +4634,7 @@ function App() {
   const [lotFtfrTo, setLotFtfrTo] = useState('');
   const [lotFtfrNotes, setLotFtfrNotes] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_lotftfr_notes') || '{}');
+      return JSON.parse(__lsGet('mfgsb_lotftfr_notes') || '{}');
     } catch {
       return {};
     }
@@ -4630,14 +4645,14 @@ function App() {
     [key]: !prev[key]
   }));
   const updateLotFtfrNote = (key, value) => {
-    if (typeof localStorage !== 'undefined' && !!(window.MFG_USER && window.MFG_USER.isGuest)) return;
+    if (typeof localStorage !== 'undefined' && __lsGet('mfgsb_guest') === '1') return;
     setLotFtfrNotes(prev => {
       const next = {
         ...prev
       };
       if (value === '' || value === undefined || value === null) delete next[key];else next[key] = value;
       try {
-        localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(next));
+        __lsSet('mfgsb_lotftfr_notes', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5073,7 +5088,7 @@ function App() {
   const [oeeMonth, setOeeMonth] = useState(new Date().getMonth() + 1);
   const [oeeManual, setOeeManual] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_oee_manual') || '{}');
+      return JSON.parse(__lsGet('mfgsb_oee_manual') || '{}');
     } catch {
       return {};
     }
@@ -5088,14 +5103,14 @@ function App() {
   const [prdEndDate, setPrdEndDate] = useState(_prNow.toISOString().split('T')[0]);
   const [prodReportNotes, setProdReportNotes] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_prod_report_notes') || '{}');
+      return JSON.parse(__lsGet('mfgsb_prod_report_notes') || '{}');
     } catch {
       return {};
     }
   });
   const [moduleQuantities, setModuleQuantities] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_module_quantities') || '{}');
+      return JSON.parse(__lsGet('mfgsb_module_quantities') || '{}');
     } catch {
       return {};
     }
@@ -5108,7 +5123,7 @@ function App() {
       const n = parseFloat(value);
       if (!n || n <= 0) delete next[date];else next[date] = n;
       try {
-        localStorage.setItem('mfgsb_module_quantities', JSON.stringify(next));
+        __lsSet('mfgsb_module_quantities', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5121,7 +5136,7 @@ function App() {
     return 0;
   };
   const setUccModule = (date, value) => {
-    if (typeof localStorage !== 'undefined' && !!(window.MFG_USER && window.MFG_USER.isGuest)) return;
+    if (typeof localStorage !== 'undefined' && __lsGet('mfgsb_guest') === '1') return;
     const n = parseFloat(value);
     const valid = !isNaN(n) && n > 0;
     setModuleQuantities(prev => {
@@ -5130,7 +5145,7 @@ function App() {
       };
       if (valid) next[date] = n;else delete next[date];
       try {
-        localStorage.setItem('mfgsb_module_quantities', JSON.stringify(next));
+        __lsSet('mfgsb_module_quantities', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5141,7 +5156,7 @@ function App() {
       const key = `uccmod|${date}`;
       if (valid) next[key] = String(n);else delete next[key];
       try {
-        localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(next));
+        __lsSet('mfgsb_lotftfr_notes', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5149,7 +5164,7 @@ function App() {
   const [uccCollapsed, setUccCollapsed] = useState(false);
   const [dtOverrides, setDtOverrides] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_dt_overrides') || '{}');
+      return JSON.parse(__lsGet('mfgsb_dt_overrides') || '{}');
     } catch {
       return {};
     }
@@ -5161,7 +5176,7 @@ function App() {
       };
       next[key] = text || '';
       try {
-        localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(next));
+        __lsSet('mfgsb_dt_overrides', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5173,7 +5188,7 @@ function App() {
       };
       delete next[key];
       try {
-        localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(next));
+        __lsSet('mfgsb_dt_overrides', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5191,12 +5206,12 @@ function App() {
   const [cuCalOpen, setCuCalOpen] = useState(false);
   const [cuMode, setCuMode] = useState('year');   // year=월별, five=5년
   const [cuOverrides, setCuOverrides] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfgsb_cu_workdays') || '{}'); } catch (e) { return {}; }
+    try { return JSON.parse(__lsGet('mfgsb_cu_workdays') || '{}'); } catch (e) { return {}; }
   });
   // 연도별 CT 데이터 { '2027': {groups:[], items:[]}, ... }
   const [cuDataByYear, setCuDataByYear] = useState(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem('mfgsb_cu_ctdata') || 'null');
+      const raw = JSON.parse(__lsGet('mfgsb_cu_ctdata') || 'null');
       if (!raw) return {};
       // 구버전(단일 데이터) → 현재 연도+1 로 이관
       if (raw.groups || raw.items) return { [String(new Date().getFullYear() + 1)]: raw };
@@ -5206,24 +5221,24 @@ function App() {
   const [cuMsg, setCuMsg] = useState('');
   const [productionPlan, setProductionPlan] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_production_plan') || '{}');
+      return JSON.parse(__lsGet('mfgsb_production_plan') || '{}');
     } catch {
       return {};
     }
   });
   // ===== Production Review 상태 =====
-  const [reviewChanges, setReviewChanges] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_changes') || '[]'); } catch { return []; } });
-  const [reviewTargets, setReviewTargets] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_targets') || '{}'); } catch { return {}; } });
-  const [reviewNotes, setReviewNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_notes') || '{}'); } catch { return {}; } });
-  const [reviewHolidays, setReviewHolidays] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_holidays') || '{}'); } catch { return {}; } });
-  const saveReviewChanges = next => { setReviewChanges(next); try { localStorage.setItem('mfgsb_review_changes', JSON.stringify(next)); } catch {} };
-  const saveReviewTargets = next => { setReviewTargets(next); try { localStorage.setItem('mfgsb_review_targets', JSON.stringify(next)); } catch {} };
-  const saveReviewNotes = next => { setReviewNotes(next); try { localStorage.setItem('mfgsb_review_notes', JSON.stringify(next)); } catch {} };
-  const saveReviewHolidays = next => { setReviewHolidays(next); try { localStorage.setItem('mfgsb_review_holidays', JSON.stringify(next)); } catch {} };
-  const [reviewJig, setReviewJig] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_jig') || '{}'); } catch { return {}; } });
-  const [reviewJigNotes, setReviewJigNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_jignotes') || '{}'); } catch { return {}; } });
-  const saveReviewJig = next => { setReviewJig(next); try { localStorage.setItem('mfgsb_review_jig', JSON.stringify(next)); } catch {} };
-  const saveReviewJigNotes = next => { setReviewJigNotes(next); try { localStorage.setItem('mfgsb_review_jignotes', JSON.stringify(next)); } catch {} };
+  const [reviewChanges, setReviewChanges] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_changes') || '[]'); } catch { return []; } });
+  const [reviewTargets, setReviewTargets] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_targets') || '{}'); } catch { return {}; } });
+  const [reviewNotes, setReviewNotes] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_notes') || '{}'); } catch { return {}; } });
+  const [reviewHolidays, setReviewHolidays] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_holidays') || '{}'); } catch { return {}; } });
+  const saveReviewChanges = next => { setReviewChanges(next); try { __lsSet('mfgsb_review_changes', JSON.stringify(next)); } catch {} };
+  const saveReviewTargets = next => { setReviewTargets(next); try { __lsSet('mfgsb_review_targets', JSON.stringify(next)); } catch {} };
+  const saveReviewNotes = next => { setReviewNotes(next); try { __lsSet('mfgsb_review_notes', JSON.stringify(next)); } catch {} };
+  const saveReviewHolidays = next => { setReviewHolidays(next); try { __lsSet('mfgsb_review_holidays', JSON.stringify(next)); } catch {} };
+  const [reviewJig, setReviewJig] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_jig') || '{}'); } catch { return {}; } });
+  const [reviewJigNotes, setReviewJigNotes] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_jignotes') || '{}'); } catch { return {}; } });
+  const saveReviewJig = next => { setReviewJig(next); try { __lsSet('mfgsb_review_jig', JSON.stringify(next)); } catch {} };
+  const saveReviewJigNotes = next => { setReviewJigNotes(next); try { __lsSet('mfgsb_review_jignotes', JSON.stringify(next)); } catch {} };
   const [prSubTab, setPrSubTab] = useState('calendar');
   const [prSection, setPrSection] = useState('TCP');
   const [prMonth, setPrMonth] = useState('');
@@ -5231,15 +5246,15 @@ function App() {
   const [prLine, setPrLine] = useState('전체');
   const [prShowItems, setPrShowItems] = useState(true);
   const [prSummary, setPrSummary] = useState(false);
-  const [reviewLineMap, setReviewLineMap] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_linemap') || '{}'); } catch { return {}; } });
-  const [reviewAch, setReviewAch] = useState(() => { try { return JSON.parse(localStorage.getItem('mfgsb_review_ach') || '{}'); } catch { return {}; } });
-  const saveReviewAch = next => { setReviewAch(next); try { localStorage.setItem('mfgsb_review_ach', JSON.stringify(next)); } catch {} };
-  const saveReviewLineMap = next => { setReviewLineMap(next); try { localStorage.setItem('mfgsb_review_linemap', JSON.stringify(next)); } catch {} };
+  const [reviewLineMap, setReviewLineMap] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_linemap') || '{}'); } catch { return {}; } });
+  const [reviewAch, setReviewAch] = useState(() => { try { return JSON.parse(__lsGet('mfgsb_review_ach') || '{}'); } catch { return {}; } });
+  const saveReviewAch = next => { setReviewAch(next); try { __lsSet('mfgsb_review_ach', JSON.stringify(next)); } catch {} };
+  const saveReviewLineMap = next => { setReviewLineMap(next); try { __lsSet('mfgsb_review_linemap', JSON.stringify(next)); } catch {} };
   const [prYear, setPrYear] = useState(new Date().getFullYear());
   const [prSelMonth, setPrSelMonth] = useState(new Date().getMonth() + 1);
   const [planItemMapping, setPlanItemMapping] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_plan_mapping') || '{}');
+      return JSON.parse(__lsGet('mfgsb_plan_mapping') || '{}');
     } catch {
       return {};
     }
@@ -5557,23 +5572,23 @@ function App() {
   };
   // V105: 조직도 데이터 (MFG Report 설정 백업에 함께 저장)
   const [orgData, setOrgData] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfgsb_org_data') || 'null'); } catch { return null; }
+    try { return JSON.parse(__lsGet('mfgsb_org_data') || 'null'); } catch { return null; }
   });
   React.useEffect(() => {
     if (!orgData) return;
-    try { localStorage.setItem('mfgsb_org_data', JSON.stringify(orgData)); } catch {}
+    try { __lsSet('mfgsb_org_data', JSON.stringify(orgData)); } catch {}
   }, [orgData]);
   // V109: FE 계획엑셀 실적
   const [feActual, setFeActual] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfgsb_fe_actual') || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(__lsGet('mfgsb_fe_actual') || '{}') || {}; } catch { return {}; }
   });
   // V107: TCP 순번 시트 기반 인원/잔업 정보
   const [tcpSeqInfo, setTcpSeqInfo] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfgsb_tcp_seq2') || '{}') || {}; } catch { return {}; }
+    try { return JSON.parse(__lsGet('mfgsb_tcp_seq2') || '{}') || {}; } catch { return {}; }
   });
   const readFePlanRaw = () => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || 'null');
+      return JSON.parse(__lsGet('mfgsb_fe_plan_raw') || 'null');
     } catch {
       return null;
     }
@@ -5647,7 +5662,7 @@ function App() {
         next[key] = value;
       }
       try {
-        localStorage.setItem('mfgsb_prod_report_notes', JSON.stringify(next));
+        __lsSet('mfgsb_prod_report_notes', JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -5753,7 +5768,7 @@ function App() {
     setCuOverrides(prev => {
       const n = { ...prev };
       if (next === cuBaseType(cuYear, dt)) delete n[k]; else n[k] = next;
-      try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(n)); } catch (e) {}
+      try { __lsSet('mfgsb_cu_workdays', JSON.stringify(n)); } catch (e) {}
       return n;
     });
   };
@@ -5936,13 +5951,13 @@ function App() {
   const [ftfrSection, setFtfrSection] = useState('TCP');
   // FTFR 연도별 Target (TCP/FE 각각). localStorage 저장
   const [ftfrTargets, setFtfrTargets] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mfgsb_ftfr_targets') || '{}'); } catch { return {}; }
+    try { return JSON.parse(__lsGet('mfgsb_ftfr_targets') || '{}'); } catch { return {}; }
   });
   const [ftfrShowTargetEdit, setFtfrShowTargetEdit] = useState(false);
   const setFtfrTarget = (section, year, val) => {
     setFtfrTargets(prev => {
       const next = { ...prev, [`${section}_${year}`]: val };
-      try { localStorage.setItem('mfgsb_ftfr_targets', JSON.stringify(next)); } catch {}
+      try { __lsSet('mfgsb_ftfr_targets', JSON.stringify(next)); } catch {}
       return next;
     });
   };
@@ -6036,7 +6051,7 @@ function App() {
   const [fdViewMode, setFdViewMode] = useState('month');
   const [ftfrConfig, setFtfrConfig] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_ftfr_config') || '{}');
+      return JSON.parse(__lsGet('mfgsb_ftfr_config') || '{}');
     } catch {
       return {};
     }
@@ -6045,12 +6060,12 @@ function App() {
   const saveFtfrConfig = next => {
     setFtfrConfig(next);
     try {
-      localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(next));
+      __lsSet('mfgsb_ftfr_config', JSON.stringify(next));
     } catch {}
   };
   const [achPlanData, setAchPlanData] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem('mfgsb_ach_plan') || '{"tcp":{},"fe":{}}');
+      return JSON.parse(__lsGet('mfgsb_ach_plan') || '{"tcp":{},"fe":{}}');
     } catch {
       return {
         tcp: {},
@@ -6075,7 +6090,7 @@ function App() {
   const saveAchPlanData = next => {
     setAchPlanData(next);
     try {
-      localStorage.setItem('mfgsb_ach_plan', JSON.stringify(next));
+      __lsSet('mfgsb_ach_plan', JSON.stringify(next));
     } catch {}
   };
   const DEFAULT_FORMULAS = {
@@ -6175,7 +6190,7 @@ function App() {
   };
   const [formulaConfig, setFormulaConfig] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem('mfgsb_formula_config') || 'null');
+      const saved = JSON.parse(__lsGet('mfgsb_formula_config') || 'null');
       return migrateFormula(saved || DEFAULT_FORMULAS);
     } catch {
       return DEFAULT_FORMULAS;
@@ -6184,7 +6199,7 @@ function App() {
   const saveFormulaConfig = next => {
     setFormulaConfig(next);
     try {
-      localStorage.setItem('mfgsb_formula_config', JSON.stringify(next));
+      __lsSet('mfgsb_formula_config', JSON.stringify(next));
     } catch {}
   };
   const resetFormulaConfig = () => {
@@ -6334,13 +6349,13 @@ function App() {
       const modSig = targets.map(t => (t.modified || '') + '#' + (t.name || '')).join('|');
       if (silent && modSig) {
         try {
-          const sigStore = JSON.parse(localStorage.getItem('mfgsb_plan_file_mod') || '{}');
+          const sigStore = JSON.parse(__lsGet('mfgsb_plan_file_mod') || '{}');
           let hasLocal = false;
           if (type === 'tcp') {
-            const pp = JSON.parse(localStorage.getItem('mfgsb_production_plan') || '{}');
-            hasLocal = Object.keys(pp).some(k => k.indexOf('TCP|') === 0) && localStorage.getItem('mfgsb_tcp_seq_v') === '2';   // V127: 순번 파서 수정 → 한 번 재파싱
+            const pp = JSON.parse(__lsGet('mfgsb_production_plan') || '{}');
+            hasLocal = Object.keys(pp).some(k => k.indexOf('TCP|') === 0) && __lsGet('mfgsb_tcp_seq_v') === '2';   // V127: 순번 파서 수정 → 한 번 재파싱
           } else {
-            const fr = JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || 'null');
+            const fr = JSON.parse(__lsGet('mfgsb_fe_plan_raw') || 'null');
             hasLocal = !!(fr && Array.isArray(fr.rows) && fr.rows.length > 0);
           }
           if (sigStore[type] === modSig && hasLocal) {
@@ -6395,9 +6410,9 @@ function App() {
       // V100: 대상 파일 전부 적용 성공 시에만 서명 저장 → 다음 자동로드부터 미변경 시 생략
       if (okCount === targets.length) {
         try {
-          const s = JSON.parse(localStorage.getItem('mfgsb_plan_file_mod') || '{}');
+          const s = JSON.parse(__lsGet('mfgsb_plan_file_mod') || '{}');
           s[type] = modSig;
-          localStorage.setItem('mfgsb_plan_file_mod', JSON.stringify(s));
+          __lsSet('mfgsb_plan_file_mod', JSON.stringify(s));
         } catch {}
       }
       return lastMod || true;
@@ -6417,11 +6432,11 @@ function App() {
       const { data: heads, error } = await client.from('prod_state').select('key,updated_at').eq('section', 'PLAN');
       if (error || !heads) return [null, null];
       const at = {}; heads.forEach(h => { at[h.key] = h.updated_at; });
-      let sig = {}; try { sig = JSON.parse(localStorage.getItem('mfgsb_plan_srv_sig') || '{}') || {}; } catch (e) {}
+      let sig = {}; try { sig = JSON.parse(__lsGet('mfgsb_plan_srv_sig') || '{}') || {}; } catch (e) {}
       const hasLocal = k => {
         try {
-          if (k === 'tcp') return Object.keys(JSON.parse(localStorage.getItem('mfgsb_production_plan') || '{}')).some(x => x.indexOf('TCP|') === 0) && localStorage.getItem('mfgsb_tcp_seq_v') === '2';
-          const fr = JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || 'null');
+          if (k === 'tcp') return Object.keys(JSON.parse(__lsGet('mfgsb_production_plan') || '{}')).some(x => x.indexOf('TCP|') === 0) && __lsGet('mfgsb_tcp_seq_v') === '2';
+          const fr = JSON.parse(__lsGet('mfgsb_fe_plan_raw') || 'null');
           return !!(fr && Array.isArray(fr.rows) && fr.rows.length > 0);
         } catch (e) { return false; }
       };
@@ -6442,7 +6457,7 @@ function App() {
           if (ok) { sig[row.key] = row.updated_at; out[row.key] = d.fileMod || row.updated_at; }
           else { planErrRef.current[row.key] = '서버 계획 적용 실패' + (why ? ':' + why : ''); out[row.key] = false; }
         });
-        try { localStorage.setItem('mfgsb_plan_srv_sig', JSON.stringify(sig)); } catch (e) {}
+        try { __lsSet('mfgsb_plan_srv_sig', JSON.stringify(sig)); } catch (e) {}
       }
       return [out.tcp, out.fe];
     } catch (e) { console.warn('서버 생산계획 불러오기 실패', e); return [null, null]; }
@@ -6519,7 +6534,7 @@ function App() {
   const saveOeeManual = next => {
     setOeeManual(next);
     try {
-      localStorage.setItem('mfgsb_oee_manual', JSON.stringify(next));
+      __lsSet('mfgsb_oee_manual', JSON.stringify(next));
     } catch {}
   };
   const driveSave = async () => {
@@ -6594,19 +6609,19 @@ function App() {
         if (d.oeeManual !== undefined) {
           setOeeManual(d.oeeManual || {});
           try {
-            localStorage.setItem('mfgsb_oee_manual', JSON.stringify(d.oeeManual || {}));
+            __lsSet('mfgsb_oee_manual', JSON.stringify(d.oeeManual || {}));
           } catch {}
         }
         if (d.ftfrConfig !== undefined) {
           setFtfrConfig(d.ftfrConfig || {});
           try {
-            localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
+            __lsSet('mfgsb_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
           } catch {}
         }
         if (d.formulaConfig !== undefined) {
           setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
           try {
-            localStorage.setItem('mfgsb_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
+            __lsSet('mfgsb_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
           } catch {}
         }
         if (d.achPlanData !== undefined) {
@@ -6615,7 +6630,7 @@ function App() {
             fe: {}
           });
           try {
-            localStorage.setItem('mfgsb_ach_plan', JSON.stringify(d.achPlanData || {
+            __lsSet('mfgsb_ach_plan', JSON.stringify(d.achPlanData || {
               tcp: {},
               fe: {}
             }));
@@ -6624,64 +6639,64 @@ function App() {
         if (d.prodReportNotes !== undefined) {
           setProdReportNotes(d.prodReportNotes || {});
           try {
-            localStorage.setItem('mfgsb_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
+            __lsSet('mfgsb_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
           } catch {}
         }
         if (d.lotFtfrNotes !== undefined) {
           setLotFtfrNotes(d.lotFtfrNotes || {});
           try {
-            localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
+            __lsSet('mfgsb_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
           } catch {}
         }
         if (d.moduleQuantities !== undefined) {
           setModuleQuantities(d.moduleQuantities || {});
           try {
-            localStorage.setItem('mfgsb_module_quantities', JSON.stringify(d.moduleQuantities || {}));
+            __lsSet('mfgsb_module_quantities', JSON.stringify(d.moduleQuantities || {}));
           } catch {}
         }
         if (d.dtOverrides !== undefined) {
           setDtOverrides(d.dtOverrides || {});
           try {
-            localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(d.dtOverrides || {}));
+            __lsSet('mfgsb_dt_overrides', JSON.stringify(d.dtOverrides || {}));
           } catch {}
         }
-        if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { localStorage.setItem('mfgsb_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
-        if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfgsb_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
-        if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfgsb_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
-        if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfgsb_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
-        if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfgsb_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
-        if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfgsb_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
-        if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfgsb_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
-        if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfgsb_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
+        if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { __lsSet('mfgsb_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
+        if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { __lsSet('mfgsb_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
+        if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { __lsSet('mfgsb_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
+        if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { __lsSet('mfgsb_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
+        if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { __lsSet('mfgsb_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
+        if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { __lsSet('mfgsb_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
+        if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { __lsSet('mfgsb_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
+        if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { __lsSet('mfgsb_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
         if (d.orgData !== undefined && d.orgData) setOrgData(d.orgData);
         if (d.productionPlan !== undefined) {
           setProductionPlan(d.productionPlan || {});
           try {
-            localStorage.setItem('mfgsb_production_plan', JSON.stringify(d.productionPlan || {}));
+            __lsSet('mfgsb_production_plan', JSON.stringify(d.productionPlan || {}));
           } catch {}
         }
         if (d.planItemMapping !== undefined) {
           setPlanItemMapping(d.planItemMapping || {});
           try {
-            localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(d.planItemMapping || {}));
+            __lsSet('mfgsb_plan_mapping', JSON.stringify(d.planItemMapping || {}));
           } catch {}
           if (d.fePlanRaw) {
             try {
-              localStorage.setItem('mfgsb_fe_plan_raw', JSON.stringify(d.fePlanRaw));
+              __lsSet('mfgsb_fe_plan_raw', JSON.stringify(d.fePlanRaw));
             } catch {}
           }
         }
         if (d.cuOverrides !== undefined) {
           setCuOverrides(d.cuOverrides || {});
-          try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
+          try { __lsSet('mfgsb_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
         }
         if (d.cuDataByYear !== undefined && d.cuDataByYear) {
           setCuDataByYear(d.cuDataByYear);
-          try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
+          try { __lsSet('mfgsb_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
         } else if (d.cuData !== undefined && d.cuData) {
           const mig = { [String(new Date().getFullYear() + 1)]: d.cuData };
           setCuDataByYear(mig);
-          try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(mig)); } catch {}
+          try { __lsSet('mfgsb_cu_ctdata', JSON.stringify(mig)); } catch {}
         }
         setShowDriveLoad(false);
         alert('설정 복원 완료\n\n※ OEE 수동입력, FTFR 집계 설정, OEE/FTFR 수식, 달성률 계획 데이터가 복원되었습니다');
@@ -6755,19 +6770,19 @@ function App() {
             if (d.oeeManual !== undefined) {
               setOeeManual(d.oeeManual || {});
               try {
-                localStorage.setItem('mfgsb_oee_manual', JSON.stringify(d.oeeManual || {}));
+                __lsSet('mfgsb_oee_manual', JSON.stringify(d.oeeManual || {}));
               } catch {}
             }
             if (d.ftfrConfig !== undefined) {
               setFtfrConfig(d.ftfrConfig || {});
               try {
-                localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
+                __lsSet('mfgsb_ftfr_config', JSON.stringify(d.ftfrConfig || {}));
               } catch {}
             }
             if (d.formulaConfig !== undefined) {
               setFormulaConfig(migrateFormula(d.formulaConfig || DEFAULT_FORMULAS));
               try {
-                localStorage.setItem('mfgsb_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
+                __lsSet('mfgsb_formula_config', JSON.stringify(d.formulaConfig || DEFAULT_FORMULAS));
               } catch {}
             }
             if (d.achPlanData !== undefined) {
@@ -6776,7 +6791,7 @@ function App() {
                 fe: {}
               });
               try {
-                localStorage.setItem('mfgsb_ach_plan', JSON.stringify(d.achPlanData || {
+                __lsSet('mfgsb_ach_plan', JSON.stringify(d.achPlanData || {
                   tcp: {},
                   fe: {}
                 }));
@@ -6785,35 +6800,35 @@ function App() {
             if (d.prodReportNotes !== undefined) {
               setProdReportNotes(d.prodReportNotes || {});
               try {
-                localStorage.setItem('mfgsb_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
+                __lsSet('mfgsb_prod_report_notes', JSON.stringify(d.prodReportNotes || {}));
               } catch {}
             }
             if (d.lotFtfrNotes !== undefined) {
               setLotFtfrNotes(d.lotFtfrNotes || {});
               try {
-                localStorage.setItem('mfgsb_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
+                __lsSet('mfgsb_lotftfr_notes', JSON.stringify(d.lotFtfrNotes || {}));
               } catch {}
             }
             if (d.moduleQuantities !== undefined) {
               setModuleQuantities(d.moduleQuantities || {});
               try {
-                localStorage.setItem('mfgsb_module_quantities', JSON.stringify(d.moduleQuantities || {}));
+                __lsSet('mfgsb_module_quantities', JSON.stringify(d.moduleQuantities || {}));
               } catch {}
             }
             if (d.dtOverrides !== undefined) {
               setDtOverrides(d.dtOverrides || {});
               try {
-                localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(d.dtOverrides || {}));
+                __lsSet('mfgsb_dt_overrides', JSON.stringify(d.dtOverrides || {}));
               } catch {}
             }
-            if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { localStorage.setItem('mfgsb_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
-            if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { localStorage.setItem('mfgsb_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
-            if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { localStorage.setItem('mfgsb_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
-            if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { localStorage.setItem('mfgsb_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
-            if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { localStorage.setItem('mfgsb_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
-            if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { localStorage.setItem('mfgsb_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
-            if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { localStorage.setItem('mfgsb_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
-            if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { localStorage.setItem('mfgsb_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
+            if (d.reviewChanges !== undefined) { setReviewChanges(d.reviewChanges || []); try { __lsSet('mfgsb_review_changes', JSON.stringify(d.reviewChanges || [])); } catch {} }
+            if (d.reviewTargets !== undefined) { setReviewTargets(d.reviewTargets || {}); try { __lsSet('mfgsb_review_targets', JSON.stringify(d.reviewTargets || {})); } catch {} }
+            if (d.reviewNotes !== undefined) { setReviewNotes(d.reviewNotes || {}); try { __lsSet('mfgsb_review_notes', JSON.stringify(d.reviewNotes || {})); } catch {} }
+            if (d.reviewHolidays !== undefined) { setReviewHolidays(d.reviewHolidays || {}); try { __lsSet('mfgsb_review_holidays', JSON.stringify(d.reviewHolidays || {})); } catch {} }
+            if (d.reviewJig !== undefined) { setReviewJig(d.reviewJig || {}); try { __lsSet('mfgsb_review_jig', JSON.stringify(d.reviewJig || {})); } catch {} }
+            if (d.reviewJigNotes !== undefined) { setReviewJigNotes(d.reviewJigNotes || {}); try { __lsSet('mfgsb_review_jignotes', JSON.stringify(d.reviewJigNotes || {})); } catch {} }
+            if (d.reviewLineMap !== undefined) { setReviewLineMap(d.reviewLineMap || {}); try { __lsSet('mfgsb_review_linemap', JSON.stringify(d.reviewLineMap || {})); } catch {} }
+            if (d.reviewAch !== undefined) { setReviewAch(d.reviewAch || {}); try { __lsSet('mfgsb_review_ach', JSON.stringify(d.reviewAch || {})); } catch {} }
             if (d.orgData !== undefined && d.orgData) setOrgData(d.orgData);
         if (d.orgData !== undefined && d.orgData) setOrgData(d.orgData);
             if (d.productionPlan !== undefined) {
@@ -6821,35 +6836,35 @@ function App() {
               setProductionPlan(prev => {
                 const merged = { ...(prev || {}), ...(d.productionPlan || {}) };
                 try {
-                  localStorage.setItem('mfgsb_production_plan', JSON.stringify(merged));
+                  __lsSet('mfgsb_production_plan', JSON.stringify(merged));
                 } catch {}
                 return merged;
               });
             }
             if (d.cuOverrides !== undefined) {
               setCuOverrides(d.cuOverrides || {});
-              try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
+              try { __lsSet('mfgsb_cu_workdays', JSON.stringify(d.cuOverrides || {})); } catch {}
             }
             if (d.cuDataByYear !== undefined && d.cuDataByYear) {
               setCuDataByYear(d.cuDataByYear);
-              try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
+              try { __lsSet('mfgsb_cu_ctdata', JSON.stringify(d.cuDataByYear)); } catch {}
             } else if (d.cuData !== undefined && d.cuData) {
               const mig = { [String(new Date().getFullYear() + 1)]: d.cuData };
               setCuDataByYear(mig);
-              try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(mig)); } catch {}
+              try { __lsSet('mfgsb_cu_ctdata', JSON.stringify(mig)); } catch {}
             }
             if (d.planItemMapping !== undefined) {
               // 자동로드는 병합: 직접 연결해둔 매칭이 지워지지 않도록 보존
               setPlanItemMapping(prev => {
                 const merged = { ...(prev || {}), ...(d.planItemMapping || {}) };
                 try {
-                  localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(merged));
+                  __lsSet('mfgsb_plan_mapping', JSON.stringify(merged));
                 } catch {}
                 return merged;
               });
               if (d.fePlanRaw) {
                 try {
-                  localStorage.setItem('mfgsb_fe_plan_raw', JSON.stringify(d.fePlanRaw));
+                  __lsSet('mfgsb_fe_plan_raw', JSON.stringify(d.fePlanRaw));
                 } catch {}
               }
             }
@@ -6978,7 +6993,7 @@ function App() {
         const seq = __parsed.seq;
         if (seq && Object.keys(seq).length) {
           setTcpSeqInfo(seq);
-          try { localStorage.setItem('mfgsb_tcp_seq2', JSON.stringify(seq)); localStorage.setItem('mfgsb_tcp_seq_v', '2'); localStorage.removeItem('mfgsb_tcp_seq'); } catch {}
+          try { __lsSet('mfgsb_tcp_seq2', JSON.stringify(seq)); __lsSet('mfgsb_tcp_seq_v', '2'); __lsDel('mfgsb_tcp_seq'); } catch {}
           try { console.log('[TCP seq]', Object.keys(seq).length + '건'); } catch {}
         }
       } catch (e) {}
@@ -7002,7 +7017,7 @@ function App() {
         if (matched) autoMap[key] = matched;
       });
       setPlanItemMapping(autoMap);
-      try { localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(autoMap)); } catch {}
+      try { __lsSet('mfgsb_plan_mapping', JSON.stringify(autoMap)); } catch {}
       const unmapped = parts.filter(p => !autoMap[`TCP|${p}`]);
       const converted = {};
       Object.entries(plan).forEach(([k, qty]) => {
@@ -7018,7 +7033,7 @@ function App() {
           const next = {};
           Object.entries(prev).forEach(([k, v]) => { if (!k.startsWith('TCP|')) next[k] = v; });
           Object.assign(next, converted);
-          try { localStorage.setItem('mfgsb_production_plan', JSON.stringify(next)); } catch {}
+          try { __lsSet('mfgsb_production_plan', JSON.stringify(next)); } catch {}
           return next;
         });
       }
@@ -7052,9 +7067,9 @@ function App() {
         const act = __p.actual;
         if (act && Object.keys(act).length) {
           let prev = {};
-          try { prev = JSON.parse(localStorage.getItem('mfgsb_fe_actual') || '{}') || {}; } catch {}
+          try { prev = JSON.parse(__lsGet('mfgsb_fe_actual') || '{}') || {}; } catch {}
           const merged = Object.assign({}, prev, act);
-          localStorage.setItem('mfgsb_fe_actual', JSON.stringify(merged));
+          __lsSet('mfgsb_fe_actual', JSON.stringify(merged));
           setFeActual(merged);
         }
       } catch (e) {}
@@ -7068,7 +7083,7 @@ function App() {
         if (rawRows.length) {
           const lotMaps = __p.lot || { revMap: {}, lineCodes: {} };
           let prev = {};
-          try { prev = JSON.parse(localStorage.getItem('mfgsb_fe_plan_raw') || '{}') || {}; } catch {}
+          try { prev = JSON.parse(__lsGet('mfgsb_fe_plan_raw') || '{}') || {}; } catch {}
           const prevRows = Array.isArray(prev.rows) ? prev.rows : [];
           const newMonths = new Set(rawRows.map(r => String(r.date || '').slice(0, 7)));
           const kept = prevRows.filter(r => !newMonths.has(String(r.date || '').slice(0, 7)));
@@ -7079,7 +7094,7 @@ function App() {
           const prevAssign = Array.isArray(prev.icvAssign) ? prev.icvAssign : [];
           const keptAssign = prevAssign.filter(k => !newMonths.has(String(k).split('|')[1].slice(0, 7)));
           const icvAssign = Array.from(new Set(keptAssign.concat(assignNew)));
-          localStorage.setItem('mfgsb_fe_plan_raw', JSON.stringify({ rows: merged, file: fileName, uploadedAt: new Date().toISOString(), revMap, lineCodes, icvAssign }));
+          __lsSet('mfgsb_fe_plan_raw', JSON.stringify({ rows: merged, file: fileName, uploadedAt: new Date().toISOString(), revMap, lineCodes, icvAssign }));
         }
       } catch (e) {}
       const __fpm = planItemMappingRef.current || {};
@@ -7105,7 +7120,7 @@ function App() {
             if (!uploadedMonths.has(m)) next[k] = v;
           });
           Object.assign(next, converted);
-          try { localStorage.setItem('mfgsb_production_plan', JSON.stringify(next)); } catch {}
+          try { __lsSet('mfgsb_production_plan', JSON.stringify(next)); } catch {}
           return next;
         });
       }
@@ -8152,7 +8167,7 @@ function App() {
         built.__fromDefault = true;
         setFtfrConfig(built);
         try {
-          localStorage.setItem('mfgsb_ftfr_config', JSON.stringify(built));
+          __lsSet('mfgsb_ftfr_config', JSON.stringify(built));
         } catch {}
       }
       h52DefaultApplied.current = true;
@@ -8870,7 +8885,7 @@ function App() {
     icon: '📤',
     label: '데이터 출력'
   }];
-  const isGuest = typeof localStorage !== 'undefined' && !!(window.MFG_USER && window.MFG_USER.isGuest);
+  const isGuest = typeof localStorage !== 'undefined' && __lsGet('mfgsb_guest') === '1';
   const GUEST_TABS = ['dashboard', 'oee', 'oeedetail', 'quantity', 'defect', 'rework', 'downtime', 'tool', 'lotftfr', 'export'];
   // V134: 게스트는 펼침 메뉴 안의 허용 화면을 꺼내서 단일 메뉴로 표시
   const visibleTabs = isGuest ? TABS.flatMap(t => t.children ? t.children.filter(k => GUEST_TABS.includes(k.id)) : (GUEST_TABS.includes(t.id) ? [t] : [])) : TABS;
@@ -14204,7 +14219,7 @@ function App() {
           if (!g.length && !it.length) { setCuMsg('CT그룹 · 아이템 시트를 찾지 못했습니다.'); return; }
           setCuDataByYear(prev => {
             const n = { ...prev, [String(cuYear)]: { groups: g, items: it } };
-            try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(n)); } catch (x) {}
+            try { __lsSet('mfgsb_cu_ctdata', JSON.stringify(n)); } catch (x) {}
             return n;
           });
           setCuMsg(`${cuYear}년 · CT그룹 ${g.length}건 · 아이템 ${it.length}건 반영. 잠시 후 공유저장소에 자동 저장됩니다.`);
@@ -14282,7 +14297,7 @@ function App() {
               if (!window.confirm(`${src}년 CT 데이터를 ${cuYear}년으로 복사할까요?`)) return;
               setCuDataByYear(prev => {
                 const n = { ...prev, [String(cuYear)]: JSON.parse(JSON.stringify(prev[src])) };
-                try { localStorage.setItem('mfgsb_cu_ctdata', JSON.stringify(n)); } catch (e) {}
+                try { __lsSet('mfgsb_cu_ctdata', JSON.stringify(n)); } catch (e) {}
                 return n;
               });
               setCuMsg(`${src}년 데이터를 ${cuYear}년으로 복사했습니다.`);
@@ -14330,7 +14345,7 @@ function App() {
                 setCuOverrides(prev => {
                   const n = { ...prev };
                   Object.keys(n).forEach(k => { if (k.slice(0, 4) === String(cuYear)) delete n[k]; });
-                  try { localStorage.setItem('mfgsb_cu_workdays', JSON.stringify(n)); } catch (e) {}
+                  try { __lsSet('mfgsb_cu_workdays', JSON.stringify(n)); } catch (e) {}
                   return n;
                 });
               },
@@ -19781,7 +19796,7 @@ function App() {
             };
             toReset.forEach(k => delete next[k]);
             try {
-              localStorage.setItem('mfgsb_dt_overrides', JSON.stringify(next));
+              __lsSet('mfgsb_dt_overrides', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -19922,7 +19937,7 @@ function App() {
             };
             if (e.target.value) next[`TCP|${part}`] = e.target.value;else delete next[`TCP|${part}`];
             try {
-              localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(next));
+              __lsSet('mfgsb_plan_mapping', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -19961,7 +19976,7 @@ function App() {
             });
             Object.assign(next, converted);
             try {
-              localStorage.setItem('mfgsb_production_plan', JSON.stringify(next));
+              __lsSet('mfgsb_production_plan', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -20036,7 +20051,7 @@ function App() {
             };
             if (e.target.value) next[`FE|${pno}`] = e.target.value;else delete next[`FE|${pno}`];
             try {
-              localStorage.setItem('mfgsb_plan_mapping', JSON.stringify(next));
+              __lsSet('mfgsb_plan_mapping', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -20082,7 +20097,7 @@ function App() {
             });
             Object.assign(next, converted);
             try {
-              localStorage.setItem('mfgsb_production_plan', JSON.stringify(next));
+              __lsSet('mfgsb_production_plan', JSON.stringify(next));
             } catch {}
             return next;
           });
@@ -20099,7 +20114,7 @@ function App() {
         if (confirm('저장된 모든 생산계획을 삭제하시겠습니까?')) {
           setProductionPlan({});
           try {
-            localStorage.setItem('mfgsb_production_plan', '{}');
+            __lsSet('mfgsb_production_plan', '{}');
           } catch {}
           alert('생산계획이 삭제되었습니다.');
         }
@@ -21209,7 +21224,7 @@ function App() {
     const updateH52Config = next => {
       setH52Config(next);
       try {
-        localStorage.setItem('mfgsb_52h_config', JSON.stringify(next));
+        __lsSet('mfgsb_52h_config', JSON.stringify(next));
       } catch {}
     };
     return React.createElement("div", null, React.createElement("div", {
