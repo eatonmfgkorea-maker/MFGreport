@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V164S</title>
+  <title>MFG Report V165S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -70,7 +70,7 @@
 <script>
 (function() {
   var APP_NAME = 'MFG Report';
-  var APP_VER = 'V164S';
+  var APP_VER = 'V165S';
   var SB_DEFAULT_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co';
   var SB_DEFAULT_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
   var CFG_KEY = 'mfg-sb-test-cfg', AUTH_KEY = 'mfg-sb-test-auth', LAST_EMAIL = 'mfg-sb-test-last-email';
@@ -324,6 +324,108 @@
 })();
 </script>
 <!-- ==================== /MFG 서버 인증 ==================== -->
+<style>
+table[data-lc] { border-collapse: separate !important; border-spacing: 0; }
+table[data-lc] > * > tr > th, table[data-lc] > * > tr > td { border-width: 0 1px 1px 0 !important; }
+</style>
+<script>
+(function () {
+  var last = null;
+  window.__lcHidden = function (notes, kind) {
+    try { var v = JSON.parse((notes || {})['__hide|' + kind] || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+  };
+  var txt = function (c) { return (c.textContent || '').replace(/[▶▼]/g, '').replace(/\s+/g, ' ').trim(); };
+  // 행 묶음(thead/tbody/tfoot)의 칸 위치 계산 — colSpan/rowSpan 반영 (숨기며 줄인 colSpan 은 원래 값 기억)
+  function grid(rows) {
+    var occ = [], out = [];
+    for (var ri = 0; ri < rows.length; ri++) {
+      occ[ri] = occ[ri] || []; var c = 0, cells = rows[ri].cells;
+      for (var j = 0; j < cells.length; j++) {
+        var el = cells[j];
+        while (occ[ri][c]) c++;
+        var o = +el.getAttribute('data-ocs');
+        if (!o || el.colSpan !== +el.getAttribute('data-lcs')) o = el.colSpan || 1;
+        el.setAttribute('data-ocs', o);
+        var rs = el.rowSpan || 1;
+        for (var r = ri; r < ri + rs; r++) { occ[r] = occ[r] || []; for (var k = c; k < c + o; k++) occ[r][k] = 1; }
+        el.__lcS = c; el.__lcN = o; el.__lcR = ri;
+        out.push(el); c += o;
+      }
+    }
+    return out;
+  }
+  function one(t, notes, setNote) {
+    var kind = t.getAttribute('data-lc'), F = +t.getAttribute('data-freeze') || 0;
+    var hid = new Set(window.__lcHidden(notes, kind));
+    var head = t.tHead; if (!head) return;
+    var hc = grid(head.rows), keys = [];
+    hc.forEach(function (el) { for (var k = el.__lcS; k < el.__lcS + el.__lcN; k++) keys[k] = (keys[k] ? keys[k] + ' > ' : '') + txt(el); });
+    var H = {}; keys.forEach(function (k, i) { if (i >= F && hid.has(k)) H[i] = 1; });
+    var all = hc.slice();
+    for (var b = 0; b < t.tBodies.length; b++) all = all.concat(grid(t.tBodies[b].rows));
+    if (t.tFoot) all = all.concat(grid(t.tFoot.rows));
+    all.forEach(function (el) {
+      var v = 0; for (var k = el.__lcS; k < el.__lcS + el.__lcN; k++) if (!H[k]) v++;
+      el.style.display = v ? '' : 'none';
+      if (v && el.colSpan !== v) el.colSpan = v;
+      el.setAttribute('data-lcs', el.colSpan);
+    });
+    // 세로 스크롤 상자 (제목줄 고정용)
+    var box = t.parentElement;
+    if (box && !box.__lc) { box.__lc = 1; box.style.overflow = 'auto'; box.style.maxHeight = 'calc(100vh - 120px)'; }
+    // 고정 열 왼쪽 위치
+    var left = [], x = 0;
+    for (var k = 0; k < F; k++) {
+      left[k] = x;
+      var w = 0; hc.forEach(function (el) { if (el.__lcS === k && el.__lcN === 1) w = el.getBoundingClientRect().width; });
+      x += w;
+    }
+    var top0 = head.rows[0] ? head.rows[0].offsetTop : 0, guest = !!(window.MFG_USER && window.MFG_USER.isGuest);
+    hc.forEach(function (el) {
+      var fr = el.__lcS + el.__lcN <= F;
+      el.style.position = 'sticky';
+      el.style.top = (head.rows[el.__lcR].offsetTop - top0) + 'px';
+      el.style.left = fr ? left[el.__lcS] + 'px' : '';
+      el.style.zIndex = fr ? 40 : 30;
+      el.style.boxShadow = 'inset 0 -1px 0 #cbd5e1' + (fr && el.__lcS + el.__lcN === F ? ', inset -1px 0 0 #cbd5e1' : '');
+      if (el.__lcS >= F) { el.title = guest ? '' : '더블클릭하면 이 열 숨김 (모두에게 적용)'; el.style.cursor = guest ? '' : 'zoom-out'; el.style.userSelect = 'none'; }
+    });
+    all.forEach(function (el) {
+      if (el.parentElement.parentElement === head) return;
+      var fr = el.__lcS + el.__lcN <= F;
+      if (!fr) { if (el.__lcFr) { el.__lcFr = 0; el.style.position = ''; el.style.left = ''; el.style.zIndex = ''; el.style.boxShadow = ''; } return; }
+      el.__lcFr = 1;
+      el.style.position = 'sticky'; el.style.left = left[el.__lcS] + 'px'; el.style.zIndex = 20;
+      el.style.boxShadow = el.__lcS + el.__lcN === F ? 'inset -1px 0 0 #cbd5e1' : '';
+      var bg = getComputedStyle(el).backgroundColor;
+      if (!bg || bg === 'transparent' || /rgba\(.*,\s*0\)$/.test(bg)) {
+        var rb = getComputedStyle(el.parentElement).backgroundColor;
+        el.style.backgroundColor = (rb && !/rgba/.test(rb) && rb !== 'transparent') ? rb : '#fff';
+      }
+    });
+    t.__lcKeys = keys; t.__lcF = F; t.__lcKind = kind; t.__lcNotes = notes; t.__lcSet = setNote;
+    if (!t.__lcOn) {
+      t.__lcOn = 1;
+      t.addEventListener('dblclick', function (e) {
+        var th = e.target.closest && e.target.closest('th');
+        if (!th || !t.tHead || !t.tHead.contains(th) || th.__lcS < t.__lcF) return;
+        if (window.MFG_USER && window.MFG_USER.isGuest) return;
+        if (e.target.closest('button, input, select, a')) return;
+        try { window.getSelection().removeAllRanges(); } catch (er) {}
+        var h = window.__lcHidden(t.__lcNotes, t.__lcKind);
+        for (var k = th.__lcS; k < th.__lcS + th.__lcN; k++) { var key = t.__lcKeys[k]; if (key && h.indexOf(key) < 0) h.push(key); }
+        t.__lcSet('__hide|' + t.__lcKind, JSON.stringify(h));
+      });
+    }
+  }
+  window.__lcApply = function (notes, setNote) {
+    last = [notes, setNote];
+    var ts = document.querySelectorAll('table[data-lc]');
+    for (var i = 0; i < ts.length; i++) { try { one(ts[i], notes, setNote); } catch (e) { console.warn('Lot&FTFR 열 고정/숨김', e); } }
+  };
+  window.addEventListener('resize', function () { if (last) window.__lcApply(last[0], last[1]); });
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style id="mfgSideCss">
@@ -350,9 +452,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V164S',
-  d: '2026-11-01',
-  items: ['FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  v: 'V165S',
+  d: '2026-11-05',
+  items: ['Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -4657,6 +4759,7 @@ function App() {
       return next;
     });
   };
+  React.useEffect(() => { if (activeTab === 'lotftfr' && window.__lcApply) window.__lcApply(lotFtfrNotes, updateLotFtfrNote); });
   const qprmExport = async (sheetName, startRow, maxCol, dataRows, fname, renameTo) => {
     try {
       const bin = atob(window.QPRM_TEMPLATE_B64);
@@ -22065,7 +22168,7 @@ function App() {
           className: "bg-slate-800 text-white px-4 py-2.5 font-bold flex items-center justify-between"
         }, React.createElement("span", null, "LVS"), React.createElement("span", {
           className: "flex items-center gap-2"
-        }, React.createElement("button", {
+        }, (() => { const __h = window.__lcHidden(lotFtfrNotes, "LVS"); return __h.length && !(window.MFG_USER && window.MFG_USER.isGuest) ? React.createElement("button", { onClick: () => updateLotFtfrNote("__hide|LVS", ""), title: "숨긴 열 다시 보이기 (모두에게 적용): " + __h.join(", "), className: "px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold" }, "↺ 숨긴 열 " + __h.length) : null; })(), React.createElement("button", {
           onClick: exportLvsExcel,
           className: "px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
         }, "엑셀"), React.createElement("span", {
@@ -22073,6 +22176,7 @@ function App() {
         }, lvsRows.length, "건"))), React.createElement("div", {
           className: "overflow-x-auto"
         }, React.createElement("table", {
+ "data-lc": "LVS", "data-freeze": 3,
           className: "text-xs border-collapse w-full whitespace-nowrap"
         }, React.createElement("thead", null, React.createElement("tr", null, React.createElement("th", {
           rowSpan: 2,
@@ -22375,7 +22479,7 @@ function App() {
         className: "bg-slate-800 text-white px-4 py-2.5 font-bold flex items-center justify-between"
       }, React.createElement("span", null, "UCC"), React.createElement("span", {
         className: "flex items-center gap-2"
-      }, React.createElement("button", {
+      }, (() => { const __h = window.__lcHidden(lotFtfrNotes, "UCC"); return __h.length && !(window.MFG_USER && window.MFG_USER.isGuest) ? React.createElement("button", { onClick: () => updateLotFtfrNote("__hide|UCC", ""), title: "숨긴 열 다시 보이기 (모두에게 적용): " + __h.join(", "), className: "px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold" }, "↺ 숨긴 열 " + __h.length) : null; })(), React.createElement("button", {
         onClick: exportUccExcel,
         className: "px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
       }, "엑셀"), React.createElement("span", {
@@ -22383,6 +22487,7 @@ function App() {
       }, uccRows.length, "일"))), React.createElement("div", {
         className: "overflow-x-auto"
       }, React.createElement("table", {
+ "data-lc": "UCC", "data-freeze": 1,
         className: "text-xs border-collapse w-full whitespace-nowrap"
       }, React.createElement("thead", null, React.createElement("tr", null, React.createElement("th", {
         rowSpan: 3,
@@ -22723,7 +22828,7 @@ function App() {
         className: "bg-slate-800 text-white px-4 py-2.5 font-bold flex items-center justify-between"
       }, React.createElement("span", null, "", item), React.createElement("span", {
         className: "flex items-center gap-2"
-      }, React.createElement("button", {
+      }, (() => { const __h = window.__lcHidden(lotFtfrNotes, "TCP"); return __h.length && !(window.MFG_USER && window.MFG_USER.isGuest) ? React.createElement("button", { onClick: () => updateLotFtfrNote("__hide|TCP", ""), title: "숨긴 열 다시 보이기 (모두에게 적용): " + __h.join(", "), className: "px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold" }, "↺ 숨긴 열 " + __h.length) : null; })(), React.createElement("button", {
         onClick: exportTcpExcel,
         className: "px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
       }, "엑셀"), React.createElement("span", {
@@ -22731,6 +22836,7 @@ function App() {
       }, rows.length, "건"))), React.createElement("div", {
         className: "overflow-x-auto"
       }, React.createElement("table", {
+ "data-lc": "TCP", "data-freeze": 3,
         className: "text-xs border-collapse w-full whitespace-nowrap"
       }, React.createElement("thead", null, React.createElement("tr", null, React.createElement("th", {
         rowSpan: 2,
