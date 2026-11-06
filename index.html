@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V168S</title>
+  <title>MFG Report V169S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,9 +452,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V168S',
+  v: 'V169S',
   d: '2026-11-06',
-  items: ['AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -3374,31 +3374,49 @@ rw = 비가동요인에 «Rework (98 → 18)» 같은 표기가 있을 때만, �
     } catch (e) { return b64; }
   };
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // V169S: 판독은 Claude(Sonnet) — Supabase 서버 함수 clever-handler 를 거침 (API 키는 서버에만). 함수 이름 askGemini 는 그대로 둠
+  const BOARD_AI = 'https://tmbeaswlpvsyjehacgsa.supabase.co/functions/v1/clever-handler';
+  const reJpeg = async (b64, maxW, q) => {
+    try {
+      const img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = 'data:image/jpeg;base64,' + b64; });
+      const sc = Math.min(1, maxW / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL('image/jpeg', q).split(',')[1];
+    } catch (e) { return b64; }
+  };
+  const fitB64 = async b64 => {   // 서버 함수 한도(약 300KB) 안으로 — 글씨가 보이게 큰 것부터
+    let out = b64;
+    for (const [w, q] of [[1400, 0.85], [1400, 0.75], [1250, 0.72], [1100, 0.7], [950, 0.68]]) {
+      if (out.length <= 270000) break;
+      out = await reJpeg(b64, w, q);
+    }
+    return out;
+  };
   const askGemini = async (b64, onWait) => {
-    const body = { prompt: BOARD_PROMPT, imageB64: b64, mimeType: 'image/jpeg' };
+    const img = await fitB64(b64);
+    const ss = window.MFG_SB ? await window.MFG_SB.auth.getSession() : null;
+    const tok = ss && ss.data && ss.data.session && ss.data.session.access_token;
+    if (!tok) throw new Error('로그인이 필요합니다');
+    const body = {
+      max_tokens: 600,
+      system: '너는 공장 생산 현황판(화이트보드·인쇄 양식) 사진에서 손글씨 숫자를 정확히 읽는다. 요청한 JSON 한 줄만 출력한다. 추측하지 말고 안 보이면 null.',
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img } }, { type: 'text', text: BOARD_PROMPT }] }]
+    };
     let j = null;
     for (let attempt = 0; attempt < 4; attempt++) {
-      const r = await fetch(GEMINI_GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
-      j = await r.json();
-      const raw = String((j && j.raw) || '');
-      const isQuota = raw.indexOf('429') >= 0 || raw.indexOf('RESOURCE_EXHAUSTED') >= 0 || raw.indexOf('quota') >= 0;
-      const isBusy = raw.indexOf('503') >= 0 || raw.indexOf('high demand') >= 0 || raw.indexOf('UNAVAILABLE') >= 0;
-      if (j && j.ok !== false) break;
-      if (!isQuota && !isBusy) break;
-      if (attempt === 3) {
-        throw new Error(isQuota ? '분당 요청 한도 초과 — 잠시 후 다시 시도하세요' : '판독 서버 혼잡 — 잠시 후 다시 시도하세요');
-      }
-      const wait = isQuota ? 32000 : 20000;
-      if (onWait) onWait(isQuota ? '분당 한도 대기' : '서버 혼잡 대기', Math.round(wait / 1000));
-      await sleep(wait);
+      const r = await fetch(BOARD_AI, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok, apikey: 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9' }, body: JSON.stringify(body) });
+      try { j = await r.json(); } catch (e) { j = null; }
+      if (r.ok && j && !j.error && j.type !== 'error') break;
+      const own = j && typeof j.error === 'string' ? j.error : '';   // 서버 함수 자체 메시지(로그인·한도 등)
+      const msg = own || (j && j.error && j.error.message) || ('HTTP ' + r.status);
+      const busy = !own && (r.status === 429 || r.status === 529 || r.status >= 500);
+      if (!busy || attempt === 3) throw new Error(busy ? '판독 서버 혼잡 — 잠시 후 다시 시도하세요' : msg);
+      if (onWait) onWait('판독 서버 혼잡 대기', 15);
+      await sleep(15000);
     }
-    if (j && j.ok === false) throw new Error(j.error || '프록시 오류');
-    let txt = j.answer || j.text || j.result || j.output || (j.candidates && j.candidates[0]?.content?.parts?.[0]?.text) || '';
+    let txt = (j.content || []).filter(x => x.type === 'text').map(x => x.text).join('\n');
     txt = String(txt).replace(/```json|```/g, '').trim();
-    // 이미지 미지원 프록시가 «이미지를 볼 수 없습니다» 로 답하는 경우 감지
-    if (/이미지를\s*(직접\s*)?(볼|확인할)\s*수\s*없/.test(txt) || (!txt.includes('{') && txt.length < 200 && !/^\s*\{/.test(txt))) {
-      throw new Error('판독 서버가 사진을 처리하지 못했습니다 (Gemini GAS 이미지 지원 필요)');
-    }
     const s0 = txt.indexOf('{'), e0 = txt.lastIndexOf('}');
     if (s0 < 0 || e0 < 0) throw new Error('판독 응답 형식 오류');
     let jbody = txt.slice(s0, e0 + 1);
@@ -6572,6 +6590,8 @@ function App() {
   const planSkipRef = React.useRef({ tcp: false, fe: false }); // V100: 파일 미변경으로 생략됐는지 표시용
   const gasListRef = React.useRef(null); // V100: 초기 자동로드에서 받은 GAS 파일 목록(계획 자동로드와 공유)
   const [planDataReady, setPlanDataReady] = useState(false); // TCP/FE 데이터·설정 자동로드 완료 신호
+  // V169S: 유효성검사 탭에서도 서버 계획(«조장님_실적체크» 실적 포함)을 최신으로 — 바뀐 게 없으면 받지 않음
+  React.useEffect(() => { if (activeTab !== 'validate' || !planDataReady) return; loadPlanFromServer().catch(() => {}); }, [activeTab, planDataReady]);
   const [planLoadStatus, setPlanLoadStatus] = useState(''); // '', 'loading', 'done', 'fail'
   const [planLoadMsg, setPlanLoadMsg] = useState('');
   React.useEffect(() => {
