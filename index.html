@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V176S</title>
+  <title>MFG Report V177S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,9 +452,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V176S',
+  v: 'V177S',
   d: '2026-11-07',
-  items: ['설비별 분석 라인 구분을 비가동 화면과 같게 — 라인 이름은 화면 표시 이름(A/FLVV·M/GVV 등), 왼쪽 «라인» 목록에 있는 생산 라인만(세척·Pack·ATV 제외), FE 파일에 섞인 TCP 기록 제외', '설비별 분석을 비가동 메뉴 왼쪽 «비가동 구분» 아래 버튼으로 옮김 — 오른쪽에 바로 표시, 왼쪽 TCP/FE·라인 선택 따라감. 한눈에 보기(건수·시간·MTTR·MTBF), 분석 결과(집중·최대 손실·반복·증가·원인·자주 멈추는 라인), 라인별·원인별·월별·설비 Top 10 그래프, 설비 이름 한꺼번에 바꾸기(합치기)', '브리핑 팝업 새 디자인 — 왼쪽 메뉴와 같은 테마(베이지 바탕·검은 굵은 선·주황 포인트), 화면 가운데에 크게, 요약은 번호 목록, 바깥을 누르거나 Esc로 닫기 · 대시보드 공지줄도 같은 테마', '브리핑: 새 브리핑이 나오면 MFG Report에 처음 들어올 때 팝업으로 한 번 띄움 (본 브리핑은 이 PC에서 다시 안 띄움) · 대시보드 맨 위 공지줄은 그대로 (눌러서 다시 보기)', '비가동 제목 오른쪽 [설비별 분석] — 장비고장·설비 설정값 변경 비가동의 내용 글을 AI가 읽어 설비·증상·원인 분류(서버 저장, 사람이 고칠 수 있음), 라인·설비별 건수·시간·MTTR·MTBF · 브리핑은 대시보드 맨 위 공지줄로 (눌러서 전체 보기), 휴대폰 화면 정리', '오른쪽 아래 «브리핑»: 매일 아침 만들어지는 생산 브리핑(주간·야간 계획/실적, OEE, 비가동·불량 Top, AI 요약)을 날짜별로 보고 [복사]해서 메일에 붙여넣기 · AI 질문·현황판 판독이 빈 답을 내던 문제(모델 생각 단계) 수정', '현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['설비별 분석 맨 위에 MTTR(평균 수리 시간)·MTBF(평균 고장 간격) 설명과 지금 화면 숫자로 푼 한 줄', '설비별 분석 라인 구분을 비가동 화면과 같게 — 라인 이름은 화면 표시 이름(A/FLVV·M/GVV 등), 왼쪽 «라인» 목록에 있는 생산 라인만(세척·Pack·ATV 제외), FE 파일에 섞인 TCP 기록 제외', '설비별 분석을 비가동 메뉴 왼쪽 «비가동 구분» 아래 버튼으로 옮김 — 오른쪽에 바로 표시, 왼쪽 TCP/FE·라인 선택 따라감. 한눈에 보기(건수·시간·MTTR·MTBF), 분석 결과(집중·최대 손실·반복·증가·원인·자주 멈추는 라인), 라인별·원인별·월별·설비 Top 10 그래프, 설비 이름 한꺼번에 바꾸기(합치기)', '브리핑 팝업 새 디자인 — 왼쪽 메뉴와 같은 테마(베이지 바탕·검은 굵은 선·주황 포인트), 화면 가운데에 크게, 요약은 번호 목록, 바깥을 누르거나 Esc로 닫기 · 대시보드 공지줄도 같은 테마', '브리핑: 새 브리핑이 나오면 MFG Report에 처음 들어올 때 팝업으로 한 번 띄움 (본 브리핑은 이 PC에서 다시 안 띄움) · 대시보드 맨 위 공지줄은 그대로 (눌러서 다시 보기)', '비가동 제목 오른쪽 [설비별 분석] — 장비고장·설비 설정값 변경 비가동의 내용 글을 AI가 읽어 설비·증상·원인 분류(서버 저장, 사람이 고칠 수 있음), 라인·설비별 건수·시간·MTTR·MTBF · 브리핑은 대시보드 맨 위 공지줄로 (눌러서 전체 보기), 휴대폰 화면 정리', '오른쪽 아래 «브리핑»: 매일 아침 만들어지는 생산 브리핑(주간·야간 계획/실적, OEE, 비가동·불량 Top, AI 요약)을 날짜별로 보고 [복사]해서 메일에 붙여넣기 · AI 질문·현황판 판독이 빈 답을 내던 문제(모델 생각 단계) 수정', '현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -27867,6 +27867,12 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
       (ST.busy ? '<button type="button" class="run" disabled>AI 분류 중… 남은 ' + unc.length + '건</button>' : isUser() && unc.length ? '<button type="button" class="run" id="eqxRun">AI 분류 (' + unc.length + '건)</button>' : '') + '</div></div>';
     if (!recs.length) { box.innerHTML = h + '<div class="eqx-card"><p class="eqx-note">이 기간·라인에 장비고장 · 설비 설정값 변경 비가동이 없습니다.</p></div>'; wire(box, recs, rows); return; }
     var mtbf = opSum && opN ? opSum / 60 / opN : null;
+    var mttr = Math.round(tot / recs.length);
+    h += '<div class="eqx-card eqx-def">' +
+      '<div><b>MTTR</b><span class="en">평균 수리 시간</span><p>한 번 멈췄을 때 다시 돌리기까지 <b>평균 몇 분</b> 걸리는지. <em>= 고장 시간 ÷ 고장 건수</em></p><p class="gd">짧을수록 좋음 — 빨리 고친다</p></div>' +
+      '<div><b>MTBF</b><span class="en">평균 고장 간격</span><p>설비가 <b>몇 시간 돌 때마다 한 번</b> 고장 나는지. <em>= 라인 가동시간 ÷ 고장 건수</em></p><p class="gd">길수록 좋음 — 덜 고장 난다</p></div>' +
+      (mtbf != null ? '<div class="ex"><span>지금 이 화면</span><p>가동 <b>약 ' + (mtbf >= 10 ? Math.round(mtbf) : mtbf.toFixed(1)) + '시간마다 한 번</b> 멈추고, 멈추면 <b>평균 ' + mttr + '분</b> 만에 다시 돌아갑니다.</p></div>' : '') +
+      '</div>';
     h += '<div class="eqx-card eqx-kpi">' +
       [['고장 건수', fmt(recs.length) + '건'], ['고장 시간', hrs(tot)], ['MTTR', Math.round(tot / recs.length) + '분', '한 번 멈추면 평균'], ['MTBF', mtbf == null ? '-' : mtbf.toFixed(1) + '시간', 'OEE 라인 가동 몇 시간에 한 번'], ['설비 수', named.length + '개'], ['미분류', nUnc + '건']]
         .map(function (x) { return '<div><span>' + x[0] + '</span><b>' + x[1] + '</b>' + (x[2] ? '<em>' + x[2] + '</em>' : '') + '</div>'; }).join('') + '</div>';
@@ -27967,6 +27973,9 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
       '.eqx-hd button.run{height:30px;padding:0 12px;border:0;border-radius:6px;background:#141414;color:#fff;font:700 12px ' + F + ';cursor:pointer}.eqx-hd button.run:hover{background:#D63A0E}' +
       '.eqx-kpi{display:grid;grid-template-columns:repeat(6,1fr);padding:0}.eqx-kpi > div{padding:12px 16px;border-left:1px solid #e2e8f0;min-width:0}.eqx-kpi > div:first-child{border-left:0}' +
       '.eqx-kpi span{display:block;font-size:11px;font-weight:700;color:#64748b}.eqx-kpi b{display:block;font-size:22px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:2px}.eqx-kpi em{display:block;font-style:normal;font-size:10.5px;color:#94a3b8}' +
+      '.eqx-def{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;padding:0;background:#f8fafc}.eqx-def > div{padding:12px 16px;border-left:1px solid #e2e8f0;min-width:0}.eqx-def > div:first-child{border-left:0}' +
+      '.eqx-def > div > b{font-size:15px;font-weight:800}.eqx-def .en{margin-left:6px;font-size:12px;font-weight:700;color:#475569}.eqx-def p{margin:4px 0 0;font-size:12.5px;line-height:1.55;color:#334155;word-break:keep-all}.eqx-def em{font-style:normal;color:#64748b;white-space:nowrap}.eqx-def p.gd{font-size:11.5px;color:#D63A0E;font-weight:700}' +
+      '.eqx-def .ex{background:#fff}.eqx-def .ex > span{font-size:11px;font-weight:700;color:#64748b}' +
       '.eqx-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px;font-weight:800;margin-bottom:10px}.eqx-h span{font-size:11px;font-weight:500;color:#94a3b8}' +
       '.eqx-ins{list-style:none;margin:0;padding:0}.eqx-ins li{display:grid;grid-template-columns:28px 1fr;padding:7px 0;border-top:1px solid #f1f5f9;font-size:13.5px;line-height:1.55;word-break:keep-all}.eqx-ins li:first-child{border-top:0}' +
       '.eqx-ins i{font-style:normal;font-weight:800;color:#D63A0E;font-variant-numeric:tabular-nums}.eqx-ins .hn{color:#64748b;font-size:12.5px}' +
@@ -27983,7 +27992,7 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
       '.eq-t tr[data-k]{cursor:pointer}.eq-t tr[data-k]:hover td{background:#f8fafc}.eq-t tr.on td{background:#fff7ed}.eqx-sub{margin:16px 0 6px;font-size:13px}.eqx-note{font-size:11.5px;color:#94a3b8;margin:10px 2px 0}' +
       '.eqx-more{margin-top:8px;height:30px;padding:0 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font:700 12px ' + F + ';color:#475569;cursor:pointer}.eqx-more:hover{background:#f8fafc}' +
       '.eq-ed{border:1px solid #cbd5e1;background:#fff;border-radius:6px;font-size:11px;padding:2px 8px;cursor:pointer;margin-left:6px}' +
-      '@media (max-width:900px){.eqx-kpi{grid-template-columns:repeat(3,1fr)}.eqx-kpi > div:nth-child(4){border-left:0}.eqx-kpi > div:nth-child(n+4){border-top:1px solid #e2e8f0}.eqx-2{grid-template-columns:1fr;gap:0}}' +
+      '@media (max-width:900px){.eqx-def{grid-template-columns:1fr}.eqx-def > div{border-left:0;border-top:1px solid #e2e8f0}.eqx-def > div:first-child{border-top:0}.eqx-kpi{grid-template-columns:repeat(3,1fr)}.eqx-kpi > div:nth-child(4){border-left:0}.eqx-kpi > div:nth-child(n+4){border-top:1px solid #e2e8f0}.eqx-2{grid-template-columns:1fr;gap:0}}' +
       '@media (max-width:640px){.eqx-card{padding:12px}.eqx-bar{grid-template-columns:minmax(70px,34%) 1fr 54px}.eqx-bar .sb{display:none}.eqx-kpi b{font-size:18px}}';
     document.head.appendChild(css);
     var loading = false;
