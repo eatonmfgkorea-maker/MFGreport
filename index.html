@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V175S</title>
+  <title>MFG Report V176S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,9 +452,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V175S',
+  v: 'V176S',
   d: '2026-11-07',
-  items: ['설비별 분석을 비가동 메뉴 왼쪽 «비가동 구분» 아래 버튼으로 옮김 — 오른쪽에 바로 표시, 왼쪽 TCP/FE·라인 선택 따라감. 한눈에 보기(건수·시간·MTTR·MTBF), 분석 결과(집중·최대 손실·반복·증가·원인·자주 멈추는 라인), 라인별·원인별·월별·설비 Top 10 그래프, 설비 이름 한꺼번에 바꾸기(합치기)', '브리핑 팝업 새 디자인 — 왼쪽 메뉴와 같은 테마(베이지 바탕·검은 굵은 선·주황 포인트), 화면 가운데에 크게, 요약은 번호 목록, 바깥을 누르거나 Esc로 닫기 · 대시보드 공지줄도 같은 테마', '브리핑: 새 브리핑이 나오면 MFG Report에 처음 들어올 때 팝업으로 한 번 띄움 (본 브리핑은 이 PC에서 다시 안 띄움) · 대시보드 맨 위 공지줄은 그대로 (눌러서 다시 보기)', '비가동 제목 오른쪽 [설비별 분석] — 장비고장·설비 설정값 변경 비가동의 내용 글을 AI가 읽어 설비·증상·원인 분류(서버 저장, 사람이 고칠 수 있음), 라인·설비별 건수·시간·MTTR·MTBF · 브리핑은 대시보드 맨 위 공지줄로 (눌러서 전체 보기), 휴대폰 화면 정리', '오른쪽 아래 «브리핑»: 매일 아침 만들어지는 생산 브리핑(주간·야간 계획/실적, OEE, 비가동·불량 Top, AI 요약)을 날짜별로 보고 [복사]해서 메일에 붙여넣기 · AI 질문·현황판 판독이 빈 답을 내던 문제(모델 생각 단계) 수정', '현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['설비별 분석 라인 구분을 비가동 화면과 같게 — 라인 이름은 화면 표시 이름(A/FLVV·M/GVV 등), 왼쪽 «라인» 목록에 있는 생산 라인만(세척·Pack·ATV 제외), FE 파일에 섞인 TCP 기록 제외', '설비별 분석을 비가동 메뉴 왼쪽 «비가동 구분» 아래 버튼으로 옮김 — 오른쪽에 바로 표시, 왼쪽 TCP/FE·라인 선택 따라감. 한눈에 보기(건수·시간·MTTR·MTBF), 분석 결과(집중·최대 손실·반복·증가·원인·자주 멈추는 라인), 라인별·원인별·월별·설비 Top 10 그래프, 설비 이름 한꺼번에 바꾸기(합치기)', '브리핑 팝업 새 디자인 — 왼쪽 메뉴와 같은 테마(베이지 바탕·검은 굵은 선·주황 포인트), 화면 가운데에 크게, 요약은 번호 목록, 바깥을 누르거나 Esc로 닫기 · 대시보드 공지줄도 같은 테마', '브리핑: 새 브리핑이 나오면 MFG Report에 처음 들어올 때 팝업으로 한 번 띄움 (본 브리핑은 이 PC에서 다시 안 띄움) · 대시보드 맨 위 공지줄은 그대로 (눌러서 다시 보기)', '비가동 제목 오른쪽 [설비별 분석] — 장비고장·설비 설정값 변경 비가동의 내용 글을 AI가 읽어 설비·증상·원인 분류(서버 저장, 사람이 고칠 수 있음), 라인·설비별 건수·시간·MTTR·MTBF · 브리핑은 대시보드 맨 위 공지줄로 (눌러서 전체 보기), 휴대폰 화면 정리', '오른쪽 아래 «브리핑»: 매일 아침 만들어지는 생산 브리핑(주간·야간 계획/실적, OEE, 비가동·불량 Top, AI 요약)을 날짜별로 보고 [복사]해서 메일에 붙여넣기 · AI 질문·현황판 판독이 빈 답을 내던 문제(모델 생각 단계) 수정', '현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -4779,7 +4779,7 @@ function App() {
     });
   };
   React.useEffect(() => { if (activeTab === 'lotftfr' && window.__lcApply) window.__lcApply(lotFtfrNotes, updateLotFtfrNote); });
-  React.useEffect(() => { window.__mfgAI = { allLogs, tcpData, feData, aggregateContribs, computeMetricsFromTotals, filterOeeLogs, productionPlan, oeeManual, activeTab, dtEq, dtSection, dtSelectedLines, dtYear }; });
+  React.useEffect(() => { window.__mfgAI = { allLogs, tcpData, feData, aggregateContribs, computeMetricsFromTotals, filterOeeLogs, productionPlan, oeeManual, activeTab, dtEq, dtSection, dtSelectedLines, dtYear, resolveLineName, getSectionDisplayLines }; });
   const qprmExport = async (sheetName, startRow, maxCol, dataRows, fname, renameTo) => {
     try {
       const bin = atob(window.QPRM_TEMPLATE_B64);
@@ -27728,19 +27728,22 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
   function collect() {
     var a = A(); if (!a) return [];
     var out = [];
+    var disp = function (sec, ln) { try { return a.resolveLineName ? a.resolveLineName(sec, ln) : ln; } catch (e) { return ln; } };
     [['TCP', a.tcpData], ['FE', a.feData]].forEach(function (pair) {
-      var sec = pair[0], data = pair[1] || {}, byId = {};
+      var src = pair[0], data = pair[1] || {}, byId = {};
       (data.productionLogs || []).forEach(function (l) { byId[l.id] = l; });
       var emb = function (id) { var x = (data.lotData || {})[id]; return !!(x && (Array.isArray(x.defects) || Array.isArray(x.reworks) || Array.isArray(x.downtimes))); };
       (data.downtimeLogs || []).forEach(function (d) {
         var l = byId[d.productionLogId]; if (!l || emb(l.id) || !EQ_TYPE.test(d.downtimeType || '')) return;   // 앱 계산과 같게: lotData에 비가동이 들어 있는 기록은 그쪽만 씀
-        out.push({ id: String(d.id), sec: sec, date: l.productionDate, shift: l.shift, line: l.lineName || '', item: l.item || '', type: d.downtimeType, m: dur(d), content: String(d.content || '').trim() });
+        var sec = l.section || src;   // 비가동 화면과 같게: 파일이 아니라 기록의 section, 라인은 화면 표시 이름(A/FLVV 등)
+        out.push({ id: String(d.id), src: src, sec: sec, date: l.productionDate, shift: l.shift, raw: l.lineName || '', line: disp(sec, l.lineName || ''), item: l.item || '', type: d.downtimeType, m: dur(d), content: String(d.content || '').trim() });
       });
       Object.keys(data.lotData || {}).forEach(function (lid) {
         var lld = data.lotData[lid], l = byId[lid] || byId[Number(lid)]; if (!l || !lld || !Array.isArray(lld.downtimes)) return;
         lld.downtimes.forEach(function (d, i) {
           var t = d.downtimeType || d.type || ''; if (!EQ_TYPE.test(t)) return;
-          out.push({ id: lid + '#' + i, sec: sec, date: l.productionDate, shift: l.shift, line: l.lineName || '', item: l.item || '', type: t, m: num(d.duration), content: String(d.content || d.memo || '').trim() });
+          var sec = l.section || src;
+          out.push({ id: lid + '#' + i, src: src, sec: sec, date: l.productionDate, shift: l.shift, raw: l.lineName || '', line: disp(sec, l.lineName || ''), item: l.item || '', type: t, m: num(d.duration), content: String(d.content || d.memo || '').trim() });
         });
       });
     });
@@ -27805,7 +27808,9 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
     var a = A(); if (!a || !box) return;
     var secF = a.dtSection || 'TCP', lines = a.dtSelectedLines || ['ALL'], allL = lines.indexOf('ALL') >= 0;
     var from = ST.from, to = ST.to;
-    var all = collect().filter(function (r) { return r.sec === secF && (allL || lines.indexOf(r.line) >= 0); });
+    // 비가동 화면 왼쪽 «라인» 목록에 있는 라인만 (TCP 1PC·2PC·Nospin / FE 생산 라인 — 세척·Pack·ATV 등 제외)
+    var okL = {}; ((a.getSectionDisplayLines && a.getSectionDisplayLines(secF)) || []).forEach(function (x) { okL[x] = 1; });
+    var all = collect().filter(function (r) { return r.src === secF && r.sec === secF && okL[r.line] && r.raw !== 'ATV' && r.raw !== 'ATV M/C' && (allL || lines.indexOf(r.line) >= 0); });
     var unc = all.filter(function (r) { return !EQ.data[r.id]; });
     var inP = all.filter(function (r) { return r.date >= from && r.date <= to; });
     var recs = inP.filter(function (r) { return !ST.line || r.line === ST.line; });
@@ -27813,8 +27818,9 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
     var op = {}, logs0 = a.allLogs || [];   // OEE 대상 라인만 (세척·Pack·ATV 등은 가동시간 기준이 없어 MTBF 빼고 표시)
     var oeeL = a.filterOeeLogs ? (secF === 'TCP' ? a.filterOeeLogs(logs0, 'TCP') : a.filterOeeLogs(logs0, 'FE').concat(a.filterOeeLogs(logs0, 'FTIV'))) : [];
     oeeL.forEach(function (l) {
-      var d = l.productionDate || ''; if (d < from || d > to) return; if (!allL && lines.indexOf(l.lineName) < 0) return;
-      var v = 0; try { v = a.aggregateContribs([l]).operatingTime; } catch (e) {} if (isFinite(v) && v > 0) op[l.lineName] = (op[l.lineName] || 0) + v;   // 한 건씩 더함 (계산 안 되는 기록 하나 때문에 라인 전체가 빠지지 않게)
+      if (l.source && l.source !== secF) return;
+      var d = l.productionDate || ''; if (d < from || d > to) return; var dl = a.resolveLineName ? a.resolveLineName(secF, l.lineName) : l.lineName; if (!okL[dl] || (!allL && lines.indexOf(dl) < 0)) return;
+      var v = 0; try { v = a.aggregateContribs([l]).operatingTime; } catch (e) {} if (isFinite(v) && v > 0) op[dl] = (op[dl] || 0) + v;   // 한 건씩 더함 (계산 안 되는 기록 하나 때문에 라인 전체가 빠지지 않게)
     });
     var opSum = 0, opN = 0;
     recs.forEach(function (r) { if (op[r.line]) opN++; });
