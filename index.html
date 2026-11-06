@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V165S</title>
+  <title>MFG Report V166S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,9 +452,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V165S',
-  d: '2026-11-05',
-  items: ['Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  v: 'V166S',
+  d: '2026-11-06',
+  items: ['오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -4760,6 +4760,7 @@ function App() {
     });
   };
   React.useEffect(() => { if (activeTab === 'lotftfr' && window.__lcApply) window.__lcApply(lotFtfrNotes, updateLotFtfrNote); });
+  React.useEffect(() => { window.__mfgAI = { allLogs, tcpData, feData, aggregateContribs, computeMetricsFromTotals, filterOeeLogs, productionPlan, oeeManual }; });
   const qprmExport = async (sheetName, startRow, maxCol, dataRows, fname, renameTo) => {
     try {
       const bin = atob(window.QPRM_TEMPLATE_B64);
@@ -27141,6 +27142,356 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setup); else setup();
 })();
+</script>
+<script>
+/* ===== MFG Report «AI 질문» (Claude API — Supabase 서버 함수 clever-handler 를 거침) =====
+ *  · 로그인한 사용자만 (게스트 X)
+ *  · 숫자는 이 화면의 데이터·수식으로 직접 계산(도구) → Claude 는 조회 조건을 정하고 결과를 정리만 함
+ */
+(function () {
+  var FN_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co/functions/v1/clever-handler';
+  var SB_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
+  var MAX_ROWS = 150;
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var num = function (v) { var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(n) ? n : 0; };
+  var r1 = function (v) { return Math.round(v * 10) / 10; };
+  var r0 = function (v) { return Math.round(v); };
+  var hm = function (s) { if (!s || typeof s !== 'string' || s.indexOf(':') < 0) return null; var a = s.split(':').map(Number); return isNaN(a[0]) || isNaN(a[1]) ? null : a[0] * 60 + a[1]; };
+  var dur = function (dt) { var d = num(dt.duration); if (!d) { var s = hm(dt.startTime), e = hm(dt.endTime); if (s != null && e != null) { if (e < s) e += 1440; d = e - s; } } return d; };
+
+  // ---------- 데이터 (App 이 window.__mfgAI 로 넘겨줌) ----------
+  function A() { return window.__mfgAI || null; }
+  function secLogs(section) {
+    var a = A(); if (!a) return [];
+    var all = (a.allLogs || []).map(function (l) { return l.section ? l : Object.assign({}, l, { section: l.source }); });
+    return a.filterOeeLogs ? a.filterOeeLogs(all, section) : all.filter(function (l) { return l.section === section; });
+  }
+  function dataOf(log) { var a = A(); return (log.section || log.source) === 'TCP' ? a.tcpData : a.feData; }
+  function pick(logs, q) {
+    var lf = (q.line || '').trim().toLowerCase(), itf = (q.item || '').trim().toLowerCase(), sf = q.shift || '';
+    return logs.filter(function (l) {
+      var d = l.productionDate || '';
+      if (q.from && d < q.from) return false;
+      if (q.to && d > q.to) return false;
+      if (lf && String(l.lineName || '').toLowerCase().indexOf(lf) < 0) return false;
+      if (itf && (String(l.item || '') + ' ' + String(l.partNo || '')).toLowerCase().indexOf(itf) < 0) return false;
+      if (sf && l.shift !== sf) return false;
+      return true;
+    });
+  }
+  var DIM = { date: function (l) { return l.productionDate; }, line: function (l) { return l.lineName || ''; }, item: function (l) { return l.item || ''; }, shift: function (l) { return l.shift || ''; },
+    month: function (l) { return (l.productionDate || '').slice(0, 7); },
+    week: function (l) { var d = new Date((l.productionDate || '') + 'T00:00:00'); if (isNaN(d)) return ''; d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' 주'; } };
+  var DIM_KO = { date: '날짜', line: '라인', item: '아이템', shift: '주야', month: '월', week: '주(월요일)', type: '유형', subtype: '세부유형', station: '공정', category: '구분' };
+  function keyOf(l, dims, extra) { return dims.map(function (d) { return DIM[d] ? DIM[d](l) : (extra && extra[d] != null ? extra[d] : ''); }); }
+  function cap(rows) { var t = rows.length > MAX_ROWS; return { rows: t ? rows.slice(0, MAX_ROWS) : rows, truncated: t ? '행이 많아 ' + MAX_ROWS + '개만 보냄 (총 ' + rows.length + '개) — 기간을 줄이거나 묶음을 바꾸세요' : undefined }; }
+
+  // 일지별 불량·재작업·비가동 (lotData 에 들어 있으면 그것, 아니면 각 기록 목록) — 앱의 OEE 계산과 같은 규칙
+  function detailOf(log) {
+    var data = dataOf(log) || {}, lld = log.id && data.lotData ? data.lotData[log.id] : null;
+    var emb = lld && (Array.isArray(lld.defects) || Array.isArray(lld.reworks) || Array.isArray(lld.downtimes));
+    if (emb) return {
+      defects: (lld.defects || []).map(function (d) { return { q: num(d.quantity), type: d.defectType || d.type || '', sub: d.defectSubType || d.subType || d.subtype || '', station: d.station || '' }; }),
+      reworks: (lld.reworks || []).map(function (d) { return { q: num(d.quantity), type: d.reworkType || d.type || '', sub: d.reworkSubType || d.subType || d.subtype || '', station: d.station || '' }; }),
+      downtimes: (lld.downtimes || []).map(function (d) { return { m: num(d.duration), type: d.downtimeType || d.type || '', cat: d.category || d.downtimeCategory || '', content: d.content || d.memo || '' }; })
+    };
+    var by = function (arr) { return (arr || []).filter(function (x) { return x.productionLogId === log.id; }); };
+    return {
+      defects: by(data.defectLogs).map(function (d) { return { q: num(d.quantity), type: d.defectType || '', sub: d.defectSubType || '', station: d.station || '' }; }),
+      reworks: by(data.reworkLogs).map(function (d) { return { q: num(d.quantity), type: d.reworkType || '', sub: d.reworkSubType || '', station: d.station || '' }; }),
+      downtimes: by(data.downtimeLogs).map(function (d) { return { m: dur(d), type: d.downtimeType || '', cat: d.downtimeCategory || d.category || '', content: d.content || '' }; })
+    };
+  }
+
+  // ---------- 도구 ----------
+  var TOOLS = [
+    { name: 'production_summary',
+      description: '생산 실적과 OEE(A·P·Q)를 MFG Report 와 같은 수식으로 계산. section: TCP(1PC·2PC·Nospin) / FE(FTIV·ATV 제외 FE 라인) / FTIV. group_by 로 날짜·주·월·라인·아이템·주야별로 나눔(빈 배열이면 합계 한 줄). 반환: 생산건수, 양품, OEE불량(기능불량만), 재작업, 생산시간·계획/비계획 비가동(분), A·P·Q·OEE(%).',
+      input_schema: { type: 'object', properties: {
+        section: { type: 'string', enum: ['TCP', 'FE', 'FTIV'] }, from: { type: 'string', description: 'YYYY-MM-DD' }, to: { type: 'string', description: 'YYYY-MM-DD' },
+        group_by: { type: 'array', items: { type: 'string', enum: ['date', 'week', 'month', 'line', 'item', 'shift'] } },
+        line: { type: 'string', description: '라인 이름 일부 (선택)' }, item: { type: 'string', description: '아이템 이름 또는 품번 일부 (선택)' }, shift: { type: 'string', enum: ['주간', '야간'] } },
+        required: ['section', 'from', 'to'] } },
+    { name: 'defect_breakdown',
+      description: '불량 상세. kind=최종불량(불량 기록, 모든 유형) 또는 1차불량(재작업 기록). group_by 에 type(유형: 기능불량·조립불량·외관불량 등)·subtype(세부: Leak·Lockup 등)·station(공정)·line·item·date·week·month·shift. 반환: 수량, 총수량(양품+최종불량, 해당 묶음의 날짜·라인·아이템 기준), 불량률(%).',
+      input_schema: { type: 'object', properties: {
+        section: { type: 'string', enum: ['TCP', 'FE', 'FTIV'] }, kind: { type: 'string', enum: ['최종불량', '1차불량'] }, from: { type: 'string' }, to: { type: 'string' },
+        group_by: { type: 'array', items: { type: 'string', enum: ['type', 'subtype', 'station', 'line', 'item', 'date', 'week', 'month', 'shift'] } },
+        line: { type: 'string' }, item: { type: 'string' }, type: { type: 'string', description: '유형 이름 일부로 거르기 (예: 기능)' } },
+        required: ['section', 'kind', 'from', 'to'] } },
+    { name: 'downtime_breakdown',
+      description: '비가동 시간(분)·건수. group_by 에 type(사유: 장비고장·Retest 등)·category(계획/비가동)·line·item·date·week·month·shift. details=true 면 긴 순서로 개별 건(날짜·라인·사유·분·내용) 최대 limit 개.',
+      input_schema: { type: 'object', properties: {
+        section: { type: 'string', enum: ['TCP', 'FE', 'FTIV'] }, from: { type: 'string' }, to: { type: 'string' },
+        group_by: { type: 'array', items: { type: 'string', enum: ['type', 'category', 'line', 'item', 'date', 'week', 'month', 'shift'] } },
+        line: { type: 'string' }, item: { type: 'string' }, type: { type: 'string' }, details: { type: 'boolean' }, limit: { type: 'integer' } },
+        required: ['section', 'from', 'to'] } },
+    { name: 'plan_vs_actual',
+      description: '생산계획(공유폴더 계획 엑셀을 서버에 올린 것) 대비 실적(양품). TCP 는 라인(1PC/2PC)·아이템, FE 는 품번으로 맞추고 라인 이름은 계획 엑셀 기준(Auto Module FLVV 등). group_by: date·week·month·line·item. 반환: 계획, 실적, 달성률(%), 계획 없이 생산한 수량.',
+      input_schema: { type: 'object', properties: {
+        section: { type: 'string', enum: ['TCP', 'FE'] }, from: { type: 'string' }, to: { type: 'string' },
+        group_by: { type: 'array', items: { type: 'string', enum: ['date', 'week', 'month', 'line', 'item'] } }, line: { type: 'string' }, item: { type: 'string' } },
+        required: ['section', 'from', 'to'] } },
+    { name: 'list_lines_items',
+      description: '섹션별 라인과 아이템(품번) 목록, 데이터가 있는 기간. 이름을 모를 때 먼저 확인.',
+      input_schema: { type: 'object', properties: { section: { type: 'string', enum: ['TCP', 'FE', 'FTIV'] } }, required: ['section'] } }
+  ];
+
+  function groupRows(dims, keys) { var o = {}; dims.forEach(function (d, i) { o[DIM_KO[d] || d] = keys[i]; }); return o; }
+
+  function tProduction(q) {
+    var a = A(), logs = pick(secLogs(q.section), q), dims = q.group_by || [], G = {};
+    logs.forEach(function (l) { var k = keyOf(l, dims), s = JSON.stringify(k); (G[s] = G[s] || { k: k, logs: [] }).logs.push(l); });
+    var rows = Object.keys(G).sort().map(function (s) {
+      var g = G[s], t = a.computeMetricsFromTotals(a.aggregateContribs(g.logs));
+      return Object.assign(groupRows(dims, g.k), { 생산건수: g.logs.length, 양품: r0(t.goodQty), OEE불량_기능: r0(t.defects), 재작업: r0(t.rework),
+        생산시간_분: r0(t.productionTime), 계획비가동_분: r0(t.plannedDt), 비계획비가동_분: r0(t.unplannedDt), A: r1(t.A), P: r1(t.P), Q: r1(t.Q), OEE: r1(t.OEE) });
+    });
+    var c = cap(rows);
+    return { 조건: q, 일지수: logs.length, rows: c.rows, 참고: c.truncated || (a.oeeManual && Object.keys((a.oeeManual[q.section] || {}).monthly || {}).length ? '월 OEE 를 수동 입력한 달은 대시보드 값이 이 계산과 다를 수 있음' : undefined) };
+  }
+
+  function tDefect(q) {
+    var logs = pick(secLogs(q.section), q), dims = q.group_by || [], typeDims = ['type', 'subtype', 'station'];
+    var baseDims = dims.filter(function (d) { return typeDims.indexOf(d) < 0; }), tf = (q.type || '').toLowerCase();
+    var G = {}, DEN = {}, total = 0, den = 0;
+    logs.forEach(function (l) {
+      var det = detailOf(l), allDef = det.defects.reduce(function (s, d) { return s + d.q; }, 0), bk = JSON.stringify(keyOf(l, baseDims));
+      var tq = num(l.goodQuantity) + allDef; DEN[bk] = (DEN[bk] || 0) + tq; den += tq;
+      (q.kind === '1차불량' ? det.reworks : det.defects).forEach(function (d) {
+        if (tf && (d.type + ' ' + d.sub).toLowerCase().indexOf(tf) < 0) return;
+        var k = keyOf(l, dims, { type: d.type, subtype: d.sub, station: d.station }), s = JSON.stringify(k);
+        (G[s] = G[s] || { k: k, q: 0, bk: bk }).q += d.q; total += d.q;
+      });
+    });
+    var rows = Object.keys(G).map(function (s) { var g = G[s], dn = DEN[g.bk] || 0; return Object.assign(groupRows(dims, g.k), { 수량: r0(g.q), 총수량: r0(dn), 불량률: dn ? Math.round(g.q / dn * 10000) / 100 : null }); })
+      .sort(function (x, y) { return y.수량 - x.수량; });
+    var c = cap(rows);
+    return { 조건: q, 합계수량: r0(total), 전체총수량: r0(den), 전체불량률: den ? Math.round(total / den * 10000) / 100 : null, 분모: '총수량 = 양품 + 최종불량(모든 유형)', rows: c.rows, 참고: c.truncated };
+  }
+
+  function tDowntime(q) {
+    var logs = pick(secLogs(q.section), q), dims = q.group_by || [], tf = (q.type || '').toLowerCase(), G = {}, list = [], tm = 0, tn = 0;
+    logs.forEach(function (l) {
+      detailOf(l).downtimes.forEach(function (d) {
+        if (tf && (d.type + ' ' + d.cat).toLowerCase().indexOf(tf) < 0) return;
+        var k = keyOf(l, dims, { type: d.type, category: d.cat }), s = JSON.stringify(k);
+        var g = (G[s] = G[s] || { k: k, m: 0, n: 0 }); g.m += d.m; g.n++; tm += d.m; tn++;
+        if (q.details) list.push({ 날짜: l.productionDate, 주야: l.shift, 라인: l.lineName, 아이템: l.item, 사유: d.type, 구분: d.cat, 분: r0(d.m), 내용: String(d.content || '').slice(0, 80) });
+      });
+    });
+    var rows = Object.keys(G).map(function (s) { var g = G[s]; return Object.assign(groupRows(dims, g.k), { 분: r0(g.m), 건수: g.n }); }).sort(function (x, y) { return y.분 - x.분; });
+    var c = cap(rows), out = { 조건: q, 합계_분: r0(tm), 합계_건수: tn, rows: c.rows, 참고: c.truncated };
+    if (q.details) out.개별건 = list.sort(function (x, y) { return y.분 - x.분; }).slice(0, Math.min(q.limit || 20, 50));
+    return out;
+  }
+
+  // 계획: 계획 엑셀을 PC 스크립트가 올린 서버 자료 (prod_state PLAN — 포털 «생산계획»과 같은 것)
+  var planCache = null, planAt = 0;
+  async function loadPlan() {
+    if (planCache && Date.now() - planAt < 300000) return planCache;
+    var r = await window.MFG_SB.from('prod_state').select('key,plan:data->plan,files:data->files').eq('section', 'PLAN');
+    if (r.error) throw new Error('계획을 불러오지 못했습니다: ' + r.error.message);
+    var out = [];
+    (r.data || []).forEach(function (x) {
+      if (x.key === 'tcp' && x.plan) Object.keys(x.plan).forEach(function (k) {
+        var a = k.split('|'), v = num(x.plan[k]); if (a.length < 5 || !v || a[4] === '주간' || a[4] === '야간') return;
+        out.push({ sec: 'TCP', date: a[3], shift: a[2], line: a[1], item: a[4], pno: '', qty: v });
+      });
+      if (x.key === 'fe' && Array.isArray(x.files)) x.files.forEach(function (f) { (f.rows || []).forEach(function (r) { if (num(r.qty)) out.push({ sec: 'FE', date: r.date, shift: r.shift, line: r.line || '', item: r.name || r.pno, pno: r.pno || '', qty: num(r.qty) }); }); });
+    });
+    planCache = out; planAt = Date.now(); return out;
+  }
+  var norm = function (s) { return String(s || '').replace(/\(.*?\)/g, '').replace(/[\s_-]+/g, '').toUpperCase(); };
+  async function tPlan(q) {
+    var P = (await loadPlan()).filter(function (r) { return r.sec === q.section && r.date >= q.from && r.date <= q.to; });
+    var dims = q.group_by || [], G = {}, lf = (q.line || '').toLowerCase(), itf = (q.item || '').toLowerCase();
+    var add = function (date, line, item, p, act) {
+      if (lf && line.toLowerCase().indexOf(lf) < 0) return;
+      if (itf && item.toLowerCase().indexOf(itf) < 0) return;
+      var k = keyOf({ productionDate: date, lineName: line, item: item }, dims), s = JSON.stringify(k);
+      var g = (G[s] = G[s] || { k: k, p: 0, a: 0 }); g.p += p; g.a += act;
+    };
+    // 계획 품목 이름표: TCP = 라인|아이템, FE = 품번
+    var label = {}, byLine = {};
+    P.forEach(function (r) {
+      if (q.section === 'TCP') { label[r.line + '|' + norm(r.item)] = { line: r.line, item: r.item }; (byLine[r.line] = byLine[r.line] || []).push(norm(r.item)); }
+      else label[norm(r.pno) + '|' + norm(r.line)] = { line: r.line, item: r.item + ' (' + r.pno + ')' };
+      var L = q.section === 'TCP' ? label[r.line + '|' + norm(r.item)] : label[norm(r.pno) + '|' + norm(r.line)];
+      add(r.date, L.line, L.item, r.qty, 0);
+    });
+    var findTcp = function (line, item) {
+      var n = norm(item), c = byLine[line] || []; if (c.indexOf(n) >= 0) return label[line + '|' + n];
+      var best = null; c.forEach(function (x) { if ((x.indexOf(n) === 0 || n.indexOf(x) === 0) && (!best || x.length > best.length)) best = x; });
+      return best ? label[line + '|' + best] : null;
+    };
+    // FE: 같은 품번이 여러 라인 계획에 있으면(New/Old ICV 등) 일지의 라인 이름과 같은 쪽
+    var findFe = function (pno, line) {
+      var p = norm(pno), ln = norm(line), c = Object.keys(label).filter(function (k) { return k.split('|')[0] === p; });
+      if (!c.length) return null;
+      var hit = c.find(function (k) { var x = k.split('|')[1]; return x === ln || x.indexOf(ln) >= 0 || ln.indexOf(x) >= 0; });
+      return label[hit || c[0]];
+    };
+    var noPlan = 0;
+    pick(secLogs(q.section === 'FE' ? 'FE' : 'TCP').concat(q.section === 'FE' ? secLogs('FTIV') : []), { from: q.from, to: q.to }).forEach(function (l) {
+      var L = q.section === 'TCP' ? findTcp(l.lineName, l.item) : findFe(l.partNo, l.lineName);
+      var g = num(l.goodQuantity);
+      if (!L) { noPlan += g; L = { line: l.lineName || '', item: (l.item || '') + (q.section === 'FE' && l.partNo ? ' (' + l.partNo + ')' : '') }; }
+      add(l.productionDate, L.line, L.item, 0, g);
+    });
+    var rows = Object.keys(G).sort().map(function (s) { var g = G[s]; return Object.assign(groupRows(dims, g.k), { 계획: r0(g.p), 실적: r0(g.a), 달성률: g.p ? r1(g.a / g.p * 100) : null }); });
+    var c = cap(rows), tp = 0, ta = 0; Object.keys(G).forEach(function (s) { tp += G[s].p; ta += G[s].a; });
+    return { 조건: q, 계획합계: r0(tp), 실적합계: r0(ta), 달성률: tp ? r1(ta / tp * 100) : null, 계획없이_생산한_수량: r0(noPlan),
+      참고: '실적=양품. 계획은 계획 엑셀(서버 업로드본). TCP 는 라인·아이템, FE 는 품번으로 맞춤. ' + (q.section === 'TCP' ? 'Pack·세척 라인은 제외. ' : '') + (c.truncated || ''), rows: c.rows };
+  }
+
+  function tList(q) {
+    var logs = secLogs(q.section), L = {}, mn = '9', mx = '';
+    logs.forEach(function (l) { var ln = l.lineName || ''; (L[ln] = L[ln] || {})[(l.item || '') + (l.partNo ? ' (' + l.partNo + ')' : '')] = 1; var d = l.productionDate || ''; if (d && d < mn) mn = d; if (d > mx) mx = d; });
+    var lines = {}; Object.keys(L).sort().forEach(function (k) { lines[k] = Object.keys(L[k]).sort().slice(0, 60); });
+    return { section: q.section, 기간: logs.length ? mn + ' ~ ' + mx : '없음', 라인별_아이템: lines };
+  }
+
+  async function runTool(name, input) {
+    try {
+      if (!A()) return { error: '데이터가 아직 로드되지 않았습니다' };
+      var q = Object.assign({}, input || {});
+      if (name === 'production_summary') return tProduction(q);
+      if (name === 'defect_breakdown') return tDefect(q);
+      if (name === 'downtime_breakdown') return tDowntime(q);
+      if (name === 'plan_vs_actual') return await tPlan(q);
+      if (name === 'list_lines_items') return tList(q);
+      return { error: '알 수 없는 도구: ' + name };
+    } catch (e) { return { error: String(e && e.message || e) }; }
+  }
+  var TOOL_KO = { production_summary: '생산·OEE', defect_breakdown: '불량', downtime_breakdown: '비가동', plan_vs_actual: '계획 대비 실적', list_lines_items: '라인·아이템 목록' };
+
+  function systemPrompt() {
+    var d = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
+    var today = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    var lines = function (s) { var o = {}; secLogs(s).forEach(function (l) { o[l.lineName || ''] = 1; }); return Object.keys(o).sort().join(', '); };
+    return [
+      '너는 이튼 평택공장 MFG 팀의 생산 데이터 도우미다. MFG Report(웹앱)에 붙어 있고, TCP·FE 생산관리시스템에 입력된 일지 데이터를 도구로 조회해 답한다.',
+      '오늘: ' + today + ' (' + '일월화수목금토'[d.getDay()] + '요일). 한 주는 월요일 시작.',
+      '섹션과 라인: TCP = ' + lines('TCP') + ' / FE = ' + lines('FE') + ' / FTIV = ' + lines('FTIV'),
+      '규칙:',
+      '- 숫자는 반드시 도구 결과로만 답한다. 추측하거나 지어내지 않는다. 도구 결과에 없으면 없다고 말한다.',
+      '- 기간을 말하지 않으면 이번 달 1일 ~ 오늘로 본다. 어제·이번 주·지난달 같은 말은 오늘 기준으로 날짜를 계산한다.',
+      '- 라인·아이템 이름이 애매하면 list_lines_items 로 먼저 확인한다.',
+      '- OEE 수식: A=가동시간÷계획시간, P=(양품+기능불량)÷기대생산량, Q=(양품−2차양품)÷(양품+기능불량). OEE 불량은 기능불량만. "산식"이라는 말은 쓰지 말고 "수식"이라고 한다.',
+      '- 답은 한국어로 짧고 바로. 첫 줄에 결론, 필요하면 작은 표(마크다운). 숫자는 천 단위 콤마, 비율은 소수 1자리 %.',
+      '- 어떤 기간·조건으로 계산했는지 한 줄로 밝힌다.',
+      '- 데이터 입력·수정은 할 수 없다. 조회만 한다.'
+    ].join('\n');
+  }
+
+  // ---------- Claude 호출 ----------
+  var history = [];   // 지난 대화(질문·최종답만)
+  async function token() {
+    var c = window.MFG_SB; if (!c) throw new Error('로그인 모듈이 없습니다');
+    var r = await c.auth.getSession(); var s = r && r.data && r.data.session;
+    if (!s) throw new Error('로그인이 필요합니다');
+    return s.access_token;
+  }
+  async function callClaude(messages) {
+    var t = await token();
+    var res = await fetch(FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t, apikey: SB_KEY },
+      body: JSON.stringify({ system: systemPrompt(), messages: messages, tools: TOOLS, max_tokens: 1500 }) });
+    var j = null; try { j = await res.json(); } catch (e) {}
+    if (!res.ok || !j || j.type === 'error' || j.error) {
+      var m = (j && (j.error && (j.error.message || j.error))) || (j && j.message) || ('HTTP ' + res.status);
+      if (res.status === 429 && !(j && j.error && typeof j.error === 'string')) m = 'AI 서버가 바쁩니다. 잠시 후 다시 물어보세요.';
+      throw new Error(typeof m === 'string' ? m : JSON.stringify(m));
+    }
+    return j;
+  }
+  async function ask(question, onStatus) {
+    var msgs = history.slice(-12).concat([{ role: 'user', content: question }]);
+    for (var step = 0; step < 6; step++) {
+      onStatus(step ? '정리 중…' : '생각 중…');
+      var r = await callClaude(msgs);
+      var content = r.content || [];
+      var uses = content.filter(function (b) { return b.type === 'tool_use'; });
+      if (r.stop_reason !== 'tool_use' || !uses.length) {
+        var text = content.filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n').trim();
+        history.push({ role: 'user', content: question }, { role: 'assistant', content: text || '(답 없음)' });
+        return text;
+      }
+      msgs.push({ role: 'assistant', content: content });
+      onStatus('조회 중… ' + uses.map(function (u) { return TOOL_KO[u.name] || u.name; }).join(', '));
+      var results = [];
+      for (var k = 0; k < uses.length; k++) results.push({ type: 'tool_result', tool_use_id: uses[k].id, content: JSON.stringify(await runTool(uses[k].name, uses[k].input)) });
+      msgs.push({ role: 'user', content: results });
+    }
+    throw new Error('조회가 너무 길어졌습니다. 질문을 조금 좁혀 주세요.');
+  }
+
+  // ---------- 화면 ----------
+  function md(t) {
+    var out = [], lines = String(t || '').split('\n'), i = 0;
+    var inl = function (s) { return esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>'); };
+    while (i < lines.length) {
+      var ln = lines[i];
+      if (/^\s*\|.*\|\s*$/.test(ln) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+        var cells = function (s) { return s.trim().replace(/^\||\|$/g, '').split('|').map(function (c) { return c.trim(); }); };
+        var h = cells(ln), body = []; i += 2;
+        while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { body.push(cells(lines[i])); i++; }
+        var isN = function (c) { return /^[-+]?[\d,.]+%?$/.test(c); };
+        out.push('<div class="aiq-tw"><table><thead><tr>' + h.map(function (c) { return '<th>' + inl(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+          body.map(function (r) { return '<tr>' + r.map(function (c) { return '<td' + (isN(c) ? ' class="n"' : '') + '>' + inl(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>');
+        continue;
+      }
+      if (/^\s*[-*•]\s+/.test(ln)) { var li = []; while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) { li.push('<li>' + inl(lines[i].replace(/^\s*[-*•]\s+/, '')) + '</li>'); i++; } out.push('<ul>' + li.join('') + '</ul>'); continue; }
+      if (/^#{1,4}\s+/.test(ln)) { out.push('<p><b>' + inl(ln.replace(/^#+\s+/, '')) + '</b></p>'); i++; continue; }
+      if (ln.trim()) out.push('<p>' + inl(ln) + '</p>');
+      i++;
+    }
+    return out.join('');
+  }
+  function addMsg(who, html) { var b = $('aiqLog'), d = document.createElement('div'); d.className = 'aiq-m ' + who; d.innerHTML = html; b.appendChild(d); b.scrollTop = b.scrollHeight; return d; }
+  function hello() { $('aiqLog').innerHTML = ''; addMsg('ai', '<p>생산·OEE·불량·비가동·계획 대비 실적을 물어보세요.</p><div class="aiq-ex"><button type="button">이번 달 FE 라인별 OEE</button><button type="button">어제 TCP 비가동 긴 순서</button><button type="button">이번 주 FTIV 최종불량 유형별</button></div>');
+    $('aiqLog').querySelectorAll('.aiq-ex button').forEach(function (b) { b.onclick = function () { $('aiqIn').value = b.textContent; send(); }; }); }
+  var busy = false;
+  async function send() {
+    var inp = $('aiqIn'), q = inp.value.trim(); if (!q || busy) return;
+    busy = true; inp.value = ''; $('aiqGo').disabled = true;
+    addMsg('me', '<p>' + esc(q) + '</p>');
+    var st = addMsg('ai st', '<p>생각 중…</p>');
+    try { var a = await ask(q, function (s) { st.innerHTML = '<p>' + esc(s) + '</p>'; }); st.className = 'aiq-m ai'; st.innerHTML = md(a); }
+    catch (e) { st.className = 'aiq-m ai err'; st.innerHTML = '<p>' + esc(e.message || e) + '</p>'; }
+    busy = false; $('aiqGo').disabled = false; $('aiqLog').scrollTop = $('aiqLog').scrollHeight; inp.focus();
+  }
+  function build() {
+    var css = document.createElement('style');
+    css.textContent = '#aiqBtn{position:fixed;right:60px;bottom:14px;z-index:9000;height:38px;padding:0 14px;border-radius:19px;border:1px solid #cbd5e1;background:#141414;color:#fff;font:700 13px Pretendard,"Malgun Gothic",sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;display:none}' +
+      '#aiqBtn:hover{background:#D63A0E}' +
+      '#aiqPan{position:fixed;right:14px;bottom:62px;z-index:9001;width:420px;max-width:calc(100vw - 28px);height:min(620px,calc(100vh - 90px));background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.2);display:none;flex-direction:column;font-family:Pretendard,"Malgun Gothic",sans-serif;color:#0f172a;overflow:hidden}' +
+      '#aiqPan.on{display:flex}#aiqHd{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #e2e8f0}#aiqHd b{font-size:14px;flex:1}#aiqHd button{border:0;background:none;cursor:pointer;font-size:12px;color:#475569;padding:4px 6px}' +
+      '#aiqLog{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.55}' +
+      '.aiq-m{max-width:92%}.aiq-m p{margin:0 0 4px}.aiq-m ul{margin:2px 0 4px;padding-left:18px}.aiq-m.me{align-self:flex-end;background:#0f172a;color:#fff;padding:7px 11px;border-radius:12px 12px 2px 12px}' +
+      '.aiq-m.ai{align-self:flex-start;background:#f1f5f9;padding:8px 11px;border-radius:12px 12px 12px 2px}.aiq-m.st{color:#64748b}.aiq-m.err{background:#fef2f2;color:#b91c1c}' +
+      '.aiq-tw{overflow-x:auto;margin:4px 0}.aiq-m table{border-collapse:collapse;font-size:12px;background:#fff}.aiq-m th,.aiq-m td{border:1px solid #e2e8f0;padding:3px 7px;white-space:nowrap;text-align:left}.aiq-m th{background:#f8fafc}.aiq-m td.n{text-align:right;font-variant-numeric:tabular-nums}' +
+      '.aiq-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.aiq-ex button{border:1px solid #cbd5e1;background:#fff;border-radius:14px;padding:4px 10px;font-size:12px;cursor:pointer}.aiq-ex button:hover{border-color:#0f172a}' +
+      '#aiqFt{display:flex;gap:6px;padding:10px;border-top:1px solid #e2e8f0}#aiqIn{flex:1;resize:none;height:38px;max-height:120px;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font:13px Pretendard,"Malgun Gothic",sans-serif}' +
+      '#aiqGo{border:0;border-radius:8px;background:#0f172a;color:#fff;font-weight:700;padding:0 14px;cursor:pointer}#aiqGo:disabled{opacity:.5}';
+    document.head.appendChild(css);
+    var b = document.createElement('button'); b.id = 'aiqBtn'; b.type = 'button'; b.textContent = 'AI 질문'; b.title = '생산 데이터를 AI에게 물어보기';
+    var p = document.createElement('div'); p.id = 'aiqPan';
+    p.innerHTML = '<div id="aiqHd"><b>AI 질문</b><button type="button" id="aiqNew">새 대화</button><button type="button" id="aiqX" aria-label="닫기">✕</button></div><div id="aiqLog"></div>' +
+      '<div id="aiqFt"><textarea id="aiqIn" placeholder="예: 지난주 TCP 2PC OEE" rows="1"></textarea><button type="button" id="aiqGo">보내기</button></div>';
+    document.body.appendChild(b); document.body.appendChild(p);
+    b.onclick = function () { p.classList.toggle('on'); if (p.classList.contains('on')) { if (!$('aiqLog').children.length) hello(); $('aiqIn').focus(); } };
+    $('aiqX').onclick = function () { p.classList.remove('on'); };
+    $('aiqNew').onclick = function () { history = []; hello(); };
+    $('aiqGo').onclick = send;
+    $('aiqIn').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+    setInterval(function () { var u = window.MFG_USER, ok = !!(u && !u.isGuest && u.email); b.style.display = ok ? 'block' : 'none'; if (!ok) p.classList.remove('on'); }, 1000);
+  }
+  window.__aiqRunTool = runTool;   // 점검용
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build); else build();
+})();
+
 </script>
 </body>
 </html>
