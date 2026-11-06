@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V166S</title>
+  <title>MFG Report V167S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,9 +452,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V166S',
+  v: 'V167S',
   d: '2026-11-06',
-  items: ['오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -27416,6 +27416,7 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
       if (r.stop_reason !== 'tool_use' || !uses.length) {
         var text = content.filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('\n').trim();
         history.push({ role: 'user', content: question }, { role: 'assistant', content: text || '(답 없음)' });
+        saveChat(question, text || '(답 없음)');
         return text;
       }
       msgs.push({ role: 'assistant', content: content });
@@ -27425,6 +27426,28 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
       msgs.push({ role: 'user', content: results });
     }
     throw new Error('조회가 너무 길어졌습니다. 질문을 조금 좁혀 주세요.');
+  }
+
+  // ---------- 대화 기록 (서버 ai_chats — 본인 것만) ----------
+  function saveChat(q, a) { try { window.MFG_SB.from('ai_chats').insert({ question: q, answer: a }).then(function (r) { if (r.error) console.warn('AI 대화 기록 저장 실패', r.error.message); }); } catch (e) {} }
+  var dayKo = function (iso) { var d = new Date(iso); return (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' + '일월화수목금토'[d.getDay()] + '요일'; };
+  var tm = function (iso) { var d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  async function loadChats() {
+    try {
+      var r = await window.MFG_SB.from('ai_chats').select('created_at,question,answer').order('created_at', { ascending: false }).limit(30);
+      if (r.error) return;
+      var rows = (r.data || []).reverse(), last = '', today = new Date().toDateString();
+      rows.forEach(function (x) {
+        var dk = new Date(x.created_at).toDateString();
+        if (dk !== last) { addMsg('day', esc(dayKo(x.created_at))); last = dk; }
+        addMsg('me old', '<p>' + esc(x.question) + '</p><span class="aiq-t">' + tm(x.created_at) + '</span>');
+        addMsg('ai old', md(x.answer));
+      });
+      // 오늘 한 대화 마지막 3개는 이어서 물어볼 수 있게
+      history = [];
+      rows.filter(function (x) { return new Date(x.created_at).toDateString() === today; }).slice(-3).forEach(function (x) { history.push({ role: 'user', content: x.question }, { role: 'assistant', content: x.answer }); });
+      if (rows.length) addMsg('day', '지금');
+    } catch (e) {}
   }
 
   // ---------- 화면 ----------
@@ -27450,7 +27473,7 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
     return out.join('');
   }
   function addMsg(who, html) { var b = $('aiqLog'), d = document.createElement('div'); d.className = 'aiq-m ' + who; d.innerHTML = html; b.appendChild(d); b.scrollTop = b.scrollHeight; return d; }
-  function hello() { $('aiqLog').innerHTML = ''; addMsg('ai', '<p>생산·OEE·불량·비가동·계획 대비 실적을 물어보세요.</p><div class="aiq-ex"><button type="button">이번 달 FE 라인별 OEE</button><button type="button">어제 TCP 비가동 긴 순서</button><button type="button">이번 주 FTIV 최종불량 유형별</button></div>');
+  function hello(keep) { if (!keep) $('aiqLog').innerHTML = ''; addMsg('ai', '<p>생산·OEE·불량·비가동·계획 대비 실적을 물어보세요.</p><div class="aiq-ex"><button type="button">이번 달 FE 라인별 OEE</button><button type="button">어제 TCP 비가동 긴 순서</button><button type="button">이번 주 FTIV 최종불량 유형별</button></div>');
     $('aiqLog').querySelectorAll('.aiq-ex button').forEach(function (b) { b.onclick = function () { $('aiqIn').value = b.textContent; send(); }; }); }
   var busy = false;
   async function send() {
@@ -27473,17 +27496,25 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
       '.aiq-m.ai{align-self:flex-start;background:#f1f5f9;padding:8px 11px;border-radius:12px 12px 12px 2px}.aiq-m.st{color:#64748b}.aiq-m.err{background:#fef2f2;color:#b91c1c}' +
       '.aiq-tw{overflow-x:auto;margin:4px 0}.aiq-m table{border-collapse:collapse;font-size:12px;background:#fff}.aiq-m th,.aiq-m td{border:1px solid #e2e8f0;padding:3px 7px;white-space:nowrap;text-align:left}.aiq-m th{background:#f8fafc}.aiq-m td.n{text-align:right;font-variant-numeric:tabular-nums}' +
       '.aiq-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.aiq-ex button{border:1px solid #cbd5e1;background:#fff;border-radius:14px;padding:4px 10px;font-size:12px;cursor:pointer}.aiq-ex button:hover{border-color:#0f172a}' +
+      '.aiq-m.day{align-self:center;max-width:none;font-size:11px;color:#94a3b8;padding:2px 0}.aiq-m.old{opacity:.8}.aiq-t{display:block;font-size:10px;opacity:.6;text-align:right;margin-top:2px}' +
       '#aiqFt{display:flex;gap:6px;padding:10px;border-top:1px solid #e2e8f0}#aiqIn{flex:1;resize:none;height:38px;max-height:120px;border:1px solid #cbd5e1;border-radius:8px;padding:8px 10px;font:13px Pretendard,"Malgun Gothic",sans-serif}' +
       '#aiqGo{border:0;border-radius:8px;background:#0f172a;color:#fff;font-weight:700;padding:0 14px;cursor:pointer}#aiqGo:disabled{opacity:.5}';
     document.head.appendChild(css);
     var b = document.createElement('button'); b.id = 'aiqBtn'; b.type = 'button'; b.textContent = 'AI 질문'; b.title = '생산 데이터를 AI에게 물어보기';
     var p = document.createElement('div'); p.id = 'aiqPan';
-    p.innerHTML = '<div id="aiqHd"><b>AI 질문</b><button type="button" id="aiqNew">새 대화</button><button type="button" id="aiqX" aria-label="닫기">✕</button></div><div id="aiqLog"></div>' +
+    p.innerHTML = '<div id="aiqHd"><b>AI 질문</b><button type="button" id="aiqNew">새 대화</button><button type="button" id="aiqDel">기록 지우기</button><button type="button" id="aiqX" aria-label="닫기">✕</button></div><div id="aiqLog"></div>' +
       '<div id="aiqFt"><textarea id="aiqIn" placeholder="예: 지난주 TCP 2PC OEE" rows="1"></textarea><button type="button" id="aiqGo">보내기</button></div>';
     document.body.appendChild(b); document.body.appendChild(p);
-    b.onclick = function () { p.classList.toggle('on'); if (p.classList.contains('on')) { if (!$('aiqLog').children.length) hello(); $('aiqIn').focus(); } };
+    var opened = false;
+    b.onclick = async function () { p.classList.toggle('on'); if (p.classList.contains('on')) { if (!opened) { opened = true; await loadChats(); hello(true); } $('aiqIn').focus(); } };
     $('aiqX').onclick = function () { p.classList.remove('on'); };
-    $('aiqNew').onclick = function () { history = []; hello(); };
+    $('aiqNew').onclick = function () { history = []; addMsg('day', '새 대화'); hello(true); };
+    $('aiqDel').onclick = async function () {
+      if (!confirm('내 AI 대화 기록을 모두 지울까요?')) return;
+      var r = await window.MFG_SB.from('ai_chats').delete().gte('id', 0);
+      if (r.error) { alert('지우지 못했습니다: ' + r.error.message); return; }
+      history = []; hello();
+    };
     $('aiqGo').onclick = send;
     $('aiqIn').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
     setInterval(function () { var u = window.MFG_USER, ok = !!(u && !u.isGuest && u.email); b.style.display = ok ? 'block' : 'none'; if (!ok) p.classList.remove('on'); }, 1000);
