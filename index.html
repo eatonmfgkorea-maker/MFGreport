@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V170S</title>
+  <title>MFG Report V172S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,9 +452,9 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
-  v: 'V170S',
+  v: 'V172S',
   d: '2026-11-06',
-  items: ['오른쪽 아래 «브리핑»: 매일 아침 만들어지는 생산 브리핑(주간·야간 계획/실적, OEE, 비가동·불량 Top, AI 요약)을 날짜별로 보고 [복사]해서 메일에 붙여넣기 · AI 질문·현황판 판독이 빈 답을 내던 문제(모델 생각 단계) 수정', '현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
+  items: ['비가동 제목 오른쪽 [설비별 분석] — 장비고장·설비 설정값 변경 비가동의 내용 글을 AI가 읽어 설비·증상·원인 분류(서버 저장, 사람이 고칠 수 있음), 라인·설비별 건수·시간·MTTR·MTBF · 브리핑은 대시보드 맨 위 공지줄로 (눌러서 전체 보기), 휴대폰 화면 정리', '오른쪽 아래 «브리핑»: 매일 아침 만들어지는 생산 브리핑(주간·야간 계획/실적, OEE, 비가동·불량 Top, AI 요약)을 날짜별로 보고 [복사]해서 메일에 붙여넣기 · AI 질문·현황판 판독이 빈 답을 내던 문제(모델 생각 단계) 수정', '현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
 }, {
   v: 'V149',
   d: '2026-10-29',
@@ -4779,7 +4779,7 @@ function App() {
     });
   };
   React.useEffect(() => { if (activeTab === 'lotftfr' && window.__lcApply) window.__lcApply(lotFtfrNotes, updateLotFtfrNote); });
-  React.useEffect(() => { window.__mfgAI = { allLogs, tcpData, feData, aggregateContribs, computeMetricsFromTotals, filterOeeLogs, productionPlan, oeeManual }; });
+  React.useEffect(() => { window.__mfgAI = { allLogs, tcpData, feData, aggregateContribs, computeMetricsFromTotals, filterOeeLogs, productionPlan, oeeManual, activeTab }; });
   const qprmExport = async (sheetName, startRow, maxCol, dataRows, fname, renameTo) => {
     try {
       const bin = atob(window.QPRM_TEMPLATE_B64);
@@ -9204,7 +9204,7 @@ function App() {
       location.reload();
     },
     className: "text-xs px-3 py-1.5 bg-white border border-amber-300 text-amber-700 rounded-lg hover:bg-amber-100 font-semibold"
-  }, "로그인하기")), React.createElement("h1", {
+  }, "로그인하기")), React.createElement("div", { id: "mfgTopSlot" }), React.createElement("div", { id: "mfgTitleSlot" }), React.createElement("h1", {
     className: "text-2xl font-bold text-slate-900 tracking-tight"
   }, (function(){ var f=TABS.find(t=>t.id===activeTab); if(f) return f.label; for(var i=0;i<TABS.length;i++){ var c=TABS[i].children; if(c){ var k=c.find(x=>x.id===activeTab); if(k) return TABS[i].label+' · '+k.label; } } return 'Dashboard'; })()), React.createElement("div", {
     className: "text-xs text-slate-500 mt-0.5"
@@ -27566,29 +27566,37 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
   var BRIEF_GAS = 'https://script.google.com/macros/s/AKfycbz3ciH6Wc_e65larP8TkhmMQtjBqicoowsDU5tdgV5X2QTLzikDT2VyWSoOz2tApUwE/exec';
   function buildBrief() {
     var css = document.createElement('style');
-    css.textContent = '#brfBtn{position:fixed;right:150px;bottom:14px;z-index:9000;height:38px;padding:0 14px;border-radius:19px;border:1px solid #cbd5e1;background:#fff;color:#141414;font:700 13px Pretendard,"Malgun Gothic",sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer;display:none}' +
-      '#brfBtn:hover{border-color:#141414}' +
-      '#brfPan{position:fixed;inset:24px 24px 62px auto;z-index:9002;width:min(980px,calc(100vw - 48px));background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.2);display:none;flex-direction:column;overflow:hidden;font-family:Pretendard,"Malgun Gothic",sans-serif}' +
+    css.textContent = '#brfTop{display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:9px 12px 9px 14px;background:#fff;border:1px solid #cbd5e1;border-left:4px solid #141414;border-radius:8px;font-family:Pretendard,"Malgun Gothic",sans-serif;cursor:pointer}' +
+      '#brfTop:hover{border-color:#94a3b8;border-left-color:#D63A0E}#brfTop .t{font-size:13px;font-weight:800;color:#141414;white-space:nowrap}#brfTop .s{flex:1;min-width:0;font-size:13px;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '#brfTop .n{font-size:11px;color:#64748b;white-space:nowrap}#brfTop button{height:28px;padding:0 12px;border:1px solid #141414;border-radius:6px;background:#141414;color:#fff;font:700 12px Pretendard,"Malgun Gothic",sans-serif;cursor:pointer;white-space:nowrap}' +
+      '@media (max-width:640px){#brfTop{flex-wrap:wrap;gap:4px 8px}#brfTop .s{flex-basis:100%;order:3;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#brfTop .n{display:none}#brfTop button{margin-left:auto}}' +
+      '#brfPan{position:fixed;inset:24px 24px 24px auto;z-index:9002;width:min(980px,calc(100vw - 48px));background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.2);display:none;flex-direction:column;overflow:hidden;font-family:Pretendard,"Malgun Gothic",sans-serif}' +
       '#brfPan.on{display:flex}#brfHd{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #e2e8f0}#brfHd b{font-size:14px;margin-right:auto}' +
       '#brfHd select,#brfHd button{height:30px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font:12px Pretendard,"Malgun Gothic",sans-serif;padding:0 10px;cursor:pointer}#brfHd button.x{border:0;font-size:14px}' +
-      '#brfBody{flex:1;overflow:auto;padding:16px 18px}#brfMsg{font-size:12px;color:#64748b}';
+      '#brfBody{flex:1;overflow:auto;padding:16px 18px}#brfMsg{font-size:12px;color:#64748b}' +
+      '#brfBody th,#brfBody td{white-space:nowrap}.brf-tw{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}' +
+      '#brfHd b,#brfHd button{white-space:nowrap}' +
+      '@media (max-width:640px){#brfPan{inset:8px 8px 60px 8px;width:auto}#brfHd{flex-wrap:wrap;padding:8px 10px}#brfHd b{font-size:13px;flex:1 1 auto}#brfMsg{display:none}#brfBody{padding:10px}#brfBody > div{font-size:12px}}';
     document.head.appendChild(css);
-    var b = document.createElement('button'); b.id = 'brfBtn'; b.type = 'button'; b.textContent = '브리핑'; b.title = '아침 생산 브리핑';
+    var b = document.createElement('div'); b.id = 'brfTop'; b.title = '아침 생산 브리핑 — 눌러서 전체 보기';
+    b.innerHTML = '<span class="t">📋 생산 브리핑</span><span class="s">불러오는 중…</span><span class="n"></span><button type="button">전체 보기</button>';
     var p = document.createElement('div'); p.id = 'brfPan';
     p.innerHTML = '<div id="brfHd"><b>아침 생산 브리핑</b><span id="brfMsg"></span><select id="brfDay" aria-label="날짜"></select><button type="button" id="brfCopy" title="메일에 붙여넣기용으로 복사">복사</button><button type="button" class="x" id="brfX" aria-label="닫기">✕</button></div><div id="brfBody"></div>';
-    document.body.appendChild(b); document.body.appendChild(p);
+    document.body.appendChild(p);
     var cur = null;
     var load = function (d) {
       $('brfBody').innerHTML = '<p style="color:#64748b;font-size:13px">불러오는 중…</p>';
       return fetch(BRIEF_GAS + (d ? '?d=' + encodeURIComponent(d) : '')).then(function (r) { return r.json(); }).then(function (j) {
         if (!j || j.none || !j.html) { $('brfBody').innerHTML = '<p style="color:#64748b;font-size:13px">아직 만들어진 브리핑이 없습니다.</p>'; cur = null; return; }
         cur = j; $('brfBody').innerHTML = j.html;
+        // 표는 가로로 밀어서 보게 (휴대폰에서 잘리지 않게)
+        $('brfBody').querySelectorAll('table').forEach(function (t) { var w = document.createElement('div'); w.className = 'brf-tw'; t.parentNode.insertBefore(w, t); w.appendChild(t); });
         $('brfMsg').textContent = j.at ? '만든 시각 ' + new Date(j.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
       }).catch(function (e) { $('brfBody').innerHTML = '<p style="color:#b91c1c;font-size:13px">불러오지 못했습니다: ' + esc(e.message || e) + '</p>'; });
     };
     var opened = false;
-    b.onclick = function () {
-      p.classList.toggle('on'); if (!p.classList.contains('on') || opened) return; opened = true;
+    var open = function () {
+      p.classList.add('on'); if (opened) return; opened = true;
       fetch(BRIEF_GAS + '?action=list').then(function (r) { return r.json(); }).then(function (j) {
         var ds = (j && j.dates) || [];
         $('brfDay').innerHTML = ds.map(function (d) { return '<option value="' + d + '">' + d + '</option>'; }).join('') || '<option value="">-</option>';
@@ -27607,12 +27615,239 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
         } else fallback();
       } catch (e) { fallback(); }
     };
-    setInterval(function () { var u = window.MFG_USER, ok = !!(u && !u.isGuest && u.email); b.style.display = ok ? 'block' : 'none'; if (!ok) p.classList.remove('on'); }, 1000);
+    // 맨 위 공지줄: 로그인 + 대시보드에서만, 최신 브리핑 제목·첫 줄 (30분마다 새로)
+    var head = null, headAt = 0;
+    var loadHead = function () {
+      headAt = Date.now();
+      fetch(BRIEF_GAS).then(function (r) { return r.json(); }).then(function (j) {
+        head = j && j.html ? j : { none: true };
+        if (head.none) { b.querySelector('.s').textContent = '아직 만들어진 브리핑이 없습니다'; b.querySelector('.n').textContent = ''; return; }
+        var first = String(j.summary || '').split('\n').map(function (x) { return x.replace(/^[-•\s]+/, '').trim(); }).filter(Boolean)[0] || '';
+        b.querySelector('.t').textContent = '📋 ' + String(j.subject || '생산 브리핑').replace(/^\[MFG 생산 브리핑\]\s*/, '생산 브리핑 ');
+        b.querySelector('.s').textContent = first || '요약 없음 — 눌러서 표 보기';
+        b.querySelector('.n').textContent = j.at ? new Date(j.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 작성' : '';
+      }).catch(function () { b.querySelector('.s').textContent = '브리핑을 불러오지 못했습니다'; });
+    };
+    b.onclick = function () { if (!p.classList.contains('on')) open(); };
+    setInterval(function () {
+      var u = window.MFG_USER, ok = !!(u && !u.isGuest && u.email), a = window.__mfgAI;
+      if (!ok) p.classList.remove('on');
+      var slot = document.getElementById('mfgTopSlot'), show = ok && slot && a && a.activeTab === 'dashboard';
+      if (show) { if (b.parentNode !== slot) slot.appendChild(b); if (!headAt || Date.now() - headAt > 1800000) loadHead(); }
+      else if (b.parentNode) b.parentNode.removeChild(b);
+    }, 800);
   }
   window.__aiqRunTool = runTool;   // 점검용
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { build(); buildBrief(); }); else { build(); buildBrief(); }
 })();
 
+</script>
+<script>
+/* ===== 비가동 › 설비별 분석 (V172S) — 버튼은 비가동 제목 오른쪽 =====
+ *  · 대상: 사유가 장비고장 · 설비 설정값 변경인 비가동 기록 (설비·안전점검 제외)
+ *  · 설비·공정 / 증상 / 원인 = AI(Claude)가 내용 글에서 뽑아 서버(prod_state MFG dtEquip)에 저장 — 사람이 고칠 수 있음
+ *  · 표: 라인·설비별 건수, 총 시간, MTTR(건당 분), MTBF(가동시간 ÷ 건수), 최근 발생, 주 원인
+ */
+(function () {
+  var FN_URL = 'https://tmbeaswlpvsyjehacgsa.supabase.co/functions/v1/clever-handler';
+  var SB_KEY = 'sb_publishable_OM6ITpYn8LYPWXXhwdA4kQ_HuAyAxV9';
+  var EQ_TYPE = { test: function (t) { t = String(t || ''); return /장비|고장|설정값/.test(t) && !/점검/.test(t); } };   // 장비고장·설비 설정값 변경 (설비·안전점검은 계획된 점검이라 뺌)
+  var CAUSES = ['부품 파손·마모', '센서·비전', '공압·진공', '전기·전원', '프로그램·설정값', '지그·툴', '자재·제품', '조작·작업', '기타'];
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var num = function (v) { var n = parseFloat(v); return isFinite(n) ? n : 0; };
+  var hm = function (s) { if (!s || String(s).indexOf(':') < 0) return null; var a = String(s).split(':').map(Number); return isNaN(a[0]) || isNaN(a[1]) ? null : a[0] * 60 + a[1]; };
+  var dur = function (dt) { var d = num(dt.duration); if (!d) { var s = hm(dt.startTime), e = hm(dt.endTime); if (s != null && e != null) { if (e < s) e += 1440; d = e - s; } } return d; };
+  var ymd = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  var fmt = function (n) { return Math.round(n).toLocaleString('ko-KR'); };
+  var A = function () { return window.__mfgAI || null; };
+  var isUser = function () { var u = window.MFG_USER; return !!(u && !u.isGuest && u.email); };
+
+  // ---------- 서버 저장 (prod_state MFG dtEquip) ----------
+  var EQ = { data: {}, at: null, loaded: false };
+  async function loadEq() {
+    var r = await window.MFG_SB.from('prod_state').select('data,updated_at').eq('section', 'MFG').eq('key', 'dtEquip').limit(1);
+    if (r.error) throw new Error(r.error.message);
+    var row = r.data && r.data[0]; EQ.data = (row && row.data) || {}; EQ.at = row ? row.updated_at : null; EQ.loaded = true;
+  }
+  async function saveEq(patch) {   // patch: {id: rec} — 서버 것과 합쳐 저장 (다른 PC가 먼저 저장했으면 그 위에 합침)
+    for (var i = 0; i < 4; i++) {
+      var merged = Object.assign({}, EQ.data, patch);
+      var r = await window.MFG_SB.rpc('save_state', { p_section: 'MFG', p_key: 'dtEquip', p_data: merged, p_base: EQ.at });
+      if (r.error) throw new Error(r.error.message);
+      if (r.data && r.data.ok) { EQ.data = merged; EQ.at = r.data.updated_at; return; }
+      EQ.data = (r.data && r.data.data) || {}; EQ.at = r.data && r.data.updated_at;
+    }
+    throw new Error('저장 충돌 — 잠시 후 다시 시도하세요');
+  }
+
+  // ---------- 대상 기록 모으기 ----------
+  function collect() {
+    var a = A(); if (!a) return [];
+    var out = [];
+    [['TCP', a.tcpData], ['FE', a.feData]].forEach(function (pair) {
+      var sec = pair[0], data = pair[1] || {}, byId = {};
+      (data.productionLogs || []).forEach(function (l) { byId[l.id] = l; });
+      var emb = function (id) { var x = (data.lotData || {})[id]; return !!(x && (Array.isArray(x.defects) || Array.isArray(x.reworks) || Array.isArray(x.downtimes))); };
+      (data.downtimeLogs || []).forEach(function (d) {
+        var l = byId[d.productionLogId]; if (!l || emb(l.id) || !EQ_TYPE.test(d.downtimeType || '')) return;   // 앱 계산과 같게: lotData에 비가동이 들어 있는 기록은 그쪽만 씀
+        out.push({ id: String(d.id), sec: sec, date: l.productionDate, shift: l.shift, line: l.lineName || '', item: l.item || '', type: d.downtimeType, m: dur(d), content: String(d.content || '').trim() });
+      });
+      Object.keys(data.lotData || {}).forEach(function (lid) {
+        var lld = data.lotData[lid], l = byId[lid] || byId[Number(lid)]; if (!l || !lld || !Array.isArray(lld.downtimes)) return;
+        lld.downtimes.forEach(function (d, i) {
+          var t = d.downtimeType || d.type || ''; if (!EQ_TYPE.test(t)) return;
+          out.push({ id: lid + '#' + i, sec: sec, date: l.productionDate, shift: l.shift, line: l.lineName || '', item: l.item || '', type: t, m: num(d.duration), content: String(d.content || d.memo || '').trim() });
+        });
+      });
+    });
+    return out;
+  }
+
+  // ---------- AI 분류 ----------
+  async function classify(recs, onProg) {
+    var ss = await window.MFG_SB.auth.getSession(), tok = ss && ss.data && ss.data.session && ss.data.session.access_token;
+    if (!tok) throw new Error('로그인이 필요합니다');
+    var known = {}; Object.keys(EQ.data).forEach(function (id) { var x = EQ.data[id]; if (x && x.eq && x.eq !== '미분류' && x.line) (known[x.line] = known[x.line] || {})[x.eq] = 1; });
+    var done = 0;
+    for (var i = 0; i < recs.length; i += 40) {
+      var part = recs.slice(i, i + 40);
+      var lines = {}; part.forEach(function (r) { lines[r.line] = 1; });
+      var names = Object.keys(lines).map(function (ln) { return ln + ': ' + Object.keys(known[ln] || {}).join(', '); }).join('\n');
+      var prompt = '공장 생산라인 비가동(장비고장) 기록이다. 각 줄에서 설비·공정, 증상, 원인 분류를 뽑아라.\n' +
+        '형식: id|라인|사유|내용\n\n' + part.map(function (r) { return r.id + '|' + r.line + '|' + r.type + '|' + r.content.replace(/[\r\n|]+/g, ' '); }).join('\n') +
+        '\n\n이미 쓰는 설비 이름(같은 설비면 이 이름을 그대로 쓸 것):\n' + (names || '(없음)') +
+        '\n\n규칙: eq = 설비 또는 공정 이름을 짧게(예: "GVV #90 마킹", "Float 공정", "프레셔드롭 #1", "Leak 테스터"). 내용으로 알 수 없으면 "미분류".' +
+        ' sym = 증상 10자 안팎. cause = 다음 중 하나: ' + CAUSES.join(', ') + '.' +
+        '\nJSON 배열만 출력: [{"id":"...","eq":"...","sym":"...","cause":"..."}]';
+      var body = { max_tokens: 4000, thinking: { type: 'disabled' }, system: '너는 제조 설비 보전 기록을 정리한다. 요청한 JSON만 출력한다.', messages: [{ role: 'user', content: prompt }] };
+      var res, j;
+      for (var t = 0; t < 3; t++) {
+        res = await fetch(FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok, apikey: SB_KEY }, body: JSON.stringify(body) });
+        j = null; try { j = await res.json(); } catch (e) {}
+        if (res.ok && j && !j.error) break;
+        if (res.status === 400 && body.thinking && /thinking/i.test(JSON.stringify(j || ''))) { delete body.thinking; body.max_tokens = 8000; t--; continue; }
+        var own = j && typeof j.error === 'string' ? j.error : '';
+        if (own || t === 2) throw new Error(own || (j && j.error && j.error.message) || ('HTTP ' + res.status));
+        await new Promise(function (r) { setTimeout(r, 12000); });
+      }
+      var txt = (j.content || []).filter(function (b) { return b.type === 'text'; }).map(function (b) { return b.text; }).join('');
+      var s0 = txt.indexOf('['), e0 = txt.lastIndexOf(']'), arr = [];
+      try { arr = JSON.parse(txt.slice(s0, e0 + 1)); } catch (e) { throw new Error('AI 응답 해석 실패'); }
+      var patch = {}, at = new Date().toISOString(), byId = {}; part.forEach(function (r) { byId[r.id] = r; });
+      arr.forEach(function (x) {
+        var r = byId[String(x.id)]; if (!r) return;
+        var c = CAUSES.indexOf(x.cause) >= 0 ? x.cause : '기타';
+        patch[r.id] = { eq: String(x.eq || '미분류').trim().slice(0, 40) || '미분류', sym: String(x.sym || '').slice(0, 40), cause: c, line: r.line, by: 'ai', at: at };
+        if (patch[r.id].eq !== '미분류') (known[r.line] = known[r.line] || {})[patch[r.id].eq] = 1;
+      });
+      await saveEq(patch);
+      done += part.length; onProg(done, recs.length);
+    }
+  }
+
+  // ---------- 화면 ----------
+  var sel = null;   // 고른 (라인|설비)
+  function render() {
+    var body = $('eqBody'); if (!body) return;
+    var a = A(); if (!a) { body.innerHTML = '<p class="eq-note">데이터를 불러오는 중입니다…</p>'; return; }
+    var from = $('eqFrom').value, to = $('eqTo').value, secF = $('eqSec').value;
+    var all = collect(), recs = all.filter(function (r) { return r.date >= from && r.date <= to && (!secF || r.sec === secF); });
+    var unc = all.filter(function (r) { return !EQ.data[r.id]; });
+    $('eqStat').textContent = '대상 ' + recs.length + '건 · 분류 안 된 기록 ' + unc.length + '건';
+    $('eqRun').style.display = isUser() && unc.length ? '' : 'none';
+    $('eqRun').textContent = 'AI 분류 (' + unc.length + '건)';
+    // 라인별 가동시간 (MTBF 용)
+    var opByLine = {};
+    if (a.aggregateContribs && a.allLogs) {
+      var lineLogs = {};
+      a.allLogs.forEach(function (l) { var d = l.productionDate || ''; if (d < from || d > to) return; var sec = l.source; if (secF && sec !== secF) return; (lineLogs[sec + '|' + l.lineName] = lineLogs[sec + '|' + l.lineName] || []).push(l); });
+      Object.keys(lineLogs).forEach(function (k) { try { opByLine[k] = a.aggregateContribs(lineLogs[k]).operatingTime || 0; } catch (e) {} });
+    }
+    var G = {};
+    recs.forEach(function (r) {
+      var c = EQ.data[r.id] || {}, eq = c.eq || '(분류 전)', k = r.sec + '|' + r.line + '|' + eq;
+      var g = (G[k] = G[k] || { sec: r.sec, line: r.line, eq: eq, n: 0, m: 0, last: '', causes: {}, recs: [] });
+      g.n++; g.m += r.m; if (r.date > g.last) g.last = r.date; if (c.cause) g.causes[c.cause] = (g.causes[c.cause] || 0) + 1; g.recs.push(r);
+    });
+    var rows = Object.keys(G).map(function (k) { return G[k]; }).sort(function (x, y) { return y.m - x.m || y.n - x.n; });
+    var cz = {}; recs.forEach(function (r) { var c = (EQ.data[r.id] || {}).cause || '(분류 전)'; cz[c] = (cz[c] || 0) + r.m; });
+    var h = '<div class="eq-chips">' + Object.keys(cz).sort(function (x, y) { return cz[y] - cz[x]; }).map(function (c) { return '<span>' + esc(c) + ' <b>' + fmt(cz[c]) + '분</b></span>'; }).join('') + '</div>';
+    h += '<div class="eq-tw"><table class="eq-t"><thead><tr><th class="l">라인</th><th class="l">설비·공정</th><th>건수</th><th>총 시간(분)</th><th>MTTR(분/건)</th><th>MTBF(시간)</th><th>최근 발생</th><th class="l">주 원인</th></tr></thead><tbody>';
+    rows.forEach(function (g) {
+      var key = g.sec + '|' + g.line + '|' + g.eq, op = opByLine[g.sec + '|' + g.line], mtbf = op && g.n ? op / 60 / g.n : null;
+      var top = Object.keys(g.causes).sort(function (x, y) { return g.causes[y] - g.causes[x]; })[0] || '';
+      h += '<tr data-k="' + esc(key) + '" class="' + (sel === key ? 'on' : '') + '"><td class="l">' + esc(g.line) + '</td><td class="l b">' + esc(g.eq) + '</td><td>' + g.n + '</td><td>' + fmt(g.m) + '</td><td>' + (g.n ? (g.m / g.n).toFixed(0) : '-') + '</td><td>' + (mtbf == null ? '-' : mtbf.toFixed(1)) + '</td><td>' + esc(g.last.slice(5)) + '</td><td class="l">' + esc(top) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    if (!rows.length) h += '<p class="eq-note">이 기간에 장비·설비 비가동 기록이 없습니다.</p>';
+    var g0 = sel && rows.filter(function (g) { return g.sec + '|' + g.line + '|' + g.eq === sel; })[0];
+    if (g0) {
+      h += '<div class="eq-sub">' + esc(g0.line) + ' · ' + esc(g0.eq) + ' — ' + g0.n + '건</div><div class="eq-tw"><table class="eq-t"><thead><tr><th class="l">날짜</th><th class="l">주야</th><th>분</th><th class="l">증상</th><th class="l">원인</th><th class="l">내용</th><th></th></tr></thead><tbody>' +
+        g0.recs.sort(function (x, y) { return x.date < y.date ? 1 : -1; }).map(function (r) {
+          var c = EQ.data[r.id] || {};
+          return '<tr><td class="l">' + esc(r.date.slice(5)) + '</td><td class="l">' + esc(r.shift || '') + '</td><td>' + fmt(r.m) + '</td><td class="l">' + esc(c.sym || '') + '</td><td class="l">' + esc(c.cause || '') + (c.by === 'user' ? ' ✎' : '') + '</td><td class="l wrap">' + esc(r.content) + '</td><td>' + (isUser() ? '<button type="button" class="eq-ed" data-id="' + esc(r.id) + '">설비 고치기</button>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+    h += '<p class="eq-note">MTTR = 총 시간 ÷ 건수 · MTBF = 그 라인 가동시간 ÷ 건수 (기간 안) · ✎ = 사람이 고친 것 · 설비 이름은 AI가 내용 글에서 뽑음</p>';
+    body.innerHTML = h;
+    body.querySelectorAll('tr[data-k]').forEach(function (tr) { tr.onclick = function () { sel = sel === tr.getAttribute('data-k') ? null : tr.getAttribute('data-k'); render(); }; });
+    body.querySelectorAll('.eq-ed').forEach(function (bt) {
+      bt.onclick = async function (ev) {
+        ev.stopPropagation();
+        var id = bt.getAttribute('data-id'), r = recs.filter(function (x) { return x.id === id; })[0], c = EQ.data[id] || {};
+        var v = prompt('설비·공정 이름 (같은 설비는 같은 이름으로)', c.eq || ''); if (v == null) return; v = v.trim(); if (!v) return;
+        var cz2 = prompt('원인: ' + CAUSES.join(' / '), c.cause || '기타'); if (cz2 == null) cz2 = c.cause || '기타';
+        try { var p = {}; p[id] = Object.assign({}, c, { eq: v, cause: CAUSES.indexOf(cz2.trim()) >= 0 ? cz2.trim() : (c.cause || '기타'), line: r ? r.line : c.line, by: 'user', at: new Date().toISOString() }); await saveEq(p); sel = (r ? r.sec + '|' + r.line + '|' : '') + v; render(); }
+        catch (e) { alert('저장 실패: ' + e.message); }
+      };
+    });
+  }
+
+  function build() {
+    var css = document.createElement('style');
+    css.textContent = '#mfgTitleSlot{float:right;margin-top:2px}#eqBtn{height:34px;padding:0 14px;border-radius:8px;border:1px solid #141414;background:#141414;color:#fff;font:700 13px Pretendard,"Malgun Gothic",sans-serif;cursor:pointer}#eqBtn:hover{background:#D63A0E;border-color:#D63A0E}' +
+      '#eqPan{position:fixed;inset:24px;z-index:9003;background:#fff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.2);display:none;flex-direction:column;overflow:hidden;font-family:Pretendard,"Malgun Gothic",sans-serif;color:#0f172a}#eqPan.on{display:flex}' +
+      '#eqHd{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #e2e8f0}#eqHd b{font-size:15px;margin-right:6px}#eqHd input,#eqHd select,#eqHd button{height:32px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font:13px Pretendard,"Malgun Gothic",sans-serif;padding:0 8px}' +
+      '#eqHd button{cursor:pointer}#eqRun{background:#141414!important;color:#fff;border-color:#141414!important;font-weight:700!important}#eqStat{font-size:12px;color:#64748b;margin-left:auto}#eqX{border:0!important;font-size:15px!important}' +
+      '#eqBody{flex:1;overflow:auto;padding:14px 16px}.eq-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.eq-chips span{font-size:12px;border:1px solid #e2e8f0;border-radius:14px;padding:3px 10px;background:#f8fafc}' +
+      '.eq-tw{overflow-x:auto}.eq-t{border-collapse:collapse;width:100%;font-size:13px}.eq-t th{font-size:12px;color:#475569;background:#f1f5f9;border-bottom:1px solid #cbd5e1;padding:6px 8px;text-align:right;white-space:nowrap}' +
+      '.eq-t td{border-bottom:1px solid #e2e8f0;padding:6px 8px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.eq-t .l{text-align:left}.eq-t .b{font-weight:700}.eq-t td.wrap{white-space:normal;min-width:220px}' +
+      '.eq-t tr[data-k]{cursor:pointer}.eq-t tr[data-k]:hover td{background:#f8fafc}.eq-t tr.on td{background:#fff7ed}.eq-sub{font-weight:700;margin:16px 0 6px}.eq-note{font-size:12px;color:#64748b;margin:10px 0 0}' +
+      '.eq-ed{border:1px solid #cbd5e1;background:#fff;border-radius:6px;font-size:11px;padding:2px 8px;cursor:pointer}' +
+      '@media (max-width:640px){#eqPan{inset:8px 8px 60px 8px}#eqHd{position:relative;padding-right:44px}#eqX{position:absolute;top:10px;right:8px}#eqStat{margin-left:0;width:100%}#eqBody{padding:10px}}';
+    document.head.appendChild(css);
+    var b = document.createElement('button'); b.id = 'eqBtn'; b.type = 'button'; b.textContent = '설비별 분석';
+    var p = document.createElement('div'); p.id = 'eqPan';
+    var t = new Date(), f = new Date(t.getFullYear(), t.getMonth() - 2, 1);
+    p.innerHTML = '<div id="eqHd"><b>설비별 비가동</b><select id="eqSec"><option value="">TCP·FE</option><option>TCP</option><option>FE</option></select><input type="date" id="eqFrom" value="' + ymd(f) + '"> ~ <input type="date" id="eqTo" value="' + ymd(t) + '"><button type="button" id="eqRun">AI 분류</button><span id="eqStat"></span><button type="button" id="eqX" aria-label="닫기">✕</button></div><div id="eqBody"></div>';
+    document.body.appendChild(p);
+    b.onclick = async function () {
+      p.classList.add('on'); $('eqBody').innerHTML = '<p class="eq-note">불러오는 중…</p>';
+      try { await loadEq(); } catch (e) { $('eqBody').innerHTML = '<p class="eq-note">분류 기록을 불러오지 못했습니다: ' + esc(e.message) + '</p>'; return; }
+      render();
+      // 새로 생긴 기록이 몇 건뿐이면 열 때 바로 AI 분류 (처음 한꺼번에 하는 것은 버튼으로)
+      var n = collect().filter(function (r) { return !EQ.data[r.id]; }).length;
+      if (isUser() && n > 0 && n <= 80) $('eqRun').click();
+    };
+    $('eqX').onclick = function () { p.classList.remove('on'); };
+    ['eqSec', 'eqFrom', 'eqTo'].forEach(function (id) { $(id).onchange = render; });
+    $('eqRun').onclick = async function () {
+      var unc = collect().filter(function (r) { return !EQ.data[r.id]; }); if (!unc.length) return;
+      var bt = $('eqRun'); bt.disabled = true;
+      try { await classify(unc, function (d, n) { bt.textContent = 'AI 분류 중… ' + d + '/' + n; }); }
+      catch (e) { alert('AI 분류 실패: ' + e.message); }
+      bt.disabled = false; render();
+    };
+    // 비가동 메뉴에서만 버튼 보임
+    setInterval(function () {
+      var a = A(), on = !!(a && a.activeTab === 'downtime'), slot = document.getElementById('mfgTitleSlot');
+      if (on && slot) { if (b.parentNode !== slot) slot.appendChild(b); } else { if (b.parentNode) b.parentNode.removeChild(b); p.classList.remove('on'); }
+    }, 700);
+  }
+  window.__eqCollect = collect;   // 점검용
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build); else build();
+})();
 </script>
 </body>
 </html>
