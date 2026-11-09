@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V184S</title>
+  <title>MFG Report V185S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,6 +452,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V185S',
+  d: '2026-11-09',
+  items: ['Production › BOM 아래 «FTIV Bank Build» 탭 — 예전 FTIV Bank Build 계산기를 그대로 옮김(월별 Bank Build 표·달력 교대 선택·버전 관리·엑셀 내려받기·백업 파일), 화면은 다른 탭과 같은 모양', '데이터는 서버(로그인한 사람만)에 저장해서 어느 PC에서나 같은 내용 — 처음엔 11/4 백업 파일(버전 4개) 내용으로 시작']
+}, {
   v: 'V184S',
   d: '2026-11-09',
   items: ['Capacity Utilization 2027년을 «20261030_Pyungtek_Capacity_Utilization_2027» 엑셀과 같게 — 라인·아이템·PC/T·수량', '공정별 라인 수(New/Old ICV 2라인) 만큼 최대공수 곱하기, 공정 순서는 엑셀 순서', '템플릿에 PC/T(초)·라인수·순서·품번·비고 열 추가']
@@ -8990,6 +8994,10 @@ function App() {
     icon: '🧩',
     label: 'BOM'
   }, {
+    id: 'bankbuild',
+    icon: '🏦',
+    label: 'FTIV Bank Build'
+  }, {
     id: 'lotftfr',
     icon: '📦',
     label: 'Lot & FTFR'
@@ -9112,7 +9120,7 @@ function App() {
     const __GROUPS = [
       ['Overview', '개요', ['dashboard', 'grp_prod', 'prodreport', 'prodreview']],
       ['OEE', '설비효율', ['oee', 'oeedetail', 'oeecompare', 'oeesim', 'oldoee']],
-      ['Production', '생산', ['grp_qty', 'quantity', 'qdetail', 'downtime', 'pcsmh', 'grp_cap', 'capacity', 'caputil', 'tool', 'bom']],
+      ['Production', '생산', ['grp_qty', 'quantity', 'qdetail', 'downtime', 'pcsmh', 'grp_cap', 'capacity', 'caputil', 'tool', 'bom', 'bankbuild']],
       ['Quality', '품질', ['grp_defect', 'defect', 'defecttype', 'grp_rework', 'rework', 'reworktype', 'lotftfr', 'grp_ftfr', 'ftfr', 'ftfrdetail', 'grp_ftiv', 'ftivboard', 'ftivdetail']],
       ['Admin', '관리', ['orgchart', 'validate', 'formula', 'upload', 'export']]
     ];
@@ -14664,7 +14672,7 @@ function App() {
         React.createElement("div", null, "\u00B7 CT \uD15C\uD50C\uB9BF\uACFC \uADFC\uBB34\uC77C \uC124\uC815\uC740 \uACF5\uC720\uC800\uC7A5\uC18C\uC5D0 \uC800\uC7A5\uB418\uC5B4 \uBAA8\uB4E0 \uC0AC\uC6A9\uC790\uC5D0\uAC8C \uC801\uC6A9\uB429\uB2C8\uB2E4"),
         React.createElement("div", null, "\u00B7 \u00AB\uD15C\uD50C\uB9BF \uB0B4\uB824\uBC1B\uAE30\u00BB \u2192 \uC5D1\uC140\uC5D0\uC11C \uC218\uC815 \u2192 \u00AB\uD15C\uD50C\uB9BF \uC62C\uB9AC\uAE30\u00BB \uC21C\uC11C\uB85C \uAD00\uB9AC\uD569\uB2C8\uB2E4"),
         React.createElement("div", null, "\u00B7 CT\u00B7\uC218\uB7C9\uACFC \uADFC\uBB34\uC77C\uC740 \uC5F0\uB3C4\uBCC4\uB85C \uB530\uB85C \uAD00\uB9AC\uB429\uB2C8\uB2E4 \u2014 \uC5F0\uB3C4\uB97C \uC120\uD0DD\uD55C \uB4A4 \uC62C\uB824\uC57C \uD574\uB2F9 \uC5F0\uB3C4\uC5D0 \uBC18\uC601\uB429\uB2C8\uB2E4")));
-  })(), activeTab === 'bom' && React.createElement("div", { id: "bomInline" }), activeTab === 'tool' && (tcpData || feData) && (() => {
+  })(), activeTab === 'bom' && React.createElement("div", { id: "bomInline" }), activeTab === 'bankbuild' && React.createElement("div", { id: "bbInline" }), activeTab === 'tool' && (tcpData || feData) && (() => {
     const toolLines = (() => {
       if (toolSection === 'TCP') return ['1PC', '2PC', 'Nospin'];
       return getSectionDisplayLines('FE');
@@ -28294,6 +28302,455 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
   setInterval(function () {
     var h = document.getElementById('bomInline');
     if (h && !h.getAttribute('data-on') && window.MFG_SB) bomMount(h);
+  }, 400);
+})();
+</script>
+<script>
+/* ===== MFG Report «FTIV Bank Build» 탭 (V185S) — 원본: FTIV_BankBuild.html, 저장: prod_state BOM/ftivBank ===== */
+(function () {
+  var st = document.createElement('style'); st.textContent = "#bbInline{--bg:#f8fafc;--panel:#ffffff;--line:#e2e8f0;--line2:#e9eef4;--fg:#0f172a;--mut:#64748b;\n  --acc:#4f46e5;--acc-soft:#eef2ff;--hd:#f8fafc;--hd-line:#e2e8f0;\n  --c1:#b45309;--c1s:#fef3c7;--c2:#c2410c;--c2s:#ffedd5;--c3:#4338ca;--c3s:#e0e7ff;--c4:#7e22ce;--c4s:#f3e8ff;\n  --wk:#ffffff;--sp:#fffbeb;--off:#f1f5f9;--neg:#dc2626;--sel:#fef9c3;\n  --sans:inherit;--mono:inherit;color:var(--fg);font-variant-numeric:tabular-nums;font-size:14px;line-height:1.45}\n#bbInline *{box-sizing:border-box}\n#bbInline .bbw{max-width:1720px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}\n#bbInline header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}\n#bbInline .io{display:flex;align-items:center;gap:6px;flex-wrap:wrap}\n#bbInline .io label.btn{cursor:pointer}\n#bbInline .vname{font:inherit;border:1px solid var(--line);border-radius:4px;padding:4px 8px;background:var(--panel);color:var(--fg);width:min(320px,100%)}\n#bbInline table.ver{border-collapse:collapse;width:100%;font-size:13px}\n#bbInline .ver th,#bbInline .ver td{border-bottom:1px solid var(--line2);padding:6px 10px;text-align:left;white-space:nowrap}\n#bbInline .ver th{font-weight:600;color:var(--mut);font-size:12px}\n#bbInline .ver td.nm{font-weight:600;white-space:normal;min-width:160px}\n#bbInline .ver td.sm{color:var(--mut);font-size:12px;white-space:normal;min-width:220px}\n#bbInline .ver td.ac{display:flex;gap:6px;justify-content:flex-end}\n#bbInline .ver tr.cur td.nm::after{content:\" (현재)\";font-weight:400;color:var(--acc);font-size:12px}\n#bbInline .ver .empty{color:var(--mut);padding:12px 10px}\n#bbInline h1{font-size:20px;margin:0;font-weight:700;letter-spacing:-.01em}\n#bbInline h1 small{font-weight:500;color:var(--mut);font-size:13px;margin-left:8px}\n#bbInline .status{font-size:13px;color:var(--mut)}\n#bbInline .status b{font-family:var(--mono);color:var(--fg)}\n#bbInline .status .neg{color:var(--neg)}\n#bbInline .panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}\n#bbInline .ptitle{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-bottom:1px solid var(--line2)}\n#bbInline .ptitle h2{font-size:14px;margin:0;font-weight:600}\n#bbInline .hint{font-size:12px;color:var(--mut)}\n#bbInline button,#bbInline input,#bbInline textarea,#bbInline select{font-family:var(--sans)}\n#bbInline button{font:inherit;color:inherit;cursor:pointer}\n#bbInline button:focus-visible,#bbInline input:focus-visible,#bbInline textarea:focus-visible,#bbInline select:focus-visible{outline:2px solid var(--acc);outline-offset:1px}\n#bbInline .btn{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:4px 10px;font-size:13px}\n#bbInline .btn:hover{border-color:var(--acc);color:var(--acc)}\n#bbInline .btn.pri{background:var(--acc);border-color:var(--acc);color:var(--panel)}\n#bbInline .btn.pri:hover{color:var(--panel);filter:brightness(1.08)}\n#bbInline .btn.warn{color:var(--neg)}\n#bbInline .tscroll{overflow-x:auto}\n#bbInline table.sum{border-collapse:collapse;font-size:12.5px;width:auto;table-layout:fixed}\n#bbInline .sum th,#bbInline .sum td{border:1px solid var(--line);padding:0;overflow:hidden;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}\n#bbInline .sum th{background:var(--hd);border-color:var(--hd-line);font-weight:600;text-align:center;padding:4px 2px}\n#bbInline .sum th.yr{font-weight:500}\n#bbInline .sum th.lab,#bbInline .sum td.lab{position:sticky;left:0;z-index:1;text-align:left;background:var(--panel);padding:4px 6px;font-weight:500}\n#bbInline .sum th.lab{background:var(--hd)}\n#bbInline .sum td.lab .row{display:flex;align-items:center;justify-content:space-between;gap:6px}\n#bbInline .sum td.lab .sub{font-size:11px;color:var(--mut);font-weight:400}\n#bbInline .sum td.v{font-family:var(--mono);padding:4px 5px;font-size:12px}\n#bbInline .sum td.in input{width:100%;box-sizing:border-box;border:0;background:transparent;font-family:var(--mono);font-size:12px;text-align:right;padding:4px 5px;color:var(--fg)}\n#bbInline .sum td.in input:focus{background:var(--acc-soft)}\n#bbInline .sum tr.prod td.v{font-weight:600}\n#bbInline .sum tr.bank td.v{font-weight:600}\n#bbInline .sum td.v.neg{color:var(--neg)}\n#bbInline .sum .mth{background:none;border:0;padding:0;font-weight:600;width:100%}\n#bbInline .sum.folded tr.cond{display:none}\n#bbInline .sum tr.grph td{background:var(--line2);padding:2px 6px;text-align:left;font-size:12px;color:var(--mut)}\n#bbInline .sum tr.grph td.lab{background:var(--line2)}\n#bbInline .fold{border:0;background:none;padding:2px 0;font-weight:600;font-size:12.5px;color:var(--fg)}\n#bbInline .fold:hover{color:var(--acc)}\n#bbInline .sum .negcol{border-left:2px solid var(--neg);border-right:2px solid var(--neg)}\n#bbInline .sum th.negcol{border-top:2px solid var(--neg)}\n#bbInline .sum tr.bank td.negcol{border-bottom:2px solid var(--neg)}\n#bbInline .sum .colsel{background:var(--sel)}\n#bbInline .sum th.colsel{background:var(--sel)}\n#bbInline .sum td.start{background:var(--line2)}\n#bbInline .fill{border:1px solid var(--line);background:none;border-radius:3px;font-size:11px;padding:0 5px;color:var(--mut)}\n#bbInline .fill:hover{color:var(--acc);border-color:var(--acc)}\n#bbInline .calbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 14px;border-bottom:1px solid var(--line2)}\n#bbInline .nav{display:flex;align-items:center;gap:6px}\n#bbInline .nav b{font-size:15px;min-width:110px;text-align:center}\n#bbInline .nav button{border:1px solid var(--line);background:var(--panel);border-radius:4px;width:28px;height:28px;font-size:16px;line-height:1}\n#bbInline .nav button:disabled{opacity:.35;cursor:default}\n#bbInline .bulk{display:flex;flex-wrap:wrap;align-items:center;gap:6px}\n#bbInline .btn.tg.on.c1{background:var(--c1s);border-color:var(--c1);color:var(--c1);font-weight:600}\n#bbInline .btn.tg.on.c2{background:var(--c2s);border-color:var(--c2);color:var(--c2);font-weight:600}\n#bbInline .btn.tg.on.c3{background:var(--c3s);border-color:var(--c3);color:var(--c3);font-weight:600}\n#bbInline .btn.tg.on.c4{background:var(--c4s);border-color:var(--c4);color:var(--c4);font-weight:600}\n#bbInline .bulk .lbl{font-size:12px;color:var(--mut);margin-right:2px}\n#bbInline .seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}\n#bbInline .seg button{border:0;background:var(--panel);padding:4px 9px;font-size:12px}\n#bbInline .seg button.on{background:var(--acc);color:var(--panel)}\n#bbInline .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line2);border-bottom:1px solid var(--line2)}\n#bbInline .dow{background:var(--panel);text-align:center;font-size:12px;font-weight:600;padding:5px 0;color:var(--mut)}\n#bbInline .dow.sun{color:var(--neg)}\n#bbInline .dow.sat{color:var(--acc)}\n#bbInline .day{background:var(--wk);min-height:96px;padding:5px;display:flex;flex-direction:column;gap:4px;min-width:0}\n#bbInline .day.special{background:var(--sp)}\n#bbInline .day.off{background:var(--off)}\n#bbInline .day.blank{background:var(--bg)}\n#bbInline .dtop{display:flex;align-items:baseline;justify-content:space-between;gap:4px;min-width:0}\n#bbInline .dnum{border:0;background:none;padding:0 2px;font-weight:600;font-size:14px;border-radius:3px}\n#bbInline .dnum:hover{background:var(--acc-soft)}\n#bbInline .dnum.sun,#bbInline .dnum.hol{color:var(--neg)}\n#bbInline .dnum.sat{color:var(--acc)}\n#bbInline .kind{font-size:10.5px;color:var(--mut);white-space:nowrap}\n#bbInline .kind.chg{color:var(--acc);font-weight:600}\n#bbInline .hname{font-size:10.5px;color:var(--neg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:-3px}\n#bbInline .chips{display:grid;grid-template-columns:1fr 1fr;gap:3px}\n#bbInline .chip{border:1px dashed var(--line);background:none;border-radius:3px;font-size:11px;padding:2px 0;color:var(--mut);white-space:nowrap;overflow:hidden}\n#bbInline .chip.on.b1{background:var(--c1s);border:1px solid var(--c1);color:var(--c1);font-weight:600}\n#bbInline .chip.on.b2{background:var(--c2s);border:1px solid var(--c2);color:var(--c2);font-weight:600}\n#bbInline .chip.on.b4{background:var(--c3s);border:1px solid var(--c3);color:var(--c3);font-weight:600}\n#bbInline .chip.on.b8{background:var(--c4s);border:1px solid var(--c4);color:var(--c4);font-weight:600}\n#bbInline .dq{margin-top:auto;text-align:right;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}\n#bbInline .dq.zero{color:var(--mut)}\n#bbInline .calfoot{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 14px;font-size:13px}\n#bbInline .calfoot b{font-family:var(--mono)}\n#bbInline .legend{display:flex;flex-wrap:wrap;gap:6px 14px;padding:10px 14px;border-top:1px solid var(--line2);font-size:12px;color:var(--mut);align-items:center}\n#bbInline .legend i{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-2px;margin-right:4px;border:1px solid var(--line)}\n#bbInline details.panel summary{padding:10px 14px;cursor:pointer;font-weight:600}\n#bbInline .set{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;padding:4px 14px 14px}\n#bbInline .field{display:flex;flex-direction:column;gap:4px;font-size:13px}\n#bbInline .field input,#bbInline .field textarea{font:inherit;border:1px solid var(--line);border-radius:4px;padding:5px 8px;background:var(--panel);color:var(--fg)}\n#bbInline .field textarea{font-family:var(--mono);font-size:12px;min-height:220px;resize:vertical}\n#bbInline .row2{display:flex;gap:10px;flex-wrap:wrap}\n#bbInline .row2 .field{flex:1;min-width:120px}\n#bbInline .holwrap{border-top:1px solid var(--line2);padding:12px 14px 14px;display:flex;flex-direction:column;gap:10px}\n#bbInline .holbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}\n#bbInline .holedit{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;min-height:30px}\n#bbInline .holedit input{font:inherit;border:1px solid var(--line);border-radius:4px;padding:4px 8px;background:var(--panel);color:var(--fg);width:160px}\n#bbInline .years{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}\n#bbInline .mm{border:1px solid var(--line2);border-radius:4px;padding:6px}\n#bbInline .mm h4{margin:0 0 4px;font-size:13px;font-weight:600}\n#bbInline .mm.out{opacity:.5}\n#bbInline .mg{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center;font-size:11.5px;font-variant-numeric:tabular-nums}\n#bbInline .mg .w{color:var(--mut);font-size:10.5px;padding:2px 0}\n#bbInline .mg button{border:0;background:none;padding:3px 0;border-radius:3px;font-size:11.5px}\n#bbInline .mg button:hover{background:var(--acc-soft)}\n#bbInline .mg button.sun{color:var(--neg)}\n#bbInline .mg button.sat{color:var(--acc)}\n#bbInline .mg button.h{background:var(--neg);color:var(--panel);font-weight:600}\n#bbInline .mg button.cur{outline:2px solid var(--acc);outline-offset:-1px}\n#bbInline .holist{font-size:12px;color:var(--mut);display:flex;flex-wrap:wrap;gap:4px 12px}\n#bbInline .holist span b{color:var(--neg);font-weight:500}\n@media (max-width:640px){#bbInline .day{min-height:84px;padding:3px}\n#bbInline .chip{font-size:10px}\n#bbInline .kind{display:none}\n#bbInline .dq{font-size:10.5px}}\n\n@media (prefers-reduced-motion:reduce){#bbInline *{transition:none!important}}\n\n#bbInline .bbw{max-width:none;margin:0;padding:0}\n#bbInline .panel{border-radius:12px;border-color:#e2e8f0;box-shadow:0 1px 2px rgba(15,23,42,.04)}\n#bbInline .topbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;padding:12px 16px}\n#bbInline .status{font-size:13px}\n#bbInline .btn{border-color:#cbd5e1;border-radius:8px;padding:5px 12px;font-weight:600;color:#334155;background:#fff}\n#bbInline .btn:hover{background:#f1f5f9;border-color:#cbd5e1;color:#0f172a}\n#bbInline .btn.pri{background:#4f46e5;border-color:#4f46e5;color:#fff}\n#bbInline .btn.pri:hover{background:#4338ca;color:#fff;filter:none}\n#bbInline .btn.warn{color:#dc2626}\n#bbInline .ptitle h2{font-size:15px;font-weight:700;color:#1e293b}\n#bbInline .sum th{color:#475569;background:#f8fafc}\n#bbInline .sum th.lab{background:#f8fafc}\n#bbInline .sum td.in input{background:#fff}\n#bbInline .sum td.in{background:#fff}\n#bbInline .sum td.v{background:#fafbfc}\n#bbInline .sum tr.bank td.v,#bbInline .sum tr.prod td.v{background:#fff}\n#bbInline .sum .colsel,#bbInline .sum td.in.colsel,#bbInline .sum td.v.colsel{background:var(--sel)}\n#bbInline .sum .mth{color:#334155;cursor:pointer}\n#bbInline .nav button{border-radius:8px;border-color:#cbd5e1}\n#bbInline .seg{border-color:#cbd5e1;border-radius:8px}\n#bbInline .day{min-height:96px}\n#bbInline details.panel summary{font-weight:700;color:#1e293b}\n#bbInline .bb-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px}\n#bbInline .bb-none{font-size:13px;color:#64748b;padding:6px 2px}\n#bbInline input,#bbInline button,#bbInline textarea{font-family:inherit}\n"; document.head.appendChild(st);
+  var SEED = {"app":"FTIV_BankBuild","current":{"start":"2026-11","months":14,"bank0":58223,"hol":{"2026-12-25":"성탄절","2027-01-01":"신정","2027-02-06":"설날 연휴","2027-02-07":"설날","2027-02-08":"설날 연휴","2027-02-09":"대체공휴일","2027-03-01":"삼일절","2027-05-01":"근로자의날","2027-05-05":"어린이날","2027-05-13":"부처님오신날","2027-06-06":"현충일","2027-07-17":"제헌절","2027-08-15":"광복절","2027-08-16":"대체공휴일","2027-09-14":"추석 연휴","2027-09-15":"추석","2027-09-16":"추석 연휴","2027-10-03":"개천절","2027-10-04":"대체공휴일","2027-10-09":"한글날","2027-10-11":"대체공휴일","2027-12-25":"성탄절","2027-12-27":"대체공휴일","2027-05-03":"대체공휴일","2027-07-19":"대체공휴일","2027-08-02":"여름휴가","2027-08-03":"여름휴가","2027-08-04":"여름휴가","2027-08-05":"여름휴가","2027-08-06":"여름휴가"},"monthly":{"2026-11":{"reg":620,"ot":790,"siop":33860},"2026-12":{"reg":620,"ot":790,"siop":35950},"2027-01":{"reg":620,"ot":790,"siop":40891},"2027-02":{"reg":620,"ot":790,"siop":38817},"2027-03":{"reg":620,"ot":790,"siop":43340},"2027-04":{"reg":620,"ot":790,"siop":43500},"2027-05":{"reg":620,"ot":790,"siop":44500},"2027-06":{"reg":620,"ot":790,"siop":44500},"2027-07":{"reg":620,"ot":790,"siop":44500},"2027-08":{"reg":620,"ot":790,"siop":43500},"2027-09":{"reg":620,"ot":790,"siop":44500},"2027-10":{"reg":620,"ot":790,"siop":43500},"2027-11":{"reg":620,"ot":790,"siop":44500},"2027-12":{"reg":620,"ot":790,"siop":43500}},"kind":{},"shifts":{"2026-12-18":1,"2027-05-03":1,"2027-07-19":1},"sel":"2026-11","otMode":"total","holVer":2,"fold":false},"versions":[{"id":1793756513343,"name":"정시 590 잔업 750 평일 주야 공휴일 주간(공휴일 잔업 추가, 7월부터 공휴일 야간 잔업 추가)","at":"2026-11-04 10:41","sum":"기간 생산 497,840 · 기말 Bank -33,295 · Bank 소진 2027년 9월 (-8,295)","state":{"start":"2026-11","months":14,"bank0":58223,"hol":{"2026-12-25":"성탄절","2027-01-01":"신정","2027-02-06":"설날 연휴","2027-02-07":"설날","2027-02-08":"설날 연휴","2027-02-09":"대체공휴일","2027-03-01":"삼일절","2027-05-01":"근로자의날","2027-05-05":"어린이날","2027-05-13":"부처님오신날","2027-06-06":"현충일","2027-07-17":"제헌절","2027-08-15":"광복절","2027-08-16":"대체공휴일","2027-09-14":"추석 연휴","2027-09-15":"추석","2027-09-16":"추석 연휴","2027-10-03":"개천절","2027-10-04":"대체공휴일","2027-10-09":"한글날","2027-10-11":"대체공휴일","2027-12-25":"성탄절","2027-12-27":"대체공휴일","2027-05-03":"대체공휴일","2027-07-19":"대체공휴일","2027-08-02":"여름휴가","2027-08-03":"여름휴가","2027-08-04":"여름휴가","2027-08-05":"여름휴가","2027-08-06":"여름휴가"},"monthly":{"2026-11":{"reg":590,"ot":750,"siop":33860},"2026-12":{"reg":590,"ot":750,"siop":35950},"2027-01":{"reg":590,"ot":750,"siop":40891},"2027-02":{"reg":590,"ot":750,"siop":38817},"2027-03":{"reg":590,"ot":750,"siop":43340},"2027-04":{"reg":590,"ot":750,"siop":43500},"2027-05":{"reg":590,"ot":750,"siop":44500},"2027-06":{"reg":590,"ot":750,"siop":44500},"2027-07":{"reg":590,"ot":750,"siop":44500},"2027-08":{"reg":590,"ot":750,"siop":43500},"2027-09":{"reg":590,"ot":750,"siop":44500},"2027-10":{"reg":590,"ot":750,"siop":43500},"2027-11":{"reg":590,"ot":750,"siop":44500},"2027-12":{"reg":590,"ot":750,"siop":43500}},"kind":{},"shifts":{"2026-12-18":1,"2026-11-07":3,"2026-11-14":3,"2026-11-21":3,"2026-11-28":3,"2026-12-05":3,"2026-12-12":3,"2026-12-19":3,"2026-12-25":3,"2026-12-26":3,"2027-01-01":3,"2027-01-02":3,"2027-01-09":3,"2027-01-16":3,"2027-01-23":3,"2027-01-30":3,"2027-02-06":3,"2027-02-08":3,"2027-02-09":3,"2027-02-13":3,"2027-02-20":3,"2027-02-27":3,"2027-03-01":3,"2027-03-06":3,"2027-03-13":3,"2027-03-20":3,"2027-03-27":3,"2027-04-03":3,"2027-04-10":3,"2027-04-17":3,"2027-04-24":3,"2027-05-01":3,"2027-05-03":3,"2027-05-05":3,"2027-05-08":3,"2027-05-13":3,"2027-05-15":3,"2027-05-22":3,"2027-05-29":3,"2027-06-05":3,"2027-06-12":3,"2027-06-19":3,"2027-06-26":3,"2027-07-03":15,"2027-07-10":15,"2027-07-17":15,"2027-07-19":15,"2027-07-24":15,"2027-07-31":15,"2027-08-02":15,"2027-08-03":15,"2027-08-04":15,"2027-08-05":15,"2027-08-06":15,"2027-08-07":15,"2027-08-14":15,"2027-08-16":15,"2027-08-21":15,"2027-08-28":15,"2027-09-04":3,"2027-09-11":3,"2027-09-14":3,"2027-09-15":3,"2027-09-16":3,"2027-09-18":3,"2027-09-25":3,"2027-10-02":3,"2027-10-04":3,"2027-10-09":3,"2027-10-11":3,"2027-10-16":3,"2027-10-23":3,"2027-10-30":3,"2027-11-06":3,"2027-11-13":3,"2027-11-20":3,"2027-11-27":3,"2027-12-04":3,"2027-12-11":3,"2027-12-18":3,"2027-12-25":3,"2027-12-27":3},"sel":"2027-07","otMode":"total","holVer":2,"fold":false}},{"id":1793756132856,"name":"정시 620 잔업 790 평일 주야 공휴일 주간(토요일 잔업)","at":"2026-11-04 10:35","sum":"기간 생산 511,750 · 기말 Bank -19,385 · Bank 소진 2027년 9월 (-65)","state":{"start":"2026-11","months":14,"bank0":58223,"hol":{"2026-12-25":"성탄절","2027-01-01":"신정","2027-02-06":"설날 연휴","2027-02-07":"설날","2027-02-08":"설날 연휴","2027-02-09":"대체공휴일","2027-03-01":"삼일절","2027-05-01":"근로자의날","2027-05-05":"어린이날","2027-05-13":"부처님오신날","2027-06-06":"현충일","2027-07-17":"제헌절","2027-08-15":"광복절","2027-08-16":"대체공휴일","2027-09-14":"추석 연휴","2027-09-15":"추석","2027-09-16":"추석 연휴","2027-10-03":"개천절","2027-10-04":"대체공휴일","2027-10-09":"한글날","2027-10-11":"대체공휴일","2027-12-25":"성탄절","2027-12-27":"대체공휴일","2027-05-03":"대체공휴일","2027-07-19":"대체공휴일","2027-08-02":"여름휴가","2027-08-03":"여름휴가","2027-08-04":"여름휴가","2027-08-05":"여름휴가","2027-08-06":"여름휴가"},"monthly":{"2026-11":{"reg":620,"ot":790,"siop":33860},"2026-12":{"reg":620,"ot":790,"siop":35950},"2027-01":{"reg":620,"ot":790,"siop":40891},"2027-02":{"reg":620,"ot":790,"siop":38817},"2027-03":{"reg":620,"ot":790,"siop":43340},"2027-04":{"reg":620,"ot":790,"siop":43500},"2027-05":{"reg":620,"ot":790,"siop":44500},"2027-06":{"reg":620,"ot":790,"siop":44500},"2027-07":{"reg":620,"ot":790,"siop":44500},"2027-08":{"reg":620,"ot":790,"siop":43500},"2027-09":{"reg":620,"ot":790,"siop":44500},"2027-10":{"reg":620,"ot":790,"siop":43500},"2027-11":{"reg":620,"ot":790,"siop":44500},"2027-12":{"reg":620,"ot":790,"siop":43500}},"kind":{},"shifts":{"2026-12-18":1,"2027-05-03":3,"2027-07-19":3,"2026-11-07":3,"2026-11-14":3,"2026-11-21":3,"2026-11-28":3,"2026-12-05":3,"2026-12-12":3,"2026-12-19":3,"2026-12-25":3,"2026-12-26":3,"2027-01-01":3,"2027-01-02":3,"2027-01-09":3,"2027-01-16":3,"2027-01-23":3,"2027-01-30":3,"2027-02-06":3,"2027-02-08":3,"2027-02-09":3,"2027-02-13":3,"2027-02-20":3,"2027-02-27":3,"2027-03-01":3,"2027-03-06":3,"2027-03-13":3,"2027-03-20":3,"2027-03-27":3,"2027-04-03":3,"2027-04-10":3,"2027-04-17":3,"2027-04-24":3,"2027-05-01":3,"2027-05-05":3,"2027-05-08":3,"2027-05-13":3,"2027-05-15":3,"2027-05-22":3,"2027-05-29":3,"2027-06-05":3,"2027-06-12":3,"2027-06-19":3,"2027-06-26":3,"2027-07-03":3,"2027-07-10":3,"2027-07-17":3,"2027-07-24":3,"2027-07-31":3,"2027-08-02":3,"2027-08-03":3,"2027-08-04":3,"2027-08-05":3,"2027-08-06":3,"2027-08-07":3,"2027-08-14":3,"2027-08-16":3,"2027-08-21":3,"2027-08-28":3,"2027-09-04":3,"2027-09-11":3,"2027-09-14":3,"2027-09-15":3,"2027-09-16":3,"2027-09-18":3,"2027-09-25":3,"2027-10-02":3,"2027-10-04":3,"2027-10-09":3,"2027-10-11":3,"2027-10-16":3,"2027-10-23":3,"2027-10-30":3,"2027-11-06":3,"2027-11-13":3,"2027-11-20":3,"2027-11-27":3,"2027-12-04":3,"2027-12-11":3,"2027-12-18":3,"2027-12-25":3,"2027-12-27":3},"sel":"2026-11","otMode":"total","holVer":2,"fold":false}},{"id":1793755634409,"name":"정시 590 잔업 750 평일 주야 공휴일 주간","at":"2026-11-04 10:33","sum":"기간 생산 472,880 · 기말 Bank -58,255 · Bank 소진 2027년 7월 (-5,225)","state":{"start":"2026-11","months":14,"bank0":58223,"hol":{"2026-12-25":"성탄절","2027-01-01":"신정","2027-02-06":"설날 연휴","2027-02-07":"설날","2027-02-08":"설날 연휴","2027-02-09":"대체공휴일","2027-03-01":"삼일절","2027-05-01":"근로자의날","2027-05-05":"어린이날","2027-05-13":"부처님오신날","2027-06-06":"현충일","2027-07-17":"제헌절","2027-08-15":"광복절","2027-08-16":"대체공휴일","2027-09-14":"추석 연휴","2027-09-15":"추석","2027-09-16":"추석 연휴","2027-10-03":"개천절","2027-10-04":"대체공휴일","2027-10-09":"한글날","2027-10-11":"대체공휴일","2027-12-25":"성탄절","2027-12-27":"대체공휴일","2027-05-03":"대체공휴일","2027-07-19":"대체공휴일","2027-08-02":"여름휴가","2027-08-03":"여름휴가","2027-08-04":"여름휴가","2027-08-05":"여름휴가","2027-08-06":"여름휴가"},"monthly":{"2026-11":{"reg":590,"ot":750,"siop":33860},"2026-12":{"reg":590,"ot":750,"siop":35950},"2027-01":{"reg":590,"ot":750,"siop":40891},"2027-02":{"reg":590,"ot":750,"siop":38817},"2027-03":{"reg":590,"ot":750,"siop":43340},"2027-04":{"reg":590,"ot":750,"siop":43500},"2027-05":{"reg":590,"ot":750,"siop":44500},"2027-06":{"reg":590,"ot":750,"siop":44500},"2027-07":{"reg":590,"ot":750,"siop":44500},"2027-08":{"reg":590,"ot":750,"siop":43500},"2027-09":{"reg":590,"ot":750,"siop":44500},"2027-10":{"reg":590,"ot":750,"siop":43500},"2027-11":{"reg":590,"ot":750,"siop":44500},"2027-12":{"reg":590,"ot":750,"siop":43500}},"kind":{},"shifts":{"2026-12-18":1,"2027-05-03":1,"2027-07-19":1},"sel":"2026-11","otMode":"total","holVer":2,"fold":false}},{"id":1793755596766,"name":"정시 620 잔업 790 평일 주야 공휴일 주간","at":"2026-11-04 10:26","sum":"기간 생산 497,980 · 기말 Bank -33,155 · Bank 소진 2027년 8월 (-975)","state":{"start":"2026-11","months":14,"bank0":58223,"hol":{"2026-12-25":"성탄절","2027-01-01":"신정","2027-02-06":"설날 연휴","2027-02-07":"설날","2027-02-08":"설날 연휴","2027-02-09":"대체공휴일","2027-03-01":"삼일절","2027-05-01":"근로자의날","2027-05-05":"어린이날","2027-05-13":"부처님오신날","2027-06-06":"현충일","2027-07-17":"제헌절","2027-08-15":"광복절","2027-08-16":"대체공휴일","2027-09-14":"추석 연휴","2027-09-15":"추석","2027-09-16":"추석 연휴","2027-10-03":"개천절","2027-10-04":"대체공휴일","2027-10-09":"한글날","2027-10-11":"대체공휴일","2027-12-25":"성탄절","2027-12-27":"대체공휴일","2027-05-03":"대체공휴일","2027-07-19":"대체공휴일","2027-08-02":"여름휴가","2027-08-03":"여름휴가","2027-08-04":"여름휴가","2027-08-05":"여름휴가","2027-08-06":"여름휴가"},"monthly":{"2026-11":{"reg":620,"ot":790,"siop":33860},"2026-12":{"reg":620,"ot":790,"siop":35950},"2027-01":{"reg":620,"ot":790,"siop":40891},"2027-02":{"reg":620,"ot":790,"siop":38817},"2027-03":{"reg":620,"ot":790,"siop":43340},"2027-04":{"reg":620,"ot":790,"siop":43500},"2027-05":{"reg":620,"ot":790,"siop":44500},"2027-06":{"reg":620,"ot":790,"siop":44500},"2027-07":{"reg":620,"ot":790,"siop":44500},"2027-08":{"reg":620,"ot":790,"siop":43500},"2027-09":{"reg":620,"ot":790,"siop":44500},"2027-10":{"reg":620,"ot":790,"siop":43500},"2027-11":{"reg":620,"ot":790,"siop":44500},"2027-12":{"reg":620,"ot":790,"siop":43500}},"kind":{},"shifts":{"2026-12-18":1,"2027-05-03":1,"2027-07-19":1},"sel":"2026-11","otMode":"total","holVer":2,"fold":false}}]};
+  var BODY = "<div class=\"bbw\">\n  <section class=\"panel topbar\"><div class=\"status\"  id=\"bb-status\"></div><div class=\"io\"><span class=\"hint\"  id=\"bb-saved\"></span><button class=\"btn pri\"  id=\"bb-verBtn\" aria-expanded=\"false\">버전 관리</button><button class=\"btn\"  id=\"bb-xlsxBtn\">엑셀 내려받기</button><button class=\"btn\"  id=\"bb-exportBtn\">백업 파일 저장</button><label class=\"btn\" for=\"bb-importFile\">백업 불러오기</label><input type=\"file\"  id=\"bb-importFile\" accept=\".json,application/json\" hidden></div></section>\n\n  <section class=\"panel\"  id=\"bb-verPanel\" hidden>\n    <div class=\"ptitle\">\n      <h2>버전 저장</h2>\n      <input  id=\"bb-verName\" class=\"vname\" placeholder=\"버전 이름 (예: 토요일 잔업 추가안)\" aria-label=\"버전 이름\">\n      <button class=\"btn pri\"  id=\"bb-verSave\">현재 상태 저장</button>\n      <span class=\"hint\"  id=\"bb-verMsg\"></span>\n    </div>\n    <div class=\"tscroll\"><table class=\"ver\"  id=\"bb-verList\"></table></div>\n  </section>\n\n  <section class=\"panel\">\n    <div class=\"ptitle\">\n      <h2>월별 Bank Build</h2>\n      <span class=\"hint\">수량은 교대 1회 기준이며, 잔업 시 수량은 정시를 포함한 그 교대의 전체 수량입니다. 흰 칸은 직접 입력, 월을 누르면 아래 달력이 바뀝니다.</span>\n    </div>\n    <div class=\"tscroll\"><table class=\"sum\"  id=\"bb-sum\"></table></div>\n  </section>\n\n  <section class=\"panel\">\n    <div class=\"calbar\">\n      <div class=\"nav\">\n        <button  id=\"bb-prev\" aria-label=\"이전 달\">‹</button>\n        <b  id=\"bb-calTitle\"></b>\n        <button  id=\"bb-next\" aria-label=\"다음 달\">›</button>\n      </div>\n      <div class=\"bulk\">\n        <span class=\"lbl\">토·공휴일 일괄(전체 월)</span>\n        <button class=\"btn tg c2\" data-tgt=\"sp\" data-on=\"2\" data-off=\"2\" data-chk=\"2\">잔업 추가</button>\n        <button class=\"btn tg c3\" data-tgt=\"sp\" data-on=\"4\" data-off=\"12\" data-chk=\"4\">야간 추가</button>\n        <button class=\"btn tg c4\" data-tgt=\"sp\" data-on=\"12\" data-off=\"8\" data-chk=\"8\">야간 잔업 추가</button>\n        <button class=\"btn\" data-tgt=\"sp\" data-add=\"reset\">주간 정시만</button>\n      </div>\n      <div class=\"bulk\">\n        <span class=\"lbl\">일요일 일괄(전체 월)</span>\n        <button class=\"btn tg c1\" data-tgt=\"sun\" data-on=\"1\" data-off=\"3\" data-chk=\"1\">주간 추가</button>\n        <button class=\"btn tg c2\" data-tgt=\"sun\" data-on=\"3\" data-off=\"2\" data-chk=\"2\">잔업 추가</button>\n        <button class=\"btn tg c3\" data-tgt=\"sun\" data-on=\"4\" data-off=\"12\" data-chk=\"4\">야간 추가</button>\n        <button class=\"btn tg c4\" data-tgt=\"sun\" data-on=\"12\" data-off=\"8\" data-chk=\"8\">야간 잔업 추가</button>\n        <button class=\"btn\" data-tgt=\"sun\" data-add=\"reset\">휴무로</button>\n      </div>\n      <button class=\"btn\"  id=\"bb-resetMonth\">이 달 변경 취소</button>\n    </div>\n    <div class=\"grid\"  id=\"bb-cal\"></div>\n    <div class=\"calfoot\"  id=\"bb-calFoot\"></div>\n    <div class=\"legend\">\n      <span><i style=\"background:var(--c1s);border-color:var(--c1)\"></i>주간 정시</span>\n      <span><i style=\"background:var(--c2s);border-color:var(--c2)\"></i>주간 잔업</span>\n      <span><i style=\"background:var(--c3s);border-color:var(--c3)\"></i>야간 정시</span>\n      <span><i style=\"background:var(--c4s);border-color:var(--c4)\"></i>야간 잔업</span>\n      <span><i style=\"background:var(--wk)\"></i>평일</span>\n      <span><i style=\"background:var(--sp)\"></i>특근(토·일·공휴일)</span>\n      <span><i style=\"background:var(--off)\"></i>휴무</span>\n      <span>날짜 숫자를 누르면 평일 → 특근 → 휴무 순으로 바뀝니다.</span>\n    </div>\n  </section>\n\n  <details class=\"panel\">\n    <summary>설정 · 공휴일</summary>\n    <div class=\"set\">\n      <div class=\"field\" style=\"gap:12px\">\n        <div class=\"row2\">\n          <label class=\"field\">시작 월<input type=\"month\"  id=\"bb-start\"></label>\n          <label class=\"field\">기간(개월)<input type=\"number\"  id=\"bb-months\" min=\"1\" max=\"36\"></label>\n        </div>\n        <span class=\"hint\">시작 Bank는 시작 월 직전 월말 재고입니다(요약표 첫 칸에서 입력).</span>\n        <span class=\"hint\">기본 운영: 평일 주간·야간 + 각 잔업 / 토·공휴일 주간 정시 / 일요일 휴무.</span>\n        <div class=\"row2\">\n          <button class=\"btn warn\"  id=\"bb-resetAll\">전체 초기화</button>\n        </div>\n      </div>\n    </div>\n    <div class=\"holwrap\">\n      <div class=\"holbar\">\n        <b>공휴일</b>\n        <span class=\"nav\"><button  id=\"bb-hyPrev\" aria-label=\"이전 해\">‹</button><b  id=\"bb-hyTitle\"></b><button  id=\"bb-hyNext\" aria-label=\"다음 해\">›</button></span>\n        <span class=\"hint\">날짜를 누르면 공휴일 지정/해제. 지정된 날은 이름을 바꿀 수 있습니다.</span>\n      </div>\n      <div class=\"holedit\"  id=\"bb-holEdit\"></div>\n      <div class=\"years\"  id=\"bb-holCal\"></div>\n    </div>\n  </details>\n</div>\n\n";
+  var XS = null, xsP = null;
+  // 서식 있는 엑셀(xlsx-js-style) — MFG Report 의 XLSX 를 덮어쓰지 않게 따로 불러옴
+  function loadXS() {
+    if (XS) return Promise.resolve(XS);
+    if (!xsP) xsP = fetch('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js').then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (code) { var ex = {}; new Function('exports', 'module', 'define', 'require', code)(ex, undefined, undefined, undefined); if (!ex.writeFile) throw new Error('xlsx'); XS = ex; return XS; })
+      .catch(function (e) { xsP = null; throw e; });
+    return xsP;
+  }
+  function start(HOST, INIT, SAVE) {
+    var $ = function (id) { return document.getElementById('bb-' + id); };
+    HOST.innerHTML = BODY;
+    const KEY='ftivBankBuild.v1';
+    const p2=n=>String(n).padStart(2,'0');
+    const fmt=n=>Math.round(n).toLocaleString('ko-KR');
+    const DOW=['일','월','화','수','목','금','토'];
+    const DEF_HOL=`2026-12-25 성탄절
+    2027-01-01 신정
+    2027-02-06 설날 연휴
+    2027-02-07 설날
+    2027-02-08 설날 연휴
+    2027-02-09 대체공휴일
+    2027-03-01 삼일절
+    2027-05-01 근로자의날
+    2027-05-03 대체공휴일
+    2027-05-05 어린이날
+    2027-05-13 부처님오신날
+    2027-06-06 현충일
+    2027-07-17 제헌절
+    2027-07-19 대체공휴일
+    2027-08-02 여름휴가
+    2027-08-03 여름휴가
+    2027-08-04 여름휴가
+    2027-08-05 여름휴가
+    2027-08-06 여름휴가
+    2027-08-15 광복절
+    2027-08-16 대체공휴일
+    2027-09-14 추석 연휴
+    2027-09-15 추석
+    2027-09-16 추석 연휴
+    2027-10-03 개천절
+    2027-10-04 대체공휴일
+    2027-10-09 한글날
+    2027-10-11 대체공휴일
+    2027-12-25 성탄절
+    2027-12-27 대체공휴일`;
+    const SIOP0={'2026-11':33860,'2026-12':35950,'2027-01':40891,'2027-02':38817,'2027-03':43340,'2027-04':43500,'2027-05':44500,'2027-06':44500,'2027-07':44500,'2027-08':43500,'2027-09':44500,'2027-10':43500,'2027-11':44500,'2027-12':43500};
+    // 교대 비트: 1 주간정시, 2 주간잔업, 4 야간정시, 8 야간잔업
+    const BITS=[[1,'주간'],[2,'잔업'],[4,'야간'],[8,'야잔']];
+    const DEF_BITS={work:15,special:1,off:0};
+    const KIND_NAME={work:'평일',special:'특근',off:'휴무'};
+    const NEXT_KIND={work:'special',special:'off',off:'work'};
+
+    function defaults(){
+      const monthly={};
+      for(const k in SIOP0) monthly[k]={reg:650,ot:780,siop:SIOP0[k]};
+      return {start:'2026-11',months:14,bank0:58223,hol:holFromText(DEF_HOL),monthly,kind:{},shifts:{},sel:'2026-11',otMode:'total'};
+    }
+    let S=(INIT&&INIT.current&&INIT.current.monthly)?INIT.current:defaults();
+    function migrateOt(o){if(o.otMode!=='total'){for(const k in o.monthly){const m=o.monthly[k];m.ot=(m.reg||0)+(m.ot||0);}o.otMode='total';}return o;}
+    migrateOt(S);
+    function save(){persist();}
+
+    let HOL={};
+    function holFromText(t){const o={};String(t||'').split(/\r?\n/).forEach(l=>{
+      const m=l.trim().match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})\s*(.*)$/);
+      if(m)o[`${m[1]}-${p2(m[2])}-${p2(m[3])}`]=m[4].trim()||'공휴일';});return o;}
+    function parseHol(){
+      if(!S.hol||typeof S.hol!=='object'){S.hol=holFromText(S.holText||DEF_HOL);}
+      delete S.holText;HOL=S.hol;
+      if((S.holVer||1)<2){Object.assign(HOL,{'2027-05-03':'대체공휴일','2027-07-19':'대체공휴일','2027-08-02':'여름휴가','2027-08-03':'여름휴가','2027-08-04':'여름휴가','2027-08-05':'여름휴가','2027-08-06':'여름휴가'});S.holVer=2;}
+    }
+    function monthList(){
+      const [y,m]=S.start.split('-').map(Number);const a=[];
+      for(let i=0;i<S.months;i++){const d=new Date(y,m-1+i,1);a.push(d.getFullYear()+'-'+p2(d.getMonth()+1));}
+      return a;
+    }
+    function getM(k){
+      if(!S.monthly[k]){
+        const ks=Object.keys(S.monthly).filter(x=>x<k).sort();const pv=ks.length?S.monthly[ks[ks.length-1]]:null;
+        S.monthly[k]={reg:pv?pv.reg:650,ot:pv?pv.ot:780,siop:0};
+      }
+      return S.monthly[k];
+    }
+    function baseKind(ds,dow){if(dow===0)return'off';if(dow===6||HOL[ds])return'special';return'work';}
+    function kindOf(ds,dow){return S.kind[ds]||baseKind(ds,dow);}
+    function bitsOf(ds,dow){const v=S.shifts[ds];return v==null?DEF_BITS[kindOf(ds,dow)]:v;}
+    function setBits(ds,dow,v){if(v===DEF_BITS[kindOf(ds,dow)])delete S.shifts[ds];else S.shifts[ds]=v;}
+    // 교대별: 정시만 → 정시 수량, 정시+잔업 → 잔업 시 수량(하루 전체), 잔업만 → 차이분
+    function shiftQty(r,o,mo){return r&&o?mo.ot:r?mo.reg:o?Math.max(0,mo.ot-mo.reg):0;}
+    function dayQty(bits,mo){return shiftQty(bits&1,bits&2,mo)+shiftQty(bits&4,bits&8,mo);}
+    function eachDay(k,fn){
+      const [y,m]=k.split('-').map(Number);const nd=new Date(y,m,0).getDate();
+      for(let d=1;d<=nd;d++){const dow=new Date(y,m-1,d).getDay();fn(`${k}-${p2(d)}`,dow,d);}
+    }
+    function calcMonth(k){
+      const mo=getM(k);const r={work:0,special:0,cnt:[0,0,0,0],prod:0};
+      eachDay(k,(ds,dow)=>{
+        const kd=kindOf(ds,dow),b=bitsOf(ds,dow);
+        if(b){if(kd==='work')r.work++;else r.special++;}
+        BITS.forEach(([bit],i)=>{if(b&bit)r.cnt[i]++;});
+        r.prod+=dayQty(b,mo);
+      });
+      return r;
+    }
+    function prevLabel(){const [y,m]=S.start.split('-').map(Number);const d=new Date(y,m-2,1);return {y:d.getFullYear(),m:d.getMonth()+1};}
+
+    /* 요약표 */
+    const sumEl=$('sum');
+    function buildTable(){
+      const ms=monthList();if(!ms.includes(S.sel))S.sel=ms[0];
+      const pv=prevLabel();
+      const years=[];ms.forEach(k=>{const y=k.slice(0,4);const last=years[years.length-1];if(last&&last.y===y)last.n++;else years.push({y,n:1});});
+      const cs=k=>k===S.sel?' colsel':'';
+      let h='<colgroup><col style="width:156px"><col style="width:62px">'+ms.map(()=>'<col style="width:62px">').join('')+'</colgroup><thead><tr><th class="lab" rowspan="2">구분</th><th class="yr" rowspan="2">'+pv.y+'년<br>'+pv.m+'월</th>';
+      years.forEach(g=>h+=`<th class="yr" colspan="${g.n}">${g.y}년</th>`);
+      h+='</tr><tr>';
+      ms.forEach(k=>h+=`<th class="${cs(k).trim()}" data-col="${k}"><button class="mth" data-sel="${k}">${+k.slice(5)}월</button></th>`);
+      h+='</tr></thead><tbody>';
+      const inRow=(f,label,sub,cls)=>{
+        let r=`<tr class="${cls||''}"><td class="lab"><div class="row"><span>${label}${sub?`<br><span class="sub">${sub}</span>`:''}</span><button class="fill" data-fill="${f}" title="선택 월 값을 이후 모든 월에 복사">채우기</button></div></td><td class="v start"></td>`;
+        ms.forEach(k=>r+=`<td class="in${cs(k)}" data-col="${k}"><input inputmode="numeric" id="bb-i-${f}-${k}" data-m="${k}" data-f="${f}" value="${fmt(getM(k)[f])}" aria-label="${k} ${label}"></td>`);
+        return r+'</tr>';
+      };
+      const vRow=(f,label,cls,sub)=>{
+        let r=`<tr class="${cls||''}"><td class="lab">${label}${sub?`<br><span class="sub">${sub}</span>`:''}</td>`;
+        if(f==='bank') r+=`<td class="in start"><input inputmode="numeric" id="bb-i-bank0" data-f="bank0" value="${fmt(S.bank0)}" aria-label="시작 Bank"></td>`;
+        else r+='<td class="v start"></td>';
+        ms.forEach(k=>r+=`<td class="v${cs(k)}" data-col="${k}" id="bb-c-${f}-${k}"></td>`);
+        return r+'</tr>';
+      };
+      h+=`<tr class="grph"><td class="lab"><button class="fold" id="bb-foldBtn" aria-expanded="${!S.fold}">${S.fold?'▸':'▾'} 생산 조건</button></td><td></td>${ms.map(k=>`<td data-col="${k}"></td>`).join('')}</tr>`
+        +inRow('reg','정시 수량','교대 1회','cond')+inRow('ot','잔업 시 수량','교대 1회, 정시 포함','cond')
+        +vRow('days','가동일','cond','평일 / 특근')+vRow('prod','생산수량','prod')
+        +inRow('siop','SIOP(출하)')+vRow('bank','Bank Build','bank');
+      sumEl.innerHTML=h+'</tbody>';sumEl.classList.toggle('folded',!!S.fold);
+      update();
+    }
+    function update(){
+      const ms=monthList();let bank=S.bank0,tot=0,minB=null,firstNeg=null;
+      ms.forEach(k=>{
+        const r=calcMonth(k),mo=getM(k);
+        bank+=r.prod-mo.siop;tot+=r.prod;
+        $('c-days-'+k).textContent=r.work+' / '+r.special;
+        $('c-prod-'+k).textContent=fmt(r.prod);
+        const b=$('c-bank-'+k);b.textContent=fmt(bank);b.classList.toggle('neg',bank<0);
+        if(minB===null||bank<minB.v)minB={k,v:bank};
+        if(bank<0&&!firstNeg)firstNeg={k,v:bank};
+      });
+      // 처음 마이너스가 나는 달의 바로 전달에 빨간 테두리
+      const mark=firstNeg?ms[ms.indexOf(firstNeg.k)-1]:null;
+      ms.forEach(k=>sumEl.querySelectorAll(`[data-col="${k}"]`).forEach(c=>c.classList.toggle('negcol',k===mark)));
+      const lab=k=>`${k.slice(0,4)}년 ${+k.slice(5)}월`;
+      $('status').innerHTML=
+        `기간 생산 <b>${fmt(tot)}</b> · 기말 Bank <b class="${bank<0?'neg':''}">${fmt(bank)}</b> · `+
+        (firstNeg?`<span class="neg">Bank 소진 ${lab(firstNeg.k)} (<b class="neg">${fmt(firstNeg.v)}</b>)</span>`:`최저 Bank ${lab(minB.k)} <b>${fmt(minB.v)}</b>`);
+      save();
+    }
+    sumEl.addEventListener('change',e=>{
+      const t=e.target;if(!t.dataset.f)return;
+      const v=parseInt(String(t.value).replace(/[^\d-]/g,''),10)||0;
+      if(t.dataset.f==='bank0')S.bank0=v;else getM(t.dataset.m)[t.dataset.f]=v;
+      t.value=fmt(v);update();if(t.dataset.m===S.sel)renderCal();
+    });
+    sumEl.addEventListener('focusin',e=>{if(e.target.tagName==='INPUT')e.target.select();});
+    sumEl.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT')e.target.blur();});
+    sumEl.addEventListener('click',e=>{
+      if(e.target.closest('#bb-foldBtn')){S.fold=!S.fold;save();buildTable();return;}
+      const s=e.target.closest('[data-sel]');if(s){S.sel=s.dataset.sel;buildTable();renderCal();return;}
+      const f=e.target.closest('[data-fill]');
+      if(f){const fld=f.dataset.fill,v=getM(S.sel)[fld];monthList().filter(k=>k>S.sel).forEach(k=>getM(k)[fld]=v);buildTable();renderCal();}
+    });
+
+    /* 달력 */
+    const calEl=$('cal');
+    function renderCal(){
+      const k=S.sel,ms=monthList(),i=ms.indexOf(k),mo=getM(k);
+      $('calTitle').textContent=`${k.slice(0,4)}년 ${+k.slice(5)}월`;
+      $('prev').disabled=i<=0;$('next').disabled=i>=ms.length-1;
+      let h=DOW.map((d,j)=>`<div class="dow${j===0?' sun':j===6?' sat':''}">${d}</div>`).join('');
+      const [y,m]=k.split('-').map(Number);const first=new Date(y,m-1,1).getDay();
+      for(let j=0;j<first;j++)h+='<div class="day blank"></div>';
+      eachDay(k,(ds,dow,d)=>{
+        const kd=kindOf(ds,dow),b=bitsOf(ds,dow),q=dayQty(b,mo),hn=HOL[ds];
+        const chg=S.kind[ds]||S.shifts[ds]!=null;
+        const vk=kd==='off'&&b?'special':kd;
+        h+=`<div class="day ${vk}"><div class="dtop"><button class="dnum${dow===0?' sun':dow===6?' sat':''}${hn?' hol':''}" data-kind="${ds}" data-dow="${dow}" title="평일/특근/휴무 전환">${d}</button><span class="kind${chg?' chg':''}">${KIND_NAME[vk]}</span></div>`;
+        if(hn)h+=`<div class="hname" title="${hn}">${hn}</div>`;
+        h+='<div class="chips">'+BITS.map(([bit,n])=>`<button class="chip b${bit}${b&bit?' on':''}" data-ds="${ds}" data-dow="${dow}" data-bit="${bit}" aria-pressed="${b&bit?'true':'false'}">${n}</button>`).join('')+'</div>';
+        h+=`<div class="dq${q?'':' zero'}">${q?fmt(q):'-'}</div></div>`;
+      });
+      const tail=(first+new Date(y,m,0).getDate())%7;if(tail)for(let j=tail;j<7;j++)h+='<div class="day blank"></div>';
+      calEl.innerHTML=h;paintBulk();
+      const r=calcMonth(k);
+      $('calFoot').innerHTML=
+        `<span>평일 <b>${r.work}</b>일 · 특근 <b>${r.special}</b>일</span>`+
+        `<span>교대 횟수 — 주간 <b>${r.cnt[0]}</b> · 주간잔업 <b>${r.cnt[1]}</b> · 야간 <b>${r.cnt[2]}</b> · 야간잔업 <b>${r.cnt[3]}</b></span>`+
+        `<span>정시 <b>${fmt(mo.reg)}</b> · 잔업 시 <b>${fmt(mo.ot)}</b> /교대</span>`+
+        `<span>월 생산 <b>${fmt(r.prod)}</b></span>`;
+    }
+    calEl.addEventListener('click',e=>{
+      const c=e.target.closest('[data-bit]');
+      if(c){const ds=c.dataset.ds,dow=+c.dataset.dow;setBits(ds,dow,bitsOf(ds,dow)^+c.dataset.bit);update();renderCal();return;}
+      const kb=e.target.closest('[data-kind]');
+      if(kb){const ds=kb.dataset.kind,dow=+kb.dataset.dow;const nk=NEXT_KIND[kindOf(ds,dow)];
+        if(nk===baseKind(ds,dow))delete S.kind[ds];else S.kind[ds]=nk;delete S.shifts[ds];update();renderCal();}
+    });
+    $('prev').onclick=()=>{const ms=monthList();S.sel=ms[ms.indexOf(S.sel)-1];buildTable();renderCal();};
+    $('next').onclick=()=>{const ms=monthList();S.sel=ms[ms.indexOf(S.sel)+1];buildTable();renderCal();};
+    function bulkDays(tgt,fn){
+      monthList().forEach(k=>eachDay(k,(ds,dow)=>{
+        if(tgt==='sun'){if(dow!==0||S.kind[ds])return;}
+        else if(kindOf(ds,dow)!=='special')return;
+        fn(ds,dow);
+      }));
+    }
+    // 일괄 버튼: 대상 날짜 전부에 켜져 있으면 색 표시(켜짐), 다시 누르면 해제
+    function bulkActive(b){let n=0,all=true;const c=+b.dataset.chk;bulkDays(b.dataset.tgt,(ds,dow)=>{n++;if(!(bitsOf(ds,dow)&c))all=false;});return n>0&&all;}
+    function paintBulk(){HOST.querySelectorAll('.calbar .tg').forEach(b=>{const on=bulkActive(b);b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));});}
+    HOST.querySelector('.calbar').addEventListener('click',e=>{
+      const b=e.target.closest('[data-tgt]');if(!b)return;
+      if(b.dataset.add==='reset')bulkDays(b.dataset.tgt,ds=>{delete S.shifts[ds];});
+      else{const on=bulkActive(b);bulkDays(b.dataset.tgt,(ds,dow)=>{const v=bitsOf(ds,dow);setBits(ds,dow,on?v&~+b.dataset.off:v|+b.dataset.on);});}
+      update();renderCal();
+    });
+    $('resetMonth').onclick=()=>{eachDay(S.sel,ds=>{delete S.kind[ds];delete S.shifts[ds];});update();renderCal();};
+
+    /* 설정 */
+    const startEl=$('start'),monthsEl=$('months');
+    let holYear=null,holSel=null;
+    function fillSettings(){startEl.value=S.start;monthsEl.value=S.months;renderHol();}
+    function holYears(){const ms=monthList();const a=+ms[0].slice(0,4),b=+ms[ms.length-1].slice(0,4);return [a,b];}
+    function renderHol(){
+      const [ya,yb]=holYears();if(holYear==null||holYear<ya||holYear>yb)holYear=+S.sel.slice(0,4);
+      $('hyTitle').textContent=holYear+'년';
+      $('hyPrev').disabled=holYear<=ya;$('hyNext').disabled=holYear>=yb;
+      const ms=monthList();let h='';
+      for(let m=1;m<=12;m++){
+        const k=holYear+'-'+p2(m);const first=new Date(holYear,m-1,1).getDay();
+        h+=`<div class="mm${ms.includes(k)?'':' out'}"><h4>${m}월</h4><div class="mg">`+DOW.map(d=>`<span class="w">${d}</span>`).join('');
+        for(let j=0;j<first;j++)h+='<span></span>';
+        eachDay(k,(ds,dow,d)=>{h+=`<button class="${dow===0?'sun':dow===6?'sat':''}${HOL[ds]?' h':''}${ds===holSel?' cur':''}" data-hd="${ds}" title="${HOL[ds]||''}">${d}</button>`;});
+        h+='</div></div>';
+      }
+      $('holCal').innerHTML=h;
+      const ed=$('holEdit');
+      if(holSel&&HOL[holSel]!=null){
+        const dw=DOW[new Date(holSel).getDay()];
+        ed.innerHTML=`<span>${holSel} (${dw})</span><input id="bb-holName" value="${HOL[holSel].replace(/"/g,'&quot;')}" aria-label="공휴일 이름"><button class="btn" id="bb-holOff">공휴일 해제</button>`;
+      }else{
+        const list=Object.keys(HOL).filter(d=>d.startsWith(holYear+'-')).sort();
+        ed.innerHTML=`<div class="holist">${list.length?list.map(d=>`<span>${+d.slice(5,7)}/${+d.slice(8)} <b>${HOL[d]}</b></span>`).join(''):'이 해에 지정된 공휴일이 없습니다.'}</div>`;
+      }
+    }
+    function holChanged(){save();buildTable();renderCal();renderHol();}
+    $('holCal').addEventListener('click',e=>{
+      const b=e.target.closest('[data-hd]');if(!b)return;const ds=b.dataset.hd;
+      if(HOL[ds]!=null){if(holSel===ds){delete HOL[ds];holSel=null;}else holSel=ds;}
+      else{HOL[ds]='공휴일';holSel=ds;}
+      holChanged();
+      if(holSel){const i=$('holName');if(i){i.focus();i.select();}}
+    });
+    $('holEdit').addEventListener('click',e=>{if(e.target.id==='bb-holOff'){delete HOL[holSel];holSel=null;holChanged();}});
+    $('holEdit').addEventListener('change',e=>{if(e.target.id==='bb-holName'){HOL[holSel]=e.target.value.trim()||'공휴일';holSel=null;holChanged();}});
+    $('holEdit').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='bb-holName')e.target.blur();});
+    $('hyPrev').onclick=()=>{holYear--;holSel=null;renderHol();};
+    $('hyNext').onclick=()=>{holYear++;holSel=null;renderHol();};
+    startEl.onchange=()=>{if(/^\d{4}-\d{2}$/.test(startEl.value)){S.start=startEl.value;buildTable();renderCal();renderHol();}};
+    monthsEl.onchange=()=>{S.months=Math.max(1,Math.min(36,parseInt(monthsEl.value,10)||12));monthsEl.value=S.months;buildTable();renderCal();renderHol();};
+    let resetArm=false;const resetBtn=$('resetAll');
+    resetBtn.onclick=()=>{
+      if(!resetArm){resetArm=true;resetBtn.textContent='한 번 더 누르면 초기화';setTimeout(()=>{resetArm=false;resetBtn.textContent='전체 초기화';},3000);return;}
+      S=defaults();parseHol();fillSettings();buildTable();renderCal();resetArm=false;resetBtn.textContent='전체 초기화';
+    };
+
+    /* 버전 관리 */
+    const VKEY='ftivBankBuild.versions';
+    let V=(INIT&&Array.isArray(INIT.versions))?INIT.versions:[];
+    let curVer=null;
+    function saveV(){persist();}
+    function loadState(o){
+      S=Object.assign(defaults(),JSON.parse(JSON.stringify(o)));if(!o.otMode)S.otMode=undefined;migrateOt(S);
+      if(o.holText&&!o.hol)S.hol=holFromText(o.holText);
+      parseHol();fillSettings();buildTable();renderCal();
+    }
+    function nowStr(){const d=new Date();return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;}
+    const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const arm={};
+    function armed(key,btn,label){
+      if(arm[key])return true;
+      arm[key]=true;btn.textContent='한 번 더';setTimeout(()=>{delete arm[key];if(btn.isConnected)btn.textContent=label;},3000);return false;
+    }
+    function renderVer(){
+      const el=$('verList');
+      if(!V.length){el.innerHTML='<tr><td class="empty">저장된 버전이 없습니다. 이름을 적고 "현재 상태 저장"을 누르세요.</td></tr>';return;}
+      el.innerHTML='<thead><tr><th>이름</th><th>저장 시각</th><th>요약</th><th></th></tr></thead><tbody>'+
+        V.map((v,i)=>`<tr class="${v.id===curVer?'cur':''}"><td class="nm">${esc(v.name)}</td><td>${v.at}</td><td class="sm">${esc(v.sum||'')}</td>
+        <td class="ac"><button class="btn" data-vload="${i}">불러오기</button><button class="btn" data-vover="${i}">덮어쓰기</button><button class="btn warn" data-vdel="${i}">삭제</button></td></tr>`).join('')+'</tbody>';
+    }
+    $('verBtn').onclick=e=>{
+      const p=$('verPanel');p.hidden=!p.hidden;e.currentTarget.setAttribute('aria-expanded',String(!p.hidden));
+      if(!p.hidden){renderVer();const n=$('verName');if(!n.value)n.value=nowStr();n.focus();n.select();}
+    };
+    function snapshot(){return JSON.parse(JSON.stringify(S));}
+    $('verSave').onclick=()=>{
+      const n=$('verName');const name=n.value.trim()||nowStr();
+      const v={id:Date.now(),name,at:nowStr(),sum:$('status').textContent,state:snapshot()};
+      V.unshift(v);curVer=v.id;saveV();renderVer();n.value='';
+      $('verMsg').textContent=`"${name}" 저장됨`;
+    };
+    $('verName').addEventListener('keydown',e=>{if(e.key==='Enter')$('verSave').click();});
+    $('verList').addEventListener('click',e=>{
+      const b=e.target.closest('button');if(!b)return;const msg=$('verMsg');
+      if(b.dataset.vload!=null){const v=V[+b.dataset.vload];if(!armed('l'+v.id,b,'불러오기'))return;loadState(v.state);curVer=v.id;renderVer();msg.textContent=`"${v.name}" 불러옴`;}
+      else if(b.dataset.vover!=null){const v=V[+b.dataset.vover];if(!armed('o'+v.id,b,'덮어쓰기'))return;v.state=snapshot();v.at=nowStr();v.sum=$('status').textContent;curVer=v.id;saveV();renderVer();msg.textContent=`"${v.name}" 덮어씀`;}
+      else if(b.dataset.vdel!=null){const v=V[+b.dataset.vdel];if(!armed('d'+v.id,b,'삭제'))return;V.splice(+b.dataset.vdel,1);if(curVer===v.id)curVer=null;saveV();renderVer();msg.textContent=`"${v.name}" 삭제됨`;}
+    });
+
+    /* 엑셀 내려받기: 저장된 버전별 월별 표를 한 시트에 위에서 아래로 */
+    function tableFor(st){
+      const keepS=S,keepH=HOL;
+      try{
+        S=Object.assign(defaults(),JSON.parse(JSON.stringify(st)));
+        if(!st.otMode)S.otMode=undefined;migrateOt(S);
+        if(st.holText&&!st.hol)S.hol=holFromText(st.holText);
+        parseHol();
+        const ms=monthList();let bank=S.bank0,firstNeg=-1;
+        const cols=ms.map((k,i)=>{const r=calcMonth(k),mo=getM(k);bank+=r.prod-mo.siop;if(bank<0&&firstNeg<0)firstNeg=i;
+          return {k,reg:mo.reg,ot:mo.ot,days:r.work+' / '+r.special,prod:r.prod,siop:mo.siop,bank};});
+        return {ms,cols,bank0:S.bank0,prev:prevLabel(),mark:firstNeg>0?firstNeg-1:-1};
+      }finally{S=keepS;HOL=keepH;}
+    }
+    function buildWorkbook(list){
+      const X=XS,ws={},merges=[];let r=0,maxC=0;
+      const F={name:'맑은 고딕',sz:10};
+      const thin={style:'thin',color:{rgb:'BFBFBF'}};
+      const red={style:'medium',color:{rgb:'FF0000'}};
+      const box=()=>({top:thin,bottom:thin,left:thin,right:thin});
+      const put=(R,C,v,s)=>{ws[X.utils.encode_cell({r:R,c:C})]={v,t:typeof v==='number'?'n':'s',s};if(C>maxC)maxC=C;};
+      const hdr=()=>({font:{...F,bold:true},fill:{fgColor:{rgb:'E2EFDA'}},alignment:{horizontal:'center',vertical:'center'},border:box()});
+      list.forEach(v=>{
+        const t=tableFor(v.state),n=t.cols.length;
+        put(r,0,v.name,{font:{...F,sz:11,bold:true}});
+        put(r,3,'저장 '+v.at,{font:{...F,color:{rgb:'808080'}}});
+        r++;
+        const h0=r,h1=r+1;
+        put(h0,0,'구분',hdr());put(h1,0,'',hdr());merges.push({s:{r:h0,c:0},e:{r:h1,c:0}});
+        put(h0,1,t.prev.y+'년',hdr());put(h1,1,t.prev.m+'월',hdr());
+        let c=2;
+        while(c-2<n){const y=t.cols[c-2].k.slice(0,4);let e=c;while(e-2+1<n&&t.cols[e-2+1].k.slice(0,4)===y)e++;
+          for(let j=c;j<=e;j++)put(h0,j,j===c?y+'년':'',hdr());if(e>c)merges.push({s:{r:h0,c},e:{r:h0,c:e}});c=e+1;}
+        t.cols.forEach((col,i)=>{const s=hdr();if(i===t.mark){s.border.top=red;s.border.left=red;s.border.right=red;}put(h1,2+i,(+col.k.slice(5))+'월',s);});
+        r+=2;
+        const rows=[['정시 수량','reg'],['잔업 시 수량','ot'],['가동일(평일/특근)','days'],['생산수량','prod'],['SIOP(출하)','siop'],['Bank Build','bank']];
+        rows.forEach(([label,f],ri)=>{
+          const bold=f==='prod'||f==='bank',last=ri===rows.length-1;
+          put(r,0,label,{font:{...F,bold},border:box(),alignment:{vertical:'center'}});
+          put(r,1,f==='bank'?t.bank0:'',{font:F,fill:{fgColor:{rgb:'F2F2F2'}},numFmt:'#,##0',border:box(),alignment:{horizontal:'right'}});
+          t.cols.forEach((col,i)=>{
+            const val=col[f],s={font:{...F,bold},border:box(),numFmt:'#,##0',alignment:{horizontal:f==='days'?'center':'right'}};
+            if(f==='bank'&&val<0)s.font.color={rgb:'FF0000'};
+            if(i===t.mark){s.border.left=red;s.border.right=red;if(last)s.border.bottom=red;}
+            put(r,2+i,val,s);
+          });
+          r++;
+        });
+        r+=2;
+      });
+      ws['!ref']=X.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(r-1,0),c:maxC}});
+      ws['!merges']=merges;
+      ws['!cols']=[{wch:18},{wch:8}].concat(Array.from({length:Math.max(maxC-1,0)},()=>({wch:8})));
+      const wb=X.utils.book_new();X.utils.book_append_sheet(wb,ws,'Bank Build');
+      return wb;
+    }
+    $('xlsxBtn').onclick=()=>{
+      const out=$('saved');
+      out.textContent='엑셀 준비 중…';
+      loadXS().then(()=>{
+      const list=V.length?V:[{name:'현재 상태',at:nowStr(),state:S}];
+      const d=new Date();
+      XS.writeFile(buildWorkbook(list),`FTIV_BankBuild_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.xlsx`);
+      out.textContent=V.length?`엑셀 내려받기: 버전 ${V.length}개`:'엑셀 내려받기: 저장된 버전이 없어 현재 상태만';
+      }).catch(()=>{out.textContent='엑셀 기능을 불러오지 못했습니다. 인터넷 연결을 확인하세요';});
+    };
+
+    /* 백업 파일: 현재 상태 + 저장된 버전 전체 */
+    $('exportBtn').onclick=()=>{
+      const d=new Date(),name=`FTIV_BankBuild_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}.json`;
+      const url=URL.createObjectURL(new Blob([JSON.stringify({app:'FTIV_BankBuild',current:S,versions:V},null,1)],{type:'application/json'}));
+      const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    };
+    $('importFile').onchange=e=>{
+      const f=e.target.files[0];if(!f)return;const r=new FileReader();
+      r.onload=()=>{try{
+          const o=JSON.parse(r.result);let cur=o,vers=[];
+          if(o.app==='FTIV_BankBuild'){cur=o.current;vers=Array.isArray(o.versions)?o.versions:[];}
+          if(!cur||!cur.monthly||!cur.start)throw 0;
+          loadState(cur);
+          const ids=new Set(V.map(v=>v.id));let add=0;
+          vers.forEach(v=>{if(v&&v.state&&!ids.has(v.id)){V.push(v);add++;}});
+          V.sort((a,b)=>b.id-a.id);saveV();curVer=null;renderVer();
+          $('saved').textContent=`불러오기 완료${add?` · 버전 ${add}개 추가`:''}`;}
+        catch(err){$('saved').textContent='백업 파일 형식이 맞지 않습니다';}e.target.value='';};
+      r.readAsText(f,'utf-8');
+    };
+
+    let lastSent=null,timer=null;
+    function persist(){
+      clearTimeout(timer);
+      timer=setTimeout(()=>{
+        const payload={app:'FTIV_BankBuild',current:S,versions:V},str=JSON.stringify(payload);
+        if(str===lastSent)return;
+        const out=$('saved');
+        SAVE(payload).then(()=>{lastSent=str;const d=new Date();if(out)out.textContent=`서버 저장 ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;})
+          .catch(e=>{if(out)out.textContent='서버 저장 실패: '+((e&&e.message)||e);});
+      },1200);
+    }
+    lastSent=JSON.stringify({app:'FTIV_BankBuild',current:S,versions:V});
+    parseHol();fillSettings();buildTable();renderCal();
+
+  }
+  function mount(host) {
+    var me = window.MFG_USER, client = window.MFG_SB;
+    host.setAttribute('data-on', '1');
+    if (!me || me.isGuest || !me.email) { host.innerHTML = '<div class="bb-card"><div class="bb-none">로그인한 사람만 볼 수 있습니다.</div></div>'; return; }
+    host.innerHTML = '<div class="bb-card"><div class="bb-none">불러오는 중…</div></div>';
+    client.from('prod_state').select('data,updated_at,updated_by').eq('section', 'BOM').eq('key', 'ftivBank').then(function (r) {
+      if (r.error) throw r.error;
+      var row = (r.data || [])[0], init = row && row.data && row.data.current ? row.data : SEED;
+      var save = function (payload) {
+        return client.from('prod_state').upsert({ section: 'BOM', key: 'ftivBank', data: payload, updated_by: me.email }, { onConflict: 'section,key' })
+          .then(function (x) { if (x.error) throw x.error; });
+      };
+      start(host, JSON.parse(JSON.stringify(init)), save);
+      if (row) { var sv = document.getElementById('bb-saved'); if (sv) sv.textContent = '서버 ' + String(row.updated_at || '').slice(0, 16).replace('T', ' ') + (row.updated_by ? ' · ' + String(row.updated_by).split('@')[0] : ''); }
+    }).catch(function (e) { host.innerHTML = '<div class="bb-card"><div class="bb-none">불러오지 못했습니다: ' + String((e && e.message) || e).replace(/</g, '&lt;') + '</div></div>'; });
+  }
+  setInterval(function () {
+    var h = document.getElementById('bbInline');
+    if (h && !h.getAttribute('data-on') && window.MFG_SB) mount(h);
   }, 400);
 })();
 </script>
