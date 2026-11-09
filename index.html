@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V187S</title>
+  <title>MFG Report V188S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,6 +452,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V188S',
+  d: '2026-11-09',
+  items: ['BOM: «엑셀 올리기»에 Oracle «Bill of Material Structure Report»(.xls) 파일도 올릴 수 있게 — 그 파일의 완제품만 추가(같은 품번은 교체), 나머지 BOM은 그대로', 'BOM전개 엑셀을 다시 올려도 Structure Report로 더한 것(PY2 등)은 남김, 목록·상세에 조직(PY2) 표시']
+}, {
   v: 'V187S',
   d: '2026-11-09',
   items: ['FTIV Bank Build: 토·공휴일/일요일 일괄 버튼(잔업·야간·야간 잔업 추가 등)이 전체 월이 아니라 지금 보고 있는 달에만 적용']
@@ -28158,6 +28162,70 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
     return { v: 3, src: 'oracle', cols: ['lv', 'rm', 'desc', 'qty', 'unit', 'kind', 'memo', 'ext', 'parent', 'from'], list: list, fgN: fgN, n: list.reduce(function (s, F) { return F.sub ? s : s + F.vers[0].rows.length - 1; }, 0) };
   }
 
+  /* Oracle «Bill of Material Structure Report» (.xls 이름의 글자 보고서) → 저장 형태(v3, 완제품별) */
+  function bomParseReport(text) {
+    var lines = String(text || '').replace(/\r/g, '').split('\n');
+    var MON = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
+    var dt = function (s) { var m = /^(\d{1,2})-([A-Z]{3})-(\d{2,4})$/.exec(String(s || '').trim()); if (!m || !MON[m[2]]) return ''; var y = m[3].length === 2 ? '20' + m[3] : m[3]; return y + '-' + MON[m[2]] + '-' + ('0' + m[1]).slice(-2); };
+    var num = function (s) { var n = parseFloat(String(s || '').replace(/,/g, '')); return isFinite(n) ? n : null; };
+    var org = '', orgCode = '', map = {}, order = [], F = null, spans = null, last = null, stack = [];
+    for (var i = 0; i < lines.length; i++) {
+      var L = lines[i], m;
+      if ((m = /^\s*Organization:\s+(.+?)\s*$/.exec(L))) { org = m[1]; var c = /-\s*([A-Z0-9]+)\s*$/.exec(org); orgCode = c ? c[1] : org; continue; }
+      if ((m = /^\s*Item:\s+(\S+)\s+(.*?)\s*(Engineering Bill:.*)?$/.exec(L)) && /Engineering Bill|^\s*Item:\s+\S+\s+\S/.test(L)) {
+        var fg = m[1]; if (!map[fg]) { map[fg] = { fg: fg, desc: m[2].trim(), date: '', rows: [] }; order.push(fg); }
+        F = map[fg]; spans = null; last = null; stack = [fg]; continue;
+      }
+      if (/^\s*-{5,}\s+-{3,}/.test(L)) {   // 제목 아래 ---- 줄로 칸 위치를 잡음
+        spans = []; var re = /-+/g, x; while ((x = re.exec(L))) spans.push(x.index);
+        continue;
+      }
+      if (!F || !spans) continue;
+      if (/Report Date:|Bill of Material Structure Report|End of Report/.test(L)) { spans = null; continue; }
+      if (!L.trim()) continue;
+      var cell = function (k) { return L.slice(spans[k], k + 1 < spans.length ? spans[k + 1] : undefined).trim(); };
+      var lvS = cell(0), item = cell(3);
+      if (!lvS && !item) {   // 품명이 다음 줄로 넘어간 것
+        var more = cell(4); if (more && last) last[2] = (last[2] + ' ' + more).trim();
+        continue;
+      }
+      var lv = parseInt(lvS.replace(/[^\d]/g, ''), 10); if (!lv || !item) continue;
+      stack.length = lv; stack[lv] = item;
+      var from = dt(cell(8)), to = dt(cell(10)), rev = cell(5), eco = cell(13);
+      if (from > F.date) F.date = from;
+      var memo = [to ? '종료 ' + to : '', eco, rev && rev !== '*00' ? 'Rev ' + rev : ''].filter(Boolean).join(' · ');
+      last = [lv, item, cell(4), num(cell(7)), cell(6).toUpperCase(), '', memo, num(cell(12)), stack[lv - 1] || F.fg, from];
+      F.rows.push(last);
+    }
+    var child = {}; order.forEach(function (k) { map[k].rows.forEach(function (r) { child[r[1]] = 1; }); });
+    var list = order.map(function (k) {
+      var G = map[k];
+      G.rows.forEach(function (r) { if (map[r[1]]) r[5] = '반제품'; });
+      return { fg: G.fg, desc: G.desc, sub: !!child[G.fg], org: orgCode, line: '', pl: '', alias: [], cur: 0, vers: [{ parent: G.fg, pdesc: G.desc, pl: '', date: G.date, rows: [[0, G.fg, G.desc, 1, 'EA', '', '', 1, '', G.date]].concat(G.rows) }] };
+    }).filter(function (G) { return G.vers[0].rows.length > 1; });
+    if (!list.length) throw new Error('BOM Structure Report 에서 부품 줄을 찾지 못했습니다');
+    var fgN = list.filter(function (G) { return !G.sub; }).length;
+    return { v: 3, src: 'report', org: orgCode, orgName: org, cols: ['lv', 'rm', 'desc', 'qty', 'unit', 'kind', 'memo', 'ext', 'parent', 'from'], list: list, fgN: fgN, n: list.reduce(function (s, G) { return G.sub ? s : s + G.vers[0].rows.length - 1; }, 0) };
+  }
+  /* 올린 것을 지금 BOM 에 합치기: Report 는 그 완제품만 추가·교체, BOM전개(전체) 는 Report 로 넣은 것(org 있는 것)은 남기고 나머지 교체 */
+  function bomMerge(old, d) {
+    var keep = (old && old.list) || [], res;
+    if (d.src === 'report') {
+      var nk = {}; d.list.forEach(function (G) { nk[G.fg] = 1; });
+      res = old && old.list ? JSON.parse(JSON.stringify(old)) : { v: 3, src: 'oracle', cols: d.cols, list: [] };
+      res.list = keep.filter(function (G) { return !nk[G.fg]; }).concat(d.list);
+      res.adds = Object.assign({}, (old && old.adds) || {}); res.adds[d.org || 'report'] = { file: d.file, at: d.at, by: d.by, n: d.list.length };
+      if ((res.v || 0) < 3) res.v = 3;
+    } else {
+      res = d; var mine = {}; d.list.forEach(function (G) { mine[G.fg] = 1; });
+      var extra = keep.filter(function (G) { return G.org && !mine[G.fg]; });
+      res.list = d.list.concat(extra); if (old && old.adds && extra.length) res.adds = old.adds;
+    }
+    res.fgN = res.list.filter(function (G) { return !G.sub; }).length;
+    res.n = res.list.reduce(function (s, G) { return G.sub ? s : s + (G.vers[G.cur || 0] || G.vers[0]).rows.length - 1; }, 0);
+    return res;
+  }
+
   // ----- BOM 조회: 완제품 → 부품 · 부품 → 완제품 · 라인별 — 로그인한 사람만 (서버 prod_state BOM/bom, 게스트는 서버에서 못 읽음) -----
   var bomData = null, bomMeta = { lines: {}, alias: {} }, bomMode = 'fg', bomSel = null, bomVer = null, bomLoading = null;
   var bnk = function (s) { return String(s == null ? '' : s).toLowerCase().replace(/[\s\-_.\/()]+/g, ''); };
@@ -28198,7 +28266,7 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
     var q = bnk(qi.value), html = '', cnt = 0, MAX = 300;
     if (bomMode === 'fg') {
       var fs = bomData.list.filter(function (F) { return !q || F.key.indexOf(q) >= 0; }); cnt = fs.length;
-      html = fs.slice(0, MAX).map(function (F) { return '<button type="button" class="bl' + (bomSel === 'fg|' + F.fg ? ' on' : '') + '" data-k="fg|' + esc(F.fg) + '"><b>' + esc(F.fg) + '</b><span>' + esc(F.desc) + (F.alias.length ? ' · ' + esc(F.alias.join(', ')) : '') + '</span><em>' + (F.sub ? '반제품' : esc(F.line)) + '</em></button>'; }).join('');
+      html = fs.slice(0, MAX).map(function (F) { return '<button type="button" class="bl' + (bomSel === 'fg|' + F.fg ? ' on' : '') + '" data-k="fg|' + esc(F.fg) + '"><b>' + esc(F.fg) + '</b><span>' + esc(F.desc) + (F.alias.length ? ' · ' + esc(F.alias.join(', ')) : '') + '</span><em>' + (F.sub ? '반제품' : esc(F.line || F.org || '')) + '</em></button>'; }).join('');
     } else if (bomMode === 'rm') {
       var ps = q ? bomData.parts.filter(function (u) { return u.key.indexOf(q) >= 0; }) : []; cnt = ps.length;
       ps.sort(function (a, b) { var ax = bnk(a.rm) === q ? 0 : 1, bx = bnk(b.rm) === q ? 0 : 1; return ax - bx || a.rm.localeCompare(b.rm); });
@@ -28221,7 +28289,7 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
       var vi = bomVer == null ? F.cur : bomVer, V = F.vers[vi] || F.vers[F.cur];
       var ora = bomData.v >= 3;
       h = '<div class="bd-h"><b>' + esc(F.fg) + '</b><span>' + esc(F.desc) + '</span></div><div class="bd-m">' +
-        (F.sub ? '<span class="tag">반제품</span>' : F.line ? '<span class="tag">' + esc(F.line) + '</span>' : '<span>라인 없음</span>') +
+        (F.sub ? '<span class="tag">반제품</span>' : F.line ? '<span class="tag">' + esc(F.line) + '</span>' : '<span>라인 없음</span>') + (F.org ? '<span class="tag">' + esc(F.org) + '</span>' : '') +
         (me && me.isAdmin && !F.sub ? '<a href="#" class="bm-ed" data-ed="line">라인 고치기</a><a href="#" class="bm-ed" data-ed="alias">다른 이름 고치기</a>' : '') + (V.parent !== F.fg ? '<span>Parent ' + esc(V.parent) + '</span>' : '') + (V.pl ? '<span>Part List ' + esc(V.pl) + '</span>' : '') +
         (F.alias.length ? '<span>다른 이름 ' + esc(F.alias.join(', ')) + '</span>' : '') + '<span>부품 ' + V.rows.filter(function (r) { return r[0] > 0; }).length + '줄</span></div>';
       if (F.vers.length > 1) h += '<div class="bd-v">' + F.vers.map(function (x, i) { return '<button type="button" data-vi="' + i + '" class="' + (i === vi ? 'on' : '') + '">' + (i === F.cur ? '지금 BOM' : '이전 BOM') + ' · ' + esc(x.date || '날짜 없음') + (x.parent !== F.fg ? ' · ' + esc(x.parent) : '') + '</button>'; }).join('') + '</div>' +
@@ -28267,7 +28335,7 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
   function bomInfo() {
     var s = $('bomSub'); if (!s) return;
     var nf = bomData ? bomData.list.filter(function (F) { return !F.sub; }).length : 0, ns = bomData ? bomData.list.length - nf : 0;
-    s.textContent = bomData ? '완제품 ' + nf + (ns ? ' · 반제품 ' + ns : '') + ' · 부품 ' + bomData.parts.length.toLocaleString() + '종 · ' + (bomData.file || '') + ' (' + String(bomData.at || bomData.updated_at || '').slice(0, 10) + ' 올림)' : '';
+    s.textContent = bomData ? '완제품 ' + nf + (ns ? ' · 반제품 ' + ns : '') + ' · 부품 ' + bomData.parts.length.toLocaleString() + '종 · ' + (bomData.file || '') + ' (' + String(bomData.at || bomData.updated_at || '').slice(0, 10) + ' 올림)' + Object.keys(bomData.adds || {}).map(function (k) { var a = bomData.adds[k]; return ' + ' + k + ' Report (' + String(a.at || '').slice(0, 10) + ')'; }).join('') : '';
   }
   function bomXlsx() {
     if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -28275,22 +28343,40 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
   }
   function bomUpload(file) {
     var m = $('bomMsg'), say2 = function (t, err) { if (m) { m.textContent = t; m.className = 'bom-msg' + (err ? ' err' : ''); } };
-    say2('엑셀 읽는 중…');
-    bomXlsx().then(function (X) { return file.arrayBuffer().then(function (buf) { return X.read(buf, { type: 'array', cellDates: true }); }); }).then(function (wb) {
-      var ws = wb.Sheets['BOM전개'] || wb.Sheets[wb.SheetNames[0]];
-      var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-      var isOra = (aoa[0] || []).some(function (x) { return String(x || '').trim() === '최상위품목'; });
-      var d = isOra ? bomParseOracle(aoa) : bomParse(aoa); d.at = new Date().toISOString(); d.file = file.name; d.by = me.name;
-      var old = bomData ? bomData.list.filter(function (F) { return !F.sub; }).length : 0;
-      var nfg = isOra ? d.fgN : d.list.length;
-      if (!confirm('BOM을 이 엑셀로 바꿀까요?\n\n' + (isOra ? 'Oracle BOM전개 · ' : '') + '완제품 ' + nfg + '개' + (isOra ? ' · 반제품 ' + (d.list.length - d.fgN) + '개' : '') + ' · 부품 줄 ' + d.n.toLocaleString() + '개\n(지금 등록된 것: 완제품 ' + old + '개)\n\n라인 · 다른 이름은 지금 것 그대로 둡니다.')) { say2(''); return; }
-      say2('저장 중…');
-      return client.from('prod_state').upsert({ section: 'BOM', key: 'bom', data: d, updated_by: me.email }, { onConflict: 'section,key' }).then(function (r) {
-        if (r.error) throw r.error;
-        bomData = bomPrep(d); bomSel = null; bomInfo(); bomPaint(); say2('저장했습니다 — 완제품 ' + nfg + '개');
+    say2('파일 읽는 중…');
+    file.slice(0, 20000).text().then(function (head) {
+      // Oracle «Bill of Material Structure Report» (.xls 이름의 글자 파일) → 그 완제품만 추가·교체
+      if (/Bill of Material Structure Report/.test(head)) return file.text().then(function (t) { return { d: bomParseReport(t), kind: 'rep' }; });
+      return bomXlsx().then(function (X) { return file.arrayBuffer().then(function (buf) { return X.read(buf, { type: 'array', cellDates: true }); }); }).then(function (wb) {
+        var ws = wb.Sheets['BOM전개'] || wb.Sheets[wb.SheetNames[0]];
+        var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+        var isOra = (aoa[0] || []).some(function (x) { return String(x || '').trim() === '최상위품목'; });
+        return { d: isOra ? bomParseOracle(aoa) : bomParse(aoa), kind: isOra ? 'ora' : 'old' };
       });
-    }).catch(function (e) { say2('엑셀을 올리지 못했습니다: ' + errText(e), true); });
+    }).then(function (o) {
+      var d = o.d; d.at = new Date().toISOString(); d.file = file.name; d.by = me.name;
+      return client.from('prod_state').select('data').eq('section', 'BOM').eq('key', 'bom').then(function (r) {
+        if (r.error) throw r.error;
+        var old = r.data && r.data[0] && r.data[0].data, oldL = (old && old.list) || [];
+        var nfg = o.kind === 'old' ? d.list.length : d.fgN, res = bomMerge(old, d), msg;
+        if (o.kind === 'rep') {
+          var had = {}; oldL.forEach(function (G) { had[G.fg] = 1; }); var rp = d.list.filter(function (G) { return had[G.fg]; }).length;
+          msg = 'BOM Structure Report' + (d.org ? ' (' + d.org + ')' : '') + '를 지금 BOM에 더할까요?\n\n완제품 ' + d.fgN + '개' + (d.list.length > d.fgN ? ' · 반제품 ' + (d.list.length - d.fgN) + '개' : '') + ' · 부품 줄 ' + d.n.toLocaleString() + '개\n' + (rp ? '이미 있는 품번 ' + rp + '개는 이 파일 내용으로 바꿉니다.\n' : '') + '나머지 BOM(완제품 ' + oldL.filter(function (G) { return !G.sub && !d.list.some(function (H) { return H.fg === G.fg; }); }).length + '개)은 그대로 둡니다.';
+        } else {
+          var ex = oldL.filter(function (G) { return G.org; }).length;
+          msg = 'BOM을 이 엑셀로 바꿀까요?\n\n' + (o.kind === 'ora' ? 'Oracle BOM전개 · ' : '') + '완제품 ' + nfg + '개' + (o.kind === 'ora' ? ' · 반제품 ' + (d.list.length - d.fgN) + '개' : '') + ' · 부품 줄 ' + d.n.toLocaleString() + '개\n(지금 등록된 것: 완제품 ' + oldL.filter(function (G) { return !G.sub; }).length + '개)\n\n' + (ex ? 'Structure Report로 더한 ' + ex + '개는 남겨 둡니다.\n' : '') + '라인 · 다른 이름은 지금 것 그대로 둡니다.';
+        }
+        if (!confirm(msg)) { say2(''); return; }
+        say2('저장 중…');
+        return client.from('prod_state').upsert({ section: 'BOM', key: 'bom', data: res, updated_by: me.email }, { onConflict: 'section,key' }).then(function (r2) {
+          if (r2.error) throw r2.error;
+          bomData = bomPrep(JSON.parse(JSON.stringify(res))); bomSel = null; bomInfo(); bomPaint();
+          say2(o.kind === 'rep' ? '더했습니다 — 완제품 ' + d.fgN + '개 (' + d.list.map(function (G) { return G.fg; }).slice(0, 6).join(', ') + ')' : '저장했습니다 — 완제품 ' + nfg + '개');
+        });
+      });
+    }).catch(function (e) { say2('파일을 올리지 못했습니다: ' + errText(e), true); });
   }
+
 
   // MFG Report: Production › BOM 탭 — React가 #bomInline 자리를 만들면 여기서 채움 (메인 포털 BOM 조회와 같은 화면·같은 서버 데이터)
   function bomMount(host) {
@@ -28298,7 +28384,7 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
     host.setAttribute('data-on', '1');
     if (!me || me.isGuest || !me.email) { host.innerHTML = '<div class="bom-card"><div class="pl-none">로그인한 사람만 볼 수 있습니다.</div></div>'; return; }
     host.innerHTML = '<div class="bom-card"><div class="pl-top"><div class="seg" id="bomSeg"><button type="button" data-v="fg">완제품 → 부품</button><button type="button" data-v="rm">부품 → 완제품</button><button type="button" data-v="ln">라인별</button></div>' +
-      (me.isAdmin ? '<label class="bom-up" title="Oracle BOM전개 엑셀 — 올리면 전체 교체">엑셀 올리기<input type="file" id="bomFile" accept=".xlsx,.xls" hidden></label>' : '') +
+      (me.isAdmin ? '<label class="bom-up" title="Oracle BOM전개 엑셀(전체 교체) · Bill of Material Structure Report .xls(그 완제품만 추가)">엑셀 올리기<input type="file" id="bomFile" accept=".xlsx,.xls,.txt" hidden></label>' : '') +
       '<span class="note" id="bomSub"></span></div><div class="bom-q"><input id="bomQ" type="search" autocomplete="off"></div><div id="bomMsg" class="bom-msg"></div></div>' +
       '<div class="bom-grid"><div id="bomList" class="bom-list bom-card"></div><div id="bomDet" class="bom-det bom-card"></div></div>';
     document.querySelectorAll('#bomSeg button').forEach(function (b) { b.onclick = function () { bomMode = b.getAttribute('data-v'); bomSel = null; $('bomQ').value = ''; bomPaint(); $('bomQ').focus(); }; });
