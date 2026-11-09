@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V183S</title>
+  <title>MFG Report V184S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,6 +452,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V184S',
+  d: '2026-11-09',
+  items: ['Capacity Utilization 2027년을 «20261030_Pyungtek_Capacity_Utilization_2027» 엑셀과 같게 — 라인·아이템·PC/T·수량', '공정별 라인 수(New/Old ICV 2라인) 만큼 최대공수 곱하기, 공정 순서는 엑셀 순서', '템플릿에 PC/T(초)·라인수·순서·품번·비고 열 추가']
+}, {
   v: 'V183S',
   d: '2026-11-08',
   items: ['BOM 탭을 다른 화면과 같은 모양(흰 카드·회색 선)으로', 'Production › Tool 교체 아래 «BOM» — 메인 포털 BOM 조회와 같은 화면·같은 데이터 (완제품 → 부품 · 부품 → 완제품 · 라인별, 로그인한 사람만, 관리자 엑셀 올리기)', '보안: 설정 자동 백업(공개 GAS)에서 조직도 제외 · 페이지 안 조직도 기본값에서 사진·전화·메일·입사일 삭제 (로그인 후 보는 조직도는 그대로)', '조직도 «생년월일» — 인원 정보에서 입력, 카드에는 안 보이고 카드를 눌러 여는 인원 정보 창에서만 (만 나이 함께), 명단 엑셀에 생년월일 열', '조직도 «비고» — 인원 정보에서 입력하면 카드 직책 아래에 빨간 글씨로 표시(없으면 그대로), 명단 엑셀에도 비고 열', '조직도 카드 입사일 옆에 근속 표시 — 2022.12.22 (03년 10개월)', '설비별 분석 맨 위에 MTTR(평균 수리 시간)·MTBF(평균 고장 간격) 설명과 지금 화면 숫자로 푼 한 줄', '설비별 분석 라인 구분을 비가동 화면과 같게 — 라인 이름은 화면 표시 이름(A/FLVV·M/GVV 등), 왼쪽 «라인» 목록에 있는 생산 라인만(세척·Pack·ATV 제외), FE 파일에 섞인 TCP 기록 제외', '설비별 분석을 비가동 메뉴 왼쪽 «비가동 구분» 아래 버튼으로 옮김 — 오른쪽에 바로 표시, 왼쪽 TCP/FE·라인 선택 따라감. 한눈에 보기(건수·시간·MTTR·MTBF), 분석 결과(집중·최대 손실·반복·증가·원인·자주 멈추는 라인), 라인별·원인별·월별·설비 Top 10 그래프, 설비 이름 한꺼번에 바꾸기(합치기)', '브리핑 팝업 새 디자인 — 왼쪽 메뉴와 같은 테마(베이지 바탕·검은 굵은 선·주황 포인트), 화면 가운데에 크게, 요약은 번호 목록, 바깥을 누르거나 Esc로 닫기 · 대시보드 공지줄도 같은 테마', '브리핑: 새 브리핑이 나오면 MFG Report에 처음 들어올 때 팝업으로 한 번 띄움 (본 브리핑은 이 PC에서 다시 안 띄움) · 대시보드 맨 위 공지줄은 그대로 (눌러서 다시 보기)', '비가동 제목 오른쪽 [설비별 분석] — 장비고장·설비 설정값 변경 비가동의 내용 글을 AI가 읽어 설비·증상·원인 분류(서버 저장, 사람이 고칠 수 있음), 라인·설비별 건수·시간·MTTR·MTBF · 브리핑은 대시보드 맨 위 공지줄로 (눌러서 전체 보기), 휴대폰 화면 정리', '오른쪽 아래 «브리핑»: 매일 아침 만들어지는 생산 브리핑(주간·야간 계획/실적, OEE, 비가동·불량 Top, AI 요약)을 날짜별로 보고 [복사]해서 메일에 붙여넣기 · AI 질문·현황판 판독이 빈 답을 내던 문제(모델 생각 단계) 수정', '현황판 대조 사진 판독을 Claude(Sonnet)로 바꿈 — 더 정확, 무료 한도 대기 없음 (로그인 사용자) · «계획엑셀 실적 대조»는 탭을 열 때 서버 생산계획을 새로 받아 이번 달도 바로 비교', 'AI 질문 창 크기 조절: 왼쪽 위 모서리를 끌거나 [⤢ 크게]로 큰 화면 (이 PC에 기억)', 'AI 질문: 내 대화 기록이 서버에 남음(본인 것만) — 창을 열면 최근 30개, 오늘 대화는 이어서 질문 가능 · 기록 지우기', '오른쪽 아래 «AI 질문»: 생산·OEE·불량·비가동·계획 대비 실적을 채팅으로 물어보면 이 화면의 데이터와 수식으로 계산해서 답함 (로그인한 사람만, Claude)', 'Lot & FTFR 표: 왼쪽 Date·주야·Part(UCC는 생산일, LVS는 생산일·Part) 열과 맨 위 제목줄 고정, 제목 칸 더블클릭하면 그 열 숨김(모두에게 적용) · ↺ 숨긴 열 버튼으로 다시 보이기 · 엑셀은 그대로 전부', 'FE 생산계획이 안 나오던 문제 — 브라우저 저장공간이 꽉 차도 이번 화면에서는 보관해서 사용, 예전(구글판) 브라우저 저장 자동 정리', '왼쪽 메뉴 새 디자인 — 포털과 같은 스타일, Overview·OEE·Production·Quality·Admin 다섯 묶음', '설정 합쳐 저장 — 조직도·리뷰·OEE 등 설정을 두 PC가 동시에 고쳐도 서로 덮지 않고 바뀐 칸끼리 합침 (같은 칸은 나중 저장한 값)', '서버 변경분을 5분 겹쳐 받기 — 여러 PC가 동시에 저장해도 빠지는 기록 없게', '서버(Supabase)판 — TCP·FE 데이터를 TCPSB·FESB가 저장한 테이블에서 바로 읽음 (백업 파일 없음), 60초마다 변경분 자동 반영', 'MFG Report 설정(OEE 목표·수식·조직도·리뷰 메모 등)은 키별로 서버에 저장 — 바뀐 항목만, 다른 사람 변경도 60초 안에 반영', '로그인: 이름+비밀번호 (TCP·FE·노무비와 같은 계정) — 처음 접속 때 본인 비밀번호로 변경, 관리자는 ⚙️ 계정에서 사용자 추가·비밀번호 초기화', '게스트로 둘러보기(보기 전용)', '생산계획: 파이썬이 계획 엑셀을 읽어 서버에 올린 결과를 바로 사용 — 큰 엑셀 내려받기·읽기 없음, 열어둔 동안 바뀌면 60초 안에 반영 (서버에 없으면 예전처럼 공유저장소 엑셀)', '백업: MFG Report 설정을 3시간에 한 번 Google 공유저장소에 백업 파일로 남김 (최근 60개)', '화면 전환 속도: 라인 이름 연결표·왼쪽 메뉴 알림 계산을 한 번만 하도록 (메뉴 누를 때 반복 계산 제거)', '휴대폰 화면: 폭이 좁으면 왼쪽 메뉴는 ☰ 버튼으로 열고, 넓은 칸은 세로로 쌓고, 큰 숫자는 화면에 맞게 줄임 (가로·세로 모두)', 'FTIV PLC 데이터: 서버 파일 저장공간에 저장·받기 (Google 거치지 않아 빠름, 최근 3개 보관) — 처음 열 때 Google에 있던 최신본을 한 번 옮겨옴']
@@ -5897,17 +5901,25 @@ function App() {
     });
   };
   const cuYearData = () => cuDataByYear[String(cuYear)] || { groups: [], items: [] };
+  // 공정 정렬(순서 → 이름)·라인 수(최대공수 배수)
+  const cuProcSort = (procs, groups) => {
+    const ord = {};
+    groups.forEach(g => { const o = Number(g['순서']); if (o > 0 && (!(g['공정'] in ord) || o < ord[g['공정']])) ord[g['공정']] = o; });
+    return procs.sort((a, b) => ((ord[a] || 999) - (ord[b] || 999)) || String(a).localeCompare(String(b)));
+  };
+  const cuLineMul = (proc, groups) => Math.max(1, ...groups.filter(g => g['공정'] === proc).map(g => Number(g['라인수']) || 1));
   const cuCalc = () => {
     const cal = cuCalendar(cuYear);
     const cd = cuYearData();
     const groups = (cd.groups || []).filter(g => g['라인'] === cuSection);
     const items = (cd.items || []).filter(g => g['라인'] === cuSection);
-    const procs = [...new Set(groups.map(g => g['공정']))].sort();
+    const procs = cuProcSort([...new Set(groups.map(g => g['공정']))], groups);
     const gKey = {};
     groups.forEach(g => { gKey[g['공정'] + '|' + g['그룹명']] = g; });
     return procs.map(proc => {
+      const mul = cuLineMul(proc, groups);
       const months = CU_MONTHS.map((m, mi) => {
-        const cap = cuMinutes(cal[mi], cuSection);
+        const cap = cuMinutes(cal[mi], cuSection) * mul;
         let need = 0, chg = 0, qty = 0;
         const detail = [];
         items.filter(it => it['공정'] === proc).forEach(it => {
@@ -5925,7 +5937,7 @@ function App() {
         });
         return { cap, need, chg, total: need + chg, qty, detail, util: cap > 0 ? (need + chg) / cap : 0 };
       });
-      return { proc, months };
+      return { proc, months, mul };
     });
   };
   // 5년 집계 — 연도별 합계만
@@ -5934,11 +5946,12 @@ function App() {
     const years = [];
     for (let i = 0; i < 5; i++) years.push(base + i);
     const procSet = new Set();
+    const allG = [];
     years.forEach(y => {
       const cd = cuDataByYear[String(y)] || { groups: [] };
-      (cd.groups || []).filter(g => g['라인'] === cuSection).forEach(g => procSet.add(g['공정']));
+      (cd.groups || []).filter(g => g['라인'] === cuSection).forEach(g => { procSet.add(g['공정']); allG.push(g); });
     });
-    const procs = [...procSet].sort();
+    const procs = cuProcSort([...procSet], allG);
     const rows = procs.map(proc => {
       const cells = years.map(y => {
         const cal = cuCalendar(y);
@@ -5946,9 +5959,10 @@ function App() {
         const gKey = {};
         (cd.groups || []).filter(g => g['라인'] === cuSection).forEach(g => { gKey[g['공정'] + '|' + g['그룹명']] = g; });
         const items = (cd.items || []).filter(it => it['라인'] === cuSection && it['공정'] === proc);
+        const mul = cuLineMul(proc, (cd.groups || []).filter(g => g['라인'] === cuSection));
         let cap = 0, need = 0, chg = 0, qty = 0;
         CU_MONTHS.forEach((m, mi) => {
-          cap += cuMinutes(cal[mi], cuSection);
+          cap += cuMinutes(cal[mi], cuSection) * mul;
           items.forEach(it => {
             const q = Number(it[m + '월_수량']) || 0;
             if (!q) return;
@@ -14367,8 +14381,8 @@ function App() {
 
     const downloadTemplate = () => {
       if (typeof XLSX === 'undefined') { setCuMsg('엑셀 모듈 로딩 중입니다. 잠시 후 다시 시도하세요.'); return; }
-      const G_COLS = ['라인', '그룹명', '공정', '기준인원', '인원', '작업시간(분)'].concat(CU_MONTHS.map(m => m + '월_생산량'));
-      const I_COLS = ['라인', '아이템명', '공정', 'CT그룹명', '교체수량', '교체CT(분)']
+      const G_COLS = ['라인', '그룹명', '공정', '기준인원', '인원', '작업시간(분)', 'PC/T(초)', '라인수', '순서'].concat(CU_MONTHS.map(m => m + '월_생산량'));
+      const I_COLS = ['라인', '아이템명', '공정', 'CT그룹명', '품번', '비고', '교체수량', '교체CT(분)']
         .concat(CU_MONTHS.map(m => m + '월_수량')).concat(CU_MONTHS.map(m => m + '월_불량률'));
       const cd = cuYearData();
       const groups = (cd.groups || []);
