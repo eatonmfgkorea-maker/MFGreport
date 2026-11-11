@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V188S</title>
+  <title>MFG Report V189S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -452,6 +452,10 @@ const {
   useMemo
 } = React;
 const VERSION_NOTES = [{
+  v: 'V189S',
+  d: '2026-11-11',
+  items: ['아침 생산 브리핑 팝업과 대시보드 맨 위 브리핑 줄을 없앰']
+}, {
   v: 'V188S',
   d: '2026-11-09',
   items: ['BOM: «엑셀 올리기»에 Oracle «Bill of Material Structure Report»(.xls) 파일도 올릴 수 있게 — 그 파일의 완제품만 추가(같은 품번은 교체), 나머지 BOM은 그대로', 'BOM전개 엑셀을 다시 올려도 Structure Report로 더한 것(PY2 등)은 남김, 목록·상세에 조직(PY2) 표시']
@@ -27607,120 +27611,8 @@ body.mnav-open #mfgNavBtn .x { display: inline; }
     setInterval(function () { var u = window.MFG_USER, ok = !!(u && !u.isGuest && u.email); b.style.display = ok ? 'block' : 'none'; if (!ok) p.classList.remove('on'); }, 1000);
   }
 
-  // ---------- 아침 생산 브리핑 보기 (Apps Script 가 매일 만들어 둔 것) ----------
-  var BRIEF_GAS = 'https://script.google.com/macros/s/AKfycbz3ciH6Wc_e65larP8TkhmMQtjBqicoowsDU5tdgV5X2QTLzikDT2VyWSoOz2tApUwE/exec';
-  function buildBrief() {
-    var css = document.createElement('style');
-    css.textContent = '#brfTop{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:9px 12px 9px 14px;background:#ECEAE5;border:2px solid #141414;font-family:"Gothic A1","Malgun Gothic",sans-serif;color:#141414;cursor:pointer}' +
-      '#brfTop:hover .t{color:#D63A0E}#brfTop .t{font-size:13px;font-weight:900;white-space:nowrap}#brfTop .s{flex:1;min-width:0;font-size:13px;color:#4A4843;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '#brfTop .n{font-size:11px;font-weight:700;color:#8C887F;white-space:nowrap}#brfTop button{height:28px;padding:0 12px;border:0;background:#141414;color:#ECEAE5;font:700 12px "Gothic A1","Malgun Gothic",sans-serif;cursor:pointer;white-space:nowrap}#brfTop button:hover{background:#D63A0E}' +
-      '@media (max-width:640px){#brfTop{flex-wrap:wrap;gap:4px 8px}#brfTop .s{flex-basis:100%;order:3;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}#brfTop .n{display:none}#brfTop button{margin-left:auto}}' +
-      // 팝업 — 왼쪽 메뉴와 같은 테마 (베이지 바탕 · 검은 굵은 선 · 주황 포인트)
-      '#brfBg{position:fixed;inset:0;z-index:9001;background:rgba(20,20,20,.5);display:none}#brfBg.on{display:block;animation:brfFade .2s ease}' +
-      '#brfPan{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9002;width:min(1040px,calc(100vw - 64px));max-height:calc(100vh - 64px);background:#ECEAE5;border:2px solid #141414;box-shadow:10px 10px 0 #141414;display:none;flex-direction:column;font-family:"Gothic A1","Malgun Gothic",sans-serif;color:#141414}' +
-      '#brfPan.on{display:flex;animation:brfIn .28s cubic-bezier(.2,.8,.2,1)}@keyframes brfIn{from{opacity:0;transform:translate(-50%,-46%)}to{opacity:1;transform:translate(-50%,-50%)}}@keyframes brfFade{from{opacity:0}to{opacity:1}}' +
-      '#brfPan .bk-top{display:flex;justify-content:space-between;align-items:center;margin:0 26px;padding:14px 0 8px;border-bottom:2px solid #141414;font-size:11px;font-weight:700;letter-spacing:.1em}#brfMsg{letter-spacing:0;color:#4A4843}' +
-      '#brfHd{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 16px;flex-wrap:wrap;margin:0 26px;padding:16px 0 14px}' +
-      '#brfHd .ttl b{display:block;font-size:42px;font-weight:900;letter-spacing:-.04em;line-height:1}#brfHd .ttl em{display:block;margin-top:8px;font-style:normal;font-size:15px;font-weight:700;color:#D63A0E}' +
-      '#brfHd .ctl{display:flex;gap:6px;align-items:center}#brfHd select,#brfHd button{height:32px;border:2px solid #141414;background:transparent;color:#141414;font:700 12px "Gothic A1","Malgun Gothic",sans-serif;padding:0 10px;cursor:pointer;white-space:nowrap;border-radius:0}' +
-      '#brfHd select{min-width:132px}#brfHd button:hover{background:#141414;color:#ECEAE5}#brfHd button.x{width:32px;padding:0;font-size:14px}' +
-      '#brfBody{flex:1;overflow:auto;padding:0 26px 26px}#brfBody > div{font-family:"Gothic A1","Malgun Gothic",sans-serif!important;color:#141414!important;max-width:none!important}' +
-      '#brfBody .bk-h{display:flex;justify-content:space-between;align-items:baseline;border-top:3px solid #141414;padding:5px 0 8px;margin:22px 0 0}#brfBody .bk-h:first-child{margin-top:0}#brfBody .bk-h b{font-size:15px;font-weight:900;letter-spacing:-.02em}#brfBody .bk-h span{font-size:11px;font-weight:700;color:#D63A0E;letter-spacing:.06em}' +
-      '#brfBody ol.bk-sum{list-style:none;margin:0;padding:0}#brfBody ol.bk-sum li{display:grid;grid-template-columns:30px 1fr;padding:8px 0;border-bottom:1px solid #CFCBC2;font-size:13.5px;line-height:1.6;word-break:keep-all}#brfBody ol.bk-sum li i{font-style:normal;font-weight:900;color:#D63A0E;font-variant-numeric:tabular-nums}' +
-      '#brfBody table{background:#fff;font-variant-numeric:tabular-nums;margin-top:2px!important}#brfBody th{background:#141414!important;color:#ECEAE5!important;border:1px solid #3A3936!important;font-weight:700!important}#brfBody td{border:1px solid #D9D5CC!important}#brfBody tr:hover td{background:#F7F5F0}' +
-      '#brfBody th,#brfBody td{white-space:nowrap}.brf-tw{overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch}' +
-      '@media (max-width:640px){#brfPan{left:8px;right:8px;top:8px;bottom:8px;transform:none;width:auto;max-height:none;box-shadow:none}#brfPan.on{animation:brfFade .2s ease}#brfPan .bk-top,#brfHd{margin:0 14px}#brfHd .ttl b{font-size:30px}#brfHd .ctl{width:100%}#brfHd select{flex:1}#brfBody{padding:0 14px 16px}#brfBody ol.bk-sum li{font-size:13px}}';
-    document.head.appendChild(css);
-    var b = document.createElement('div'); b.id = 'brfTop'; b.title = '아침 생산 브리핑 — 눌러서 전체 보기';
-    b.innerHTML = '<span class="t">📋 생산 브리핑</span><span class="s">불러오는 중…</span><span class="n"></span><button type="button">전체 보기</button>';
-    var bg = document.createElement('div'); bg.id = 'brfBg';
-    var p = document.createElement('div'); p.id = 'brfPan'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', '아침 생산 브리핑');
-    p.innerHTML = '<div class="bk-top"><span>EATON · MFG MORNING BRIEFING</span><span id="brfMsg"></span></div>' +
-      '<div id="brfHd"><div class="ttl"><b>생산 브리핑</b><em id="brfSub"></em></div><div class="ctl"><select id="brfDay" aria-label="날짜"></select><button type="button" id="brfCopy" title="메일에 붙여넣기용으로 복사">복사</button><button type="button" class="x" id="brfX" aria-label="닫기">✕</button></div></div><div id="brfBody"></div>';
-    document.body.appendChild(bg); document.body.appendChild(p);
-    // 보기 좋게 다시 꾸미기 (복사는 메일용 원본 html 그대로)
-    var dress = function (root) {
-      var box = root.firstElementChild; if (!box) return;
-      var kids = Array.prototype.slice.call(box.children);
-      kids.forEach(function (el) {
-        var t = (el.textContent || '').trim();
-        if (el.tagName === 'DIV' && /^\[MFG 생산 브리핑\]/.test(t)) { $('brfSub').textContent = t.replace(/^\[MFG 생산 브리핑\]\s*/, ''); el.remove(); return; }
-        if (el.tagName === 'DIV' && /border-left/.test(el.getAttribute('style') || '')) {
-          var items = Array.prototype.map.call(el.children, function (d) { return (d.textContent || '').replace(/^[-•\s]+/, '').trim(); }).filter(Boolean);
-          var h = document.createElement('div'); h.className = 'bk-h'; h.innerHTML = '<b>요약</b><span>AI SUMMARY</span>';
-          var ol = document.createElement('ol'); ol.className = 'bk-sum';
-          ol.innerHTML = items.map(function (x, i) { return '<li><i>' + String(i + 1).padStart(2, '0') + '</i><span>' + esc(x) + '</span></li>'; }).join('');
-          box.insertBefore(h, el); box.insertBefore(ol, el); el.remove(); return;
-        }
-        if (el.tagName === 'DIV' && /^■/.test(t) && !el.querySelector('table')) {
-          var sec = t.replace(/^■\s*/, ''), m = sec.match(/^(.*?)(\s*[-—·:]\s*|\s+)(TCP|FE|비가동|불량).*$/);
-          el.className = 'bk-h'; el.removeAttribute('style'); el.innerHTML = '<b>' + esc(sec) + '</b><span>' + (/비가동/.test(sec) ? 'DOWNTIME' : /불량/.test(sec) ? 'DEFECT' : 'DAILY') + '</span>';
-        }
-      });
-    };
-    var cur = null;
-    var load = function (d) {
-      $('brfBody').innerHTML = '<p style="color:#64748b;font-size:13px">불러오는 중…</p>';
-      return fetch(BRIEF_GAS + (d ? '?d=' + encodeURIComponent(d) : '')).then(function (r) { return r.json(); }).then(function (j) {
-        if (!j || j.none || !j.html) { $('brfBody').innerHTML = '<p style="color:#64748b;font-size:13px">아직 만들어진 브리핑이 없습니다.</p>'; cur = null; return; }
-        cur = j; $('brfBody').innerHTML = j.html; $('brfSub').textContent = ''; try { dress($('brfBody')); } catch (e) {}
-        // 표는 가로로 밀어서 보게 (휴대폰에서 잘리지 않게)
-        $('brfBody').querySelectorAll('table').forEach(function (t) { var w = document.createElement('div'); w.className = 'brf-tw'; t.parentNode.insertBefore(w, t); w.appendChild(t); });
-        $('brfMsg').textContent = j.at ? new Date(j.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' 작성' : '';
-      }).catch(function (e) { $('brfBody').innerHTML = '<p style="color:#b91c1c;font-size:13px">불러오지 못했습니다: ' + esc(e.message || e) + '</p>'; });
-    };
-    var opened = false;
-    var open = function () {
-      p.classList.add('on'); bg.classList.add('on'); if (opened) return; opened = true;
-      fetch(BRIEF_GAS + '?action=list').then(function (r) { return r.json(); }).then(function (j) {
-        var ds = (j && j.dates) || [];
-        $('brfDay').innerHTML = ds.map(function (d) { return '<option value="' + d + '">' + d + '</option>'; }).join('') || '<option value="">-</option>';
-      }).catch(function () {});
-      load('');
-    };
-    $('brfDay').onchange = function () { load($('brfDay').value); };
-    var close = function () { p.classList.remove('on'); bg.classList.remove('on'); };
-    $('brfX').onclick = close; bg.onclick = close;
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && p.classList.contains('on')) close(); });
-    $('brfCopy').onclick = function () {
-      if (!cur) return;
-      var done = function () { $('brfCopy').textContent = '복사됨'; setTimeout(function () { $('brfCopy').textContent = '복사'; }, 1500); };
-      var fallback = function () { var r = document.createRange(); r.selectNodeContents($('brfBody')); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); try { document.execCommand('copy'); done(); } catch (e) {} sel.removeAllRanges(); };
-      try {
-        if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
-          navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([cur.html], { type: 'text/html' }), 'text/plain': new Blob([$('brfBody').innerText], { type: 'text/plain' }) })]).then(done, fallback);
-        } else fallback();
-      } catch (e) { fallback(); }
-    };
-    // 맨 위 공지줄: 로그인 + 대시보드에서만, 최신 브리핑 제목·첫 줄 (30분마다 새로)
-    var head = null, headAt = 0;
-    var loadHead = function () {
-      headAt = Date.now();
-      fetch(BRIEF_GAS).then(function (r) { return r.json(); }).then(function (j) {
-        head = j && j.html ? j : { none: true };
-        if (head.none) { b.querySelector('.s').textContent = '아직 만들어진 브리핑이 없습니다'; b.querySelector('.n').textContent = ''; return; }
-        var first = String(j.summary || '').split('\n').map(function (x) { return x.replace(/^[-•\s]+/, '').trim(); }).filter(Boolean)[0] || '';
-        b.querySelector('.t').textContent = '📋 ' + String(j.subject || '생산 브리핑').replace(/^\[MFG 생산 브리핑\]\s*/, '생산 브리핑 ');
-        b.querySelector('.s').textContent = first || '요약 없음 — 눌러서 표 보기';
-        b.querySelector('.n').textContent = j.at ? new Date(j.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) + ' 작성' : '';
-        // 새 브리핑이 나오면 처음 들어왔을 때 한 번 팝업 (이 PC에서 본 것은 다시 안 띄움)
-        var key = String(j.at || j.subject || ''), seen = '';
-        try { seen = localStorage.getItem('brfSeen') || ''; } catch (e) {}
-        if (key && key !== seen) { try { localStorage.setItem('brfSeen', key); } catch (e) {} open(); }
-      }).catch(function () { b.querySelector('.s').textContent = '브리핑을 불러오지 못했습니다'; });
-    };
-    b.onclick = function () { if (!p.classList.contains('on')) open(); };
-    setInterval(function () {
-      var u = window.MFG_USER, ok = !!(u && !u.isGuest && u.email), a = window.__mfgAI;
-      if (!ok) { p.classList.remove('on'); bg.classList.remove('on'); }
-      var slot = document.getElementById('mfgTopSlot'), show = ok && slot && a && a.activeTab === 'dashboard';
-      if (ok && (!headAt || Date.now() - headAt > 1800000)) loadHead();   // 어느 메뉴에 있든 확인 (새 브리핑이면 팝업)
-      if (show) { if (b.parentNode !== slot) slot.appendChild(b); }
-      else if (b.parentNode) b.parentNode.removeChild(b);
-    }, 800);
-  }
   window.__aiqRunTool = runTool;   // 점검용
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { build(); buildBrief(); }); else { build(); buildBrief(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build); else build();
 })();
 
 </script>
