@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V194S</title>
+  <title>MFG Report V195S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -451,7 +451,7 @@ const {
   useState,
   useMemo
 } = React;
-const VERSION_NOTES = [{ v: 'V194S', d: '2026-11-17', items: ['FTIV «PLC 데이터 올리기»: 현황판 PC 의 ftiv_db_cache.txt(PLC 기록)와 ftiv_manual.txt(작업자·계획·비가동 입력)를 올리면 반영 — 두 파일을 같이 골라도 됨, PLC 엑셀도 그대로 가능', 'FTIV 현황판의 작업자·계획·비가동·서명 입력을 서버에 저장해 로그인한 사람 모두 같은 내용을 봄 (전에는 입력한 PC 에서만 보였음)'] }, { v: 'V193S', d: '2026-11-17', items: ['조직도: 인원 정보에 «퇴사일» — 퇴사일이 되면 조직도·인원수에서 빠지고 맨 아래 «퇴사자» 목록(접었다 펴기)으로, 하위 인원은 위 사람에게 붙음', '퇴사자 목록: 이름·직급·부서·직책·입사일·퇴사일·근속, 누르면 정보·면담기록 보기, 퇴사일을 지우면 조직도로 복귀', '명단 엑셀에 «퇴사일» 열 추가(빈칸이면 기존 유지)'] }, { v: 'V192S', d: '2026-11-11', items: ['조직도 맨 왼쪽 «생일자» — 월을 누르면 그 달 생일자(날짜순, 월/일·이름·부서), 이름을 누르면 인원 정보'] }, { v: 'V191S', d: '2026-11-11', items: ['조직도 면담기록을 가운데 큰 창으로 — 왼쪽 쓰기(내용 칸 크게), 오른쪽 기록 목록'] }, { v: 'V190S', d: '2026-11-11', items: ['조직도: 인원 정보 창에 «면담기록» — 날짜·내용·첨부파일(25MB, 10개까지) 저장, 고치기·지우기는 쓴 사람/관리자', '면담기록은 로그인한 사람 누구나 쓰고, 읽기는 관리자가 «면담 열람 권한»에서 사람별로 정해 둔 대로만 (서버에서 거름, 쓴 사람은 자기 글을 봄)', '조직도 새 인원 ID 는 지운 사람 번호를 다시 쓰지 않음'] }, {
+const VERSION_NOTES = [{ v: 'V195S', d: '2026-11-17', items: ['FTIV PLC 데이터 저장이 서버 오류로 실패하면 자동으로 4번까지 다시 보냄, 실패 문구를 알기 쉽게'] }, { v: 'V194S', d: '2026-11-17', items: ['FTIV «PLC 데이터 올리기»: 현황판 PC 의 ftiv_db_cache.txt(PLC 기록)와 ftiv_manual.txt(작업자·계획·비가동 입력)를 올리면 반영 — 두 파일을 같이 골라도 됨, PLC 엑셀도 그대로 가능', 'FTIV 현황판의 작업자·계획·비가동·서명 입력을 서버에 저장해 로그인한 사람 모두 같은 내용을 봄 (전에는 입력한 PC 에서만 보였음)'] }, { v: 'V193S', d: '2026-11-17', items: ['조직도: 인원 정보에 «퇴사일» — 퇴사일이 되면 조직도·인원수에서 빠지고 맨 아래 «퇴사자» 목록(접었다 펴기)으로, 하위 인원은 위 사람에게 붙음', '퇴사자 목록: 이름·직급·부서·직책·입사일·퇴사일·근속, 누르면 정보·면담기록 보기, 퇴사일을 지우면 조직도로 복귀', '명단 엑셀에 «퇴사일» 열 추가(빈칸이면 기존 유지)'] }, { v: 'V192S', d: '2026-11-11', items: ['조직도 맨 왼쪽 «생일자» — 월을 누르면 그 달 생일자(날짜순, 월/일·이름·부서), 이름을 누르면 인원 정보'] }, { v: 'V191S', d: '2026-11-11', items: ['조직도 면담기록을 가운데 큰 창으로 — 왼쪽 쓰기(내용 칸 크게), 오른쪽 기록 목록'] }, { v: 'V190S', d: '2026-11-11', items: ['조직도: 인원 정보 창에 «면담기록» — 날짜·내용·첨부파일(25MB, 10개까지) 저장, 고치기·지우기는 쓴 사람/관리자', '면담기록은 로그인한 사람 누구나 쓰고, 읽기는 관리자가 «면담 열람 권한»에서 사람별로 정해 둔 대로만 (서버에서 거름, 쓴 사람은 자기 글을 봄)', '조직도 새 인원 ID 는 지운 사람 번호를 다시 쓰지 않음'] }, {
   v: 'V189S',
   d: '2026-11-11',
   items: ['아침 생산 브리핑 팝업과 대시보드 맨 위 브리핑 줄을 없앰']
@@ -2038,8 +2038,21 @@ const FTIVSRC = (function () {
     const bytes = b64ToBytes(r.b64);
     step(`서버에 저장 중… (${Math.round(bytes.length / 1024 / 1024 * 10) / 10}MB)`);
     const filename = FTIV_PREFIX + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.json.gz';
-    const up = await sbs().upload(filename, bytes, { contentType: 'application/gzip', upsert: false });
-    if (up.error) throw new Error('저장 실패: ' + (up.error.message || up.error));
+    // 큰 파일이라 서버가 가끔 받지 못함(530 등) → 4번까지 다시 보냄
+    let upErr = null;
+    for (let k = 0; k < 4; k++) {
+      if (k) { step(`서버가 받지 못해 다시 보내는 중… (${k + 1}/4)`); await new Promise(r => setTimeout(r, [0, 3000, 8000, 15000][k])); }
+      try {
+        const up = await sbs().upload(filename, bytes, { contentType: 'application/gzip', upsert: true });
+        upErr = up.error || null;
+      } catch (e) { upErr = e; }
+      if (!upErr) break;
+      console.warn('FTIV 저장 실패', k + 1, upErr);
+    }
+    if (upErr) {
+      const m = String(upErr.message || upErr);
+      throw new Error('서버에 저장하지 못했습니다 (' + (/doctype|Unexpected token/i.test(m) ? '서버가 일시적으로 응답하지 않음' : m) + `, ${Math.round(bytes.length / 1024 / 1024 * 10) / 10}MB). 잠시 뒤 PLC 파일만 다시 올려 주세요.`);
+    }
     await pruneSb(3);   // 최근 3개만 보관
     const f = (await listSb()).find(x => x.name === filename) || { id: 'local-' + Date.now(), name: filename, modified: new Date().toISOString() };
     if (!String(f.id).startsWith('local-')) { await __idb.set('ftiv-data:' + f.id, r.bundle); __idb.prune('ftiv-data', 'ftiv-data:' + f.id); }
