@@ -216,6 +216,7 @@
   .special .body a[data-pend] { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
   #idleDlg form { padding: 14px 16px 16px; display: grid; grid-template-columns: 70px 1fr; gap: 10px 12px; align-items: center; font-size: 14px; }
   #idleDlg input[type=time], #idleDlg input[type=text] { font: inherit; height: 34px; border: 1px solid var(--ui-border); border-radius: 8px; padding: 0 8px; }
+  #idleDlg input.t24 { width: 96px; justify-self: start; text-align: center; font-variant-numeric: tabular-nums; }
   #idleDlg .kind { display: flex; gap: 8px; }
   #idleDlg .kind label { display: flex; align-items: center; gap: 6px; border: 1px solid var(--ui-border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-weight: 700; }
   #idleDlg .kind label:has(input:checked).p { border-color: var(--green); color: var(--green); background: #e8f6f1; }
@@ -359,11 +360,11 @@
     <span>구분</span>
     <div class="kind"><label class="p"><input type="radio" name="kind" value="p">계획 비가동</label><label class="u"><input type="radio" name="kind" value="u">비계획 비가동</label><label class="n"><input type="radio" name="kind" value="n">시간 없음</label></div>
     <div class="sec">비가동요인</div>
-    <span class="tm">시작</span><input class="tm" type="time" id="idS">
+    <span class="tm">시작</span><input class="tm t24" type="text" id="idS" inputmode="numeric" maxlength="5" placeholder="13:30" autocomplete="off" title="24시간제 (예: 13:30)">
     <span class="cl">글자색</span><div class="kind cl"><label class="ck"><input type="radio" name="color" value="k">검정</label><label class="cg"><input type="radio" name="color" value="g">초록</label><label class="cr"><input type="radio" name="color" value="r">빨강</label></div>
     <span>내용</span><input type="text" id="idX" placeholder="예: 설비 고장(OP70 실린더)" autocomplete="off">
     <div class="sec">조치사항</div>
-    <span class="tm">종료</span><span class="tm endrow"><input type="time" id="idE"><small>아직 안 끝났으면 비워 두기</small></span>
+    <span class="tm">종료</span><span class="tm endrow"><input class="t24" type="text" id="idE" inputmode="numeric" maxlength="5" placeholder="13:40" autocomplete="off" title="24시간제 (예: 13:40)"><small>아직 안 끝났으면 비워 두기</small></span>
     <span>조치</span><input type="text" id="idA" placeholder="예: 실린더 교체 후 재가동" autocomplete="off">
     <div class="err" id="idErr"></div>
     <div class="btns"><button type="button" class="del" id="idDel">삭제</button><button type="button" id="idCancel">취소</button><button type="submit" class="save" id="idSave">저장</button></div>
@@ -696,6 +697,16 @@
   }
   const idleKind = () => document.querySelector('#idleDlg [name=kind]:checked')?.value;
   const syncIdleForm = () => $('#idleDlg form').classList.toggle('notime', idleKind() === 'n');
+  // 시각은 24시간제 글자 칸(브라우저 시간 칸은 PC 설정에 따라 오전/오후로 나옴). 1330 · 13:30 · 830 → 13:30 · 08:30
+  function time24(v) {
+    v = String(v || '').trim(); if (!v) return '';
+    let h, mi; const m = /^(\d{1,2})\s*[:.]\s*(\d{1,2})$/.exec(v);
+    if (m) { h = +m[1]; mi = +m[2]; }
+    else if (/^\d{1,2}$/.test(v)) { h = +v; mi = 0; }
+    else if (/^\d{3,4}$/.test(v)) { h = +v.slice(0, -2); mi = +v.slice(-2); }
+    else return null;
+    return h > 23 || mi > 59 ? null : String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+  }
   let idleEdit = null;   // [시간대, 순번 | 'new']
   function openIdle(i, j) {
     const m = manual(), it = j === 'new' ? null : ((m.idles || [])[i] || [])[+j];
@@ -724,8 +735,9 @@
         if (!x) { $('#idErr').textContent = '내용을 넣어 주세요.'; return; }
         it = { k, c: document.querySelector('#idleDlg [name=color]:checked')?.value || 'k', x, a };
       } else {
-        const s = $('#idS').value, e = $('#idE').value;   // 종료는 비워도 됨(진행 중)
-        if (!s) { $('#idErr').textContent = '시작 시각을 넣어 주세요.'; return; }
+        const s = time24($('#idS').value), e = time24($('#idE').value);   // 종료는 비워도 됨(진행 중)
+        if (!s) { $('#idErr').textContent = s === null ? '시작 시각은 24시간제로 넣어 주세요. (예: 13:30)' : '시작 시각을 넣어 주세요.'; return; }
+        if (e === null) { $('#idErr').textContent = '종료 시각은 24시간제로 넣어 주세요. (예: 13:40)'; return; }
         it = { k, s, e, x, a };
       }
       if (j === 'new') list.push(it); else list[+j] = it;
@@ -1048,6 +1060,11 @@
   $('#idleDlg form').onsubmit = e => { e.preventDefault(); saveIdle(false); };
   $('#idDel').onclick = () => { if (confirm('이 비가동 기록을 지울까요?')) saveIdle(true); };
   $('#idCancel').onclick = () => $('#idleDlg').close();
+  ['#idS', '#idE'].forEach(q => {
+    const el = $(q);
+    el.addEventListener('input', () => { const d = el.value.replace(/[^\d:]/g, ''); el.value = /^\d{4}$/.test(d) ? d.slice(0, 2) + ':' + d.slice(2) : d; });
+    el.addEventListener('blur', () => { const v = time24(el.value); if (v) el.value = v; });
+  });
   document.querySelectorAll('#idleDlg [name=kind]').forEach(r => r.onchange = syncIdleForm);
   // 전체화면: 현황판(stage)만. 전체화면을 못 쓰는 곳(권한 없는 iframe)에서는 버튼을 숨김
   if (!document.fullscreenEnabled) $('#full').hidden = true;
