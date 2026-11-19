@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FTIV 생산 현황판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+   <!-- QR 만들기(인터넷 없이). 없으면 QR 버튼만 숨김 -->
+<script>
+  // MFGreport 안(iframe srcdoc)에서는 부모 창이 공유저장소에서 받은 데이터를 쓰고, 이 파일만 따로 열면 같은 폴더의 data.js
+  (function () {
+    try {
+      var d = window.parent !== window && window.parent.FTIV_BOARD_DATA;
+      if (d) { window.PLC_META = d.meta; window.PLC_DATA = d.data; window.PLC_SHIFT = d.shift; window.PLC_UNITS = d.units; window.PLC_DAYS = d.days; window.PLC_CAUSES = d.causes; return; }
+    } catch (e) {}
+    document.write('<script src="data.js"><\/script>');
+  })();
+</script>
+<style>
+  :root {
+    --wall: #dfe3d6;
+    --frame: #b9bec4;
+    --frame-dark: #8d939a;
+    --board: #fdfdfb;
+    --ink: #1f2a44;
+    --navy: #1d3f8f;
+    --eaton: #005eb8;
+    --line: #2b2f36;
+    --line-soft: #b8bec7;
+    --red: #d3262e;
+    --green: #0f9a73;
+    --live: #1d6fd1;
+    --black: #222;
+    --muted: #6b7280;
+    --ui-bg: #ffffff;
+    --ui-border: #d5d9df;
+    /* 트렌드 차트 */
+    --series-opr: #2a78d6;
+    --series-ovr: #eb6834;
+    --text-secondary: #52514e;
+    --text-muted: #8a8984;
+    --grid: #e4e3de;
+    --axis: #b9b8b1;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--wall);
+    font-family: 'Noto Sans KR', system-ui, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* ── 상단 컨트롤 ── */
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+    padding: 9px 16px;
+    background: rgba(255,255,255,.94);
+    border-bottom: 1px solid var(--ui-border);
+    font-size: 14px;
+  }
+  .toolbar .brand { font-weight: 900; color: var(--eaton); letter-spacing: .5px; }
+  .toolbar .group { display: flex; align-items: center; gap: 6px; }
+  .toolbar .lab { color: var(--muted); font-size: 13px; }
+  .toolbar .sep { width: 1px; height: 24px; background: var(--ui-border); }
+  .toolbar button, .toolbar input {
+    font: inherit; height: 34px; border: 1px solid var(--ui-border); border-radius: 8px;
+    background: var(--ui-bg); color: var(--ink); padding: 0 10px; cursor: pointer;
+  }
+  .toolbar button:hover { border-color: var(--eaton); }
+  .seg { display: inline-flex; border: 1px solid var(--ui-border); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; height: 32px; }
+  .seg button.on { background: var(--eaton); color: #fff; }
+  .toolbar .meta { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+  /* ── 보드 ── */
+  .stage { padding: 12px 16px; display: flex; justify-content: center; overflow: hidden; }
+  .scaler { transform-origin: top left; flex: none; }
+  .frame {
+    width: 2200px;
+    padding: 18px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #d4d8dc, var(--frame) 40%, var(--frame-dark));
+    box-shadow: 0 18px 40px rgba(40,50,40,.28), inset 0 1px 0 rgba(255,255,255,.7);
+  }
+  .board {
+    position: relative;
+    background: radial-gradient(ellipse at 30% 0%, #ffffff 0%, var(--board) 55%, #f3f4f1 100%);
+    border-radius: 4px;
+    padding: 22px 34px 28px;
+    box-shadow: inset 0 0 0 1px #c9cdd2;
+  }
+
+  /* 상단: 1행 로고·제목·마크 / 2행 생산일자·작업자 + 트렌드(구 Part No 자리) */
+  .top { display: grid; grid-template-columns: 500px 1fr; column-gap: 32px; }
+  /* 1행: 왼쪽 위 현재 시각 "14:05(목)" + 제목(현황판 가로 정중앙, 같은 행에 겹쳐 놓음) */
+  .clock { grid-column: 1; grid-row: 1; font-weight: 900; font-size: 64px; color: var(--ink); line-height: 1; letter-spacing: 1px; font-variant-numeric: tabular-nums; align-self: center; position: relative; z-index: 1; }
+  .clock small { font-size: 40px; font-weight: 700; color: var(--text-secondary); margin-left: 4px; }
+  .title { grid-column: 1 / -1; grid-row: 1; text-align: center; color: var(--navy); }
+  .title h1 { margin: 0; font-size: 44px; font-weight: 900; letter-spacing: -1px; line-height: 1.15; }
+  .title h2 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -.5px; }
+
+  .left2 { grid-column: 1; grid-row: 2; margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .field { display: flex; align-items: baseline; gap: 12px; font-size: 25px; font-weight: 700; }
+  .field .lab { width: 132px; flex: none; white-space: nowrap; text-align: justify; text-align-last: justify; }
+  .field .colon { flex: none; margin: 0 -2px 0 -4px; }
+  /* 작업자: 인원수(1~3명) 고르면 그만큼 이름 칸 */
+  .field .workers { display: flex; align-items: baseline; gap: 10px; }
+  .field .workers select { font: inherit; font-size: 20px; font-weight: 700; height: 34px; border: 1px solid var(--ui-border); border-radius: 6px; background: #fff; color: var(--ink); padding: 0 4px; cursor: pointer; align-self: center; }
+  .field .workers .wn { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; border-bottom: 1px dashed var(--line-soft); }
+  @media print { .field .workers select { border: 0; appearance: none; } }
+  .field .val {
+    flex: 1; min-height: 40px; border-bottom: 2px solid var(--line);
+    font-weight: 700; font-size: 26px; color: var(--black); line-height: 1.1;
+    padding: 0 6px;
+  }
+  /* 당일 집계: 남는 높이를 채워 아래 끝을 트렌드 차트 상자와 맞춤 */
+  .daysum { margin-top: 6px; flex: 1; display: flex; }
+  .daysum .cells { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; border: 2px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .daysum .cell { display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 4px 10px; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); background: rgba(255,255,255,.6); }
+  .daysum .cell:nth-child(4n) { border-right: 0; }
+  .daysum .cell:nth-child(n+5) { border-bottom: 0; }
+  .daysum .c-lab { font-size: 16px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .daysum .c-lab i { width: 14px; height: 4px; border-radius: 2px; }
+  .daysum .c-val { font-size: 30px; font-weight: 900; color: var(--black); font-variant-numeric: tabular-nums; line-height: 1.05; white-space: nowrap; }
+  .daysum .c-val small { display: block; font-size: 16px; font-weight: 700; color: var(--red); }
+
+  .trends { grid-column: 2; grid-row: 2; margin-top: 14px; display: grid; grid-template-columns: 220px 420px 1fr 1fr; gap: 18px; }
+  .trends > .trend { min-width: 0; }   /* 긴 부제목이 칸을 밀어내지 않게 */
+  /* 도넛 */
+  .trend.donut { align-items: stretch; }
+  .trend .dn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 0; }
+  .trend .dn svg { width: 165px; height: 165px; flex: none; cursor: default; }
+  .trend .dn svg .dn-c { font-size: 34px; font-weight: 900; fill: var(--ink); font-variant-numeric: tabular-nums; }
+  .trend .dn svg .dn-s { font-size: 15px; font-weight: 700; fill: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .trend .dn-leg { display: grid; grid-template-columns: 14px max-content max-content max-content; align-items: center; gap: 12px 8px; font-size: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .trend .dn-leg .lg-row { display: contents; }
+  .trend .dn-leg i { width: 14px; height: 14px; border-radius: 3px; }
+  .trend .dn-leg span { text-align: right; color: var(--text-secondary); font-weight: 700; }
+  .trend .dn-leg em { font-style: normal; text-align: right; font-weight: 900; color: var(--ink); }
+  /* 정시 / 잔업 */
+  .otseg { display: inline-flex; border: 2px solid var(--line); border-radius: 8px; overflow: hidden; flex: none; align-self: center; }
+  .otseg button { font: inherit; font-size: 19px; font-weight: 900; height: 36px; padding: 0 14px; border: 0; background: #fff; color: var(--text-secondary); cursor: pointer; }
+  .otseg button + button { border-left: 2px solid var(--line); }
+  .otseg button.on { background: var(--ink); color: #fff; }
+  @media print { .otseg button:not(.on) { display: none; } }
+  tr.off .timecell, tr.off .plancell .plan { opacity: .35; }
+  .trend { border: 2px solid var(--line); border-radius: 4px; padding: 8px 12px 4px; background: rgba(255,255,255,.5); display: flex; flex-direction: column; }
+  .trend .t-head { display: flex; align-items: baseline; gap: 14px; }
+  .trend .t-title { font-size: 21px; font-weight: 900; color: var(--ink); white-space: nowrap; }
+  .trend .t-title i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 8px; }
+  .trend .t-sub { font-size: 17px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trend svg { display: block; width: 100%; height: 230px; cursor: pointer; }
+  .trend svg text { font-family: 'Noto Sans KR', sans-serif; font-size: 15px; fill: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+  /* ── 표 ── */
+  table.grid { width: 100%; border-collapse: collapse; margin-top: 18px; table-layout: fixed; }
+  .grid th, .grid td { border: 2px solid var(--line); vertical-align: middle; }
+  .grid th { height: 44px; font-size: 28px; font-weight: 900; letter-spacing: 1px; }
+  .grid thead tr:first-child th[rowspan] { height: 88px; }
+  .grid th.sub { font-size: 20px; font-weight: 700; letter-spacing: 0; height: 40px; }
+  .grid th.sub i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .grid td { height: 108px; }
+  col.c-pn { width: 140px; } col.c-time { width: 180px; } col.c-plan { width: 200px; } col.c-cum { width: 180px; }
+  col.c-ng, col.c-opr, col.c-ovr { width: 118px; } col.c-etc { width: 124px; }
+  /* 조치사항(입력+서명) = 비가동요인과 같은 폭 */
+  col.c-act { width: 446px; } col.c-sign { width: 60px; }
+
+  .pncell { position: relative; text-align: center; font-size: 20px; font-weight: 500; }
+  .pncell .lot { position: absolute; top: 4px; left: 5px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .pncell .ops { display: flex; flex-direction: column; gap: 6px; padding: 18px 6px 0; text-align: left; }
+  .pncell .op { display: flex; align-items: baseline; gap: 4px; }
+  .pncell .op em { font-style: normal; font-size: 12px; font-weight: 900; color: var(--muted); flex: none; width: 34px; }
+  .pncell .who { flex: 1; min-width: 0; min-height: 26px; font-size: 18px; font-weight: 700; border-bottom: 1px dashed var(--line-soft); white-space: nowrap; overflow: hidden; }
+
+  .timecell { text-align: center; font-size: 23px; font-weight: 700; line-height: 1.35; white-space: nowrap; }
+  .timecell small { font-size: 20px; font-weight: 700; display: block; }
+
+  /* 불량 (시간대별 수량·불량률) */
+  .ngcell { text-align: center; line-height: 1.15; padding: 0 2px; }
+  .ngcell b { display: block; font-size: 28px; font-weight: 900; color: var(--black); font-variant-numeric: tabular-nums; }
+  .ngcell span { display: block; font-size: 21px; font-weight: 700; color: var(--red); font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+  .ngcell.total b { color: var(--red); }
+  .ngcell small { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-top: 2px; line-height: 1.25; word-break: keep-all; }
+  .grid th.ng-head { font-size: 24px; }
+  .grid th.ng-head small { font-size: 15px; font-weight: 700; color: var(--text-secondary); }
+  .grid th.sub { font-size: 16px; }
+  .grid th.sub i { width: 12px; margin-right: 4px; }
+  .ngcell.zero b, .ngcell.zero span { color: #b7bcc4; }
+  .ngcell[data-ng] { cursor: pointer; }
+  .ngcell[data-ng]:hover { background: rgba(0,94,184,.07); }
+  .special .body a[data-lot] { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+  .special .body a[data-lot]:hover { color: var(--eaton); }
+
+  .plancell { position: relative; padding: 0; overflow: hidden; }
+  .plancell svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .plancell .plan { position: absolute; top: 4px; left: 8px; font-size: 22px; font-weight: 700; color: var(--black); }
+  .plancell .act { position: absolute; right: 28px; bottom: 10px; font-size: 30px; font-weight: 900; color: var(--red); }
+  .cumcell { text-align: center; font-size: 32px; font-weight: 900; color: var(--red); }
+  /* 실적·누적 색: 진행 중 파랑 / 끝난 시간대는 계획 범위 안이면 초록, 모자라거나 넘으면 빨강 */
+  .plancell .act.live, .cumcell.live { color: var(--live); animation: livePulse 1.6s ease-in-out infinite; animation-delay: var(--blink-delay, 0s); }
+  /* 진행 중 깜빡임. 화면이 3초마다 다시 그려져도 박자가 끊기지 않게 지금 시각으로 위상을 맞춤(render 의 --blink-delay) */
+  @keyframes livePulse { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+  @media print { .plancell .act.live, .cumcell.live { animation: none; } }
+  .plancell .act.ok, .cumcell.ok { color: var(--green); }
+  .plancell .act.bad, .cumcell.bad { color: var(--red); }
+  /* 비가동: 계획 초록 / 비계획 빨강 */
+  .notes .idle { cursor: pointer; }
+  .notes .idle:hover { background: rgba(0,94,184,.06); }
+  .notes .idle .tag { font-size: 14px; font-weight: 900; border: 1.5px solid currentColor; border-radius: 4px; padding: 0 4px; margin-right: 6px; vertical-align: 2px; }
+  .notes .idle-add { color: #b7bcc4; cursor: pointer; }
+  .notes .idle-add:hover { color: var(--eaton); background: rgba(0,94,184,.06); }
+  .special .body a[data-pend] { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+  #idleDlg form { padding: 14px 16px 16px; display: grid; grid-template-columns: 70px 1fr; gap: 10px 12px; align-items: center; font-size: 14px; }
+  #idleDlg input[type=time], #idleDlg input[type=text] { font: inherit; height: 34px; border: 1px solid var(--ui-border); border-radius: 8px; padding: 0 8px; }
+  #idleDlg .kind { display: flex; gap: 8px; }
+  #idleDlg .kind label { display: flex; align-items: center; gap: 6px; border: 1px solid var(--ui-border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-weight: 700; }
+  #idleDlg .kind label:has(input:checked).p { border-color: var(--green); color: var(--green); background: #e8f6f1; }
+  #idleDlg .kind label:has(input:checked).u { border-color: var(--red); color: var(--red); background: #fdeced; }
+  #idleDlg .kind label:has(input:checked).n, #idleDlg .kind label:has(input:checked).ck { border-color: var(--black); color: var(--black); background: #f1f2f4; }
+  #idleDlg .kind label:has(input:checked).cg { border-color: var(--green); color: var(--green); background: #e8f6f1; }
+  #idleDlg .kind label:has(input:checked).cr { border-color: var(--red); color: var(--red); background: #fdeced; }
+  #idleDlg .sec { grid-column: 1 / 3; font-weight: 900; font-size: 13px; color: var(--eaton); border-bottom: 1px solid #eceef1; padding-bottom: 3px; margin-top: 4px; }
+  #idleDlg .endrow { display: flex; align-items: center; gap: 10px; }
+  #idleDlg .endrow small { color: var(--muted); }
+  #idleDlg form.notime .tm, #idleDlg form:not(.notime) .cl { display: none; }
+  #idleDlg .btns { grid-column: 1 / 3; display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  #idleDlg .btns button { font: inherit; height: 34px; border: 1px solid var(--ui-border); background: #fff; border-radius: 8px; padding: 0 14px; cursor: pointer; }
+  #idleDlg .btns .save { background: var(--eaton); border-color: var(--eaton); color: #fff; }
+  #idleDlg .btns .del { margin-right: auto; color: var(--red); }
+  #idleDlg .err { grid-column: 1 / 3; color: var(--red); font-size: 13px; min-height: 16px; }
+  /* QR: 오른쪽 위 작은 QR(누르면 크게) */
+  .qrbtn { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 2px solid var(--line); border-radius: 8px; background: #fff; padding: 6px 6px 3px; cursor: pointer; position: relative; z-index: 1; }
+  .qrbtn:hover { border-color: var(--eaton); }
+  .qrbtn #qrMini svg { display: block; width: 96px; height: 96px; }
+  .qrbtn b { font-size: 14px; font-weight: 900; color: var(--text-secondary); letter-spacing: 1px; }
+  /* 큰 QR: 화면 거의 전체(찍기 쉽게) */
+  #qrDlg { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border: 0; border-radius: 0; }
+  #qrDlg .qr-body { padding: 6px 12px 8px; text-align: center; }
+  #qrDlg #qrBig svg { display: block; width: min(calc(100vh - 120px), 96vw); height: min(calc(100vh - 120px), 96vw); margin: 0 auto; }
+  #qrDlg p { margin: 10px 0 0; font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+  @media print { .qrbtn { display: none; } }
+  /* 전체화면: 현황판만 */
+  #stage:fullscreen { background: var(--wall); padding: 10px; align-items: center; }
+
+  .notes { padding: 2px 10px; font-size: 19px; font-weight: 500; line-height: 1.3; vertical-align: top !important; }
+  .notes .ln { min-height: 34px; padding: 4px 2px 2px; border-bottom: 1px solid var(--line-soft); }
+  .notes .ln:last-child { border-bottom: 0; }
+  .g { color: var(--green); } .r { color: var(--red); } .k { color: var(--black); }
+
+  .signcell { text-align: center; cursor: pointer; font-size: 36px; font-weight: 900; color: var(--black); user-select: none; border-left: none !important; }
+  .signcell:hover { background: rgba(0,94,184,.05); }
+
+  .total-row td { height: 104px; }
+  .total-row .lab { font-size: 34px; font-weight: 900; text-align: center; }
+  .special { vertical-align: top !important; padding: 0 !important; }
+  .special .hdr { display: inline-block; border-right: 2px solid var(--line); border-bottom: 2px solid var(--line); padding: 2px 26px; font-size: 22px; font-weight: 900; }
+  .special .body { padding: 2px 12px; font-size: 19px; font-weight: 500; line-height: 1.45; }
+
+  /* 편집 가능 필드 */
+  [contenteditable] { outline: none; border-radius: 4px; cursor: text; }
+  [contenteditable]:hover { background: rgba(0,94,184,.06); }
+  [contenteditable]:focus { background: rgba(0,94,184,.10); box-shadow: 0 0 0 2px rgba(0,94,184,.35); }
+  [contenteditable]:empty::before { content: attr(data-ph); color: #b7bcc4; }
+
+  .empty-banner {
+    position: absolute; left: 50%; top: 62%; transform: translate(-50%,-50%);
+    background: rgba(255,255,255,.95); border: 2px dashed #9aa3ad; border-radius: 12px;
+    padding: 18px 28px; font-size: 26px; color: #555; text-align: center;
+  }
+
+  /* 넓은 화면: 스크롤 없이 한 화면 — 현황판을 가로·세로 모두에 맞춰 축소 */
+  @media (min-width: 1100px) {
+    body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .toolbar { flex: none; }
+    .stage { flex: 1; min-height: 0; }
+  }
+
+  /* 툴팁 */
+  .tip {
+    position: fixed; z-index: 50; pointer-events: none; display: none;
+    background: #fff; border: 1px solid #dcdbd5; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+    padding: 8px 10px; font-size: 12px; color: var(--text-secondary); min-width: 150px;
+  }
+  .tip .t-date { margin-bottom: 4px; }
+  .tip .t-row { display: flex; align-items: center; gap: 6px; }
+  .tip .t-row i { width: 12px; height: 2px; border-radius: 1px; }
+  .tip .t-row b { color: #0b0b0b; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .tip .t-hint { color: var(--text-muted); margin-top: 4px; }
+
+  /* 데이터 표 창 */
+  dialog { border: 1px solid var(--ui-border); border-radius: 12px; padding: 0; width: min(760px, 94vw); max-height: 86vh; }
+  dialog::backdrop { background: rgba(20,30,40,.35); }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #eceef1; position: sticky; top: 0; background: #fff; }
+  .dlg-head b { font-size: 16px; }
+  .dlg-head button { font: inherit; border: 1px solid var(--ui-border); background: #fff; border-radius: 8px; height: 30px; padding: 0 12px; cursor: pointer; }
+  .dlg-body { padding: 4px 16px 16px; font-size: 13px; }
+  .dlg-body h4 { margin: 16px 0 6px; font-size: 14px; }
+  .dlg-body table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .dlg-body th, .dlg-body td { padding: 5px 8px; border-bottom: 1px solid #f0efeb; text-align: right; }
+  .dlg-body th:first-child, .dlg-body td:first-child { text-align: left; }
+  .dlg-body tr.sel td { background: #eef5fc; font-weight: 700; }
+  .dlg-body #dailyBody tr { cursor: pointer; }
+  .dlg-body p { color: var(--muted); margin: 8px 0 0; line-height: 1.6; }
+
+  @media print {
+    .toolbar { display: none; }
+    body { height: auto; display: block; overflow: visible; background: #fff; }
+    .stage { padding: 0; }
+    .frame { box-shadow: none; }
+    @page { size: A3 landscape; margin: 8mm; }
+  }
+</style>
+<style>.qrbtn{display:none!important}</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <span class="brand">FTIV LINE</span>
+  <div class="group">
+    <button id="prev" title="이전 생산일">◀</button>
+    <input type="date" id="date">
+    <button id="next" title="다음 생산일">▶</button>
+  </div>
+  <div class="seg" id="shiftSeg">
+    <button data-s="A">A조 (주간)</button>
+    <button data-s="B">B조 (야간)</button>
+  </div>
+  <span class="sep"></span>
+  <div class="group">
+    <span class="lab">트렌드</span>
+    <div class="seg" id="periodSeg"><button data-p="30">30일</button><button data-p="90">90일</button><button data-p="0">전체</button></div>
+    <div class="seg" id="trendShiftSeg"><button data-s="all">A+B</button><button data-s="A">A조</button><button data-s="B">B조</button></div>
+  </div>
+  <span class="sep"></span>
+  <div class="group">
+    <button id="openData">데이터 표</button>
+    <button id="full" title="현황판만 화면 가득 (Esc 로 나가기)">전체화면</button>
+    <button id="print">인쇄</button>
+    <button id="reset" title="이 날짜/시프트의 수기 입력 지우기">수기입력 초기화</button>
+  </div>
+  <span class="meta" id="meta"></span>
+</div>
+
+<div class="stage" id="stage"><div class="scaler" id="scaler"><div class="frame"><div class="board" id="board"></div></div></div></div>
+<div class="tip" id="tip"></div>
+
+<dialog id="qrDlg">
+  <div class="dlg-head"><b>핸드폰으로 현황판 옮기기</b><button id="qrClose">닫기</button></div>
+  <div class="qr-body"><div id="qrBig"></div><p id="qrInfo"></p></div>
+</dialog>
+
+<dialog id="idleDlg">
+  <div class="dlg-head"><b id="idleTitle">비가동 입력</b></div>
+  <form method="dialog">
+    <span>구분</span>
+    <div class="kind"><label class="p"><input type="radio" name="kind" value="p">계획 비가동</label><label class="u"><input type="radio" name="kind" value="u">비계획 비가동</label><label class="n"><input type="radio" name="kind" value="n">시간 없음</label></div>
+    <div class="sec">비가동요인</div>
+    <span class="tm">시작</span><input class="tm" type="time" id="idS">
+    <span class="cl">글자색</span><div class="kind cl"><label class="ck"><input type="radio" name="color" value="k">검정</label><label class="cg"><input type="radio" name="color" value="g">초록</label><label class="cr"><input type="radio" name="color" value="r">빨강</label></div>
+    <span>내용</span><input type="text" id="idX" placeholder="예: 설비 고장(OP70 실린더)" autocomplete="off">
+    <div class="sec">조치사항</div>
+    <span class="tm">종료</span><span class="tm endrow"><input type="time" id="idE"><small>아직 안 끝났으면 비워 두기</small></span>
+    <span>조치</span><input type="text" id="idA" placeholder="예: 실린더 교체 후 재가동" autocomplete="off">
+    <div class="err" id="idErr"></div>
+    <div class="btns"><button type="button" class="del" id="idDel">삭제</button><button type="button" id="idCancel">취소</button><button type="submit" class="save" id="idSave">저장</button></div>
+  </form>
+</dialog>
+
+<dialog id="dataDlg">
+  <div class="dlg-head"><b>PLC 데이터</b><button id="closeData">닫기</button></div>
+  <div class="dlg-body">
+    <h4>현황판 집계 근거 <span id="evidCap" style="font-weight:400;color:var(--muted)"></span></h4>
+    <div id="evidBody"></div>
+    <h4>일별 리크 불량률 <span id="dailyCap" style="font-weight:400;color:var(--muted)"></span></h4>
+    <table><thead><tr><th>일자</th><th>투입</th><th>양품</th><th>OPR</th><th>OVR</th></tr></thead><tbody id="dailyBody"></tbody></table>
+    <p>불량률 = 원인별 불량 ÷ 투입(양품+불량). 생산이 없거나 투입 50개 미만인 날은 트렌드에서 제외(가로축은 생산일만). 행을 클릭하면 현황판이 그 날짜로 이동합니다.</p>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  const DATA = window.PLC_DATA || {};
+  const SHIFT = window.PLC_SHIFT || {};  // 시프트별 최종불량·재작업 미투입 LOT
+  const META = window.PLC_META || { windows: {} };
+  const days = Object.keys(DATA).sort();
+  const DEFAULT_PLAN = [[122, 162], [149, 198], [143, 189], [163, 216], [143, 189]];
+  // 하우징조립·미분류는 실시간(PLC 검사결과 워드) 데이터에서 쓰는 원인
+  const CAUSE_ORDER = ['OPR', 'OVR', '코일저항', '코일조립', '하우징리크', '하우징조립', '스프링압력', '폴조립', '프레셔드롭', '기타', '미분류'];
+  const MIN_INPUT = 50;
+
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  // 수기 입력 저장소. 실시간 현황판(live.html) 안에서는 부모 창의 FTIV_MANUAL 을 통해 라인 PC 파일에 저장하고,
+  // 브라우저에도 예비로 한 부 남김. 그 밖(MFGreport·파일로 열기)에서는 브라우저에만 저장
+  const shared = (() => { try { return window.parent !== window && window.parent.FTIV_MANUAL || null; } catch { return null; } })();
+  const sharedKey = k => /^ftiv:(\d{4}-\d\d-\d\d:[AB]|defaults)$/.test(k);
+  const store = {
+    get(k, d) {
+      if (shared && sharedKey(k)) { const v = shared.data[k]; return v === undefined ? d : JSON.parse(JSON.stringify(v)); }
+      try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; }
+    },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} if (shared && sharedKey(k)) shared.save(k, JSON.parse(JSON.stringify(v))); },
+    del(k) { try { localStorage.removeItem(k); } catch {} if (shared && sharedKey(k)) shared.save(k, null); },
+  };
+
+  const params = new URLSearchParams(location.search);
+  let state = {
+    day: params.get('d') && DATA[params.get('d')] ? params.get('d') : store.get('ftiv:last-day', days[days.length - 1]),
+    shift: ['A', 'B'].includes(params.get('s')) ? params.get('s') : store.get('ftiv:last-shift', 'A'),
+  };
+  if (!DATA[state.day]) state.day = days[days.length - 1];
+  let trend = store.get('ftiv:side', { period: 30, shift: 'all' });
+  let viewEnd = null;  // 트렌드 창의 마지막 날짜(클릭해도 창이 흔들리지 않게 유지)
+
+  const key = () => `ftiv:${state.day}:${state.shift}`;
+  const manual = () => store.get(key(), {});
+  const defaults = () => store.get('ftiv:defaults', { workers: '', plan: { A: DEFAULT_PLAN, B: DEFAULT_PLAN } });
+
+  // ── 계획 비가동 자동 입력: 주간(A조), 오늘 날짜를 처음 그릴 때 한 번만 넣음(m.auto). 넣은 뒤에는 수기 입력과 같아서 눌러서 고치기·삭제 가능 ──
+  // 마감은 정시 17:20~17:30 / 잔업 19:50~20:00 — 정시·잔업을 바꾸면 자동으로 넣은 마감 줄(au: 'end')만 옮김
+  const AUTO_IDLE = [['08:30', '08:35', '체조'], ['08:35', '08:40', '조회'], ['13:30', '13:35', '체조']];
+  const AUTO_END = ot => ot ? ['19:50', '20:00', '마감 및 5S+'] : ['17:20', '17:30', '마감 및 5S+'];
+  function putAutoIdle(m, [s, e, x], au) {
+    const t = v => +v.slice(0, 2) * 60 + +v.slice(3, 5), tw = META.windows.A || [];
+    const i = tw.findIndex(([a, b]) => t(s) >= t(a) && t(s) < t(b)); if (i < 0) return;
+    m.idles = m.idles || []; const list = (m.idles[i] = (m.idles[i] || []).slice());
+    if (list.some(it => it.k !== 'n' && it.s === s && it.e === e)) return;   // 같은 시간이 이미 있으면 넣지 않음
+    list.push({ k: 'p', s, e, x, a: '', au });
+    list.sort((a, b) => (a.k === 'n') - (b.k === 'n') || (a.k === 'n' ? 0 : minutesOf(tw[i][0], a.s) - minutesOf(tw[i][0], b.s)));
+  }
+  const isTodayA = () => { const n = new Date(); return state.shift === 'A' && state.day === `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
+  function seedAutoIdles(m, ot) {
+    if (m.auto || !isTodayA()) return false;
+    AUTO_IDLE.forEach(it => putAutoIdle(m, it, 1));
+    putAutoIdle(m, AUTO_END(ot), 'end');
+    m.auto = 1; return true;
+  }
+  function moveAutoEnd(m, ot) {
+    if (!m.auto) return;
+    m.idles = (m.idles || []).map(l => l && l.filter(it => it.au !== 'end'));
+    putAutoIdle(m, AUTO_END(ot), 'end');
+  }
+
+  function minutesOf(a, b) {
+    const [h1, m1] = a.split(':').map(Number), [h2, m2] = b.split(':').map(Number);
+    return ((h2 * 60 + m2) - (h1 * 60 + m1) + 1440) % 1440;
+  }
+  // 시간대 진행 상태: 'done' 끝남 / 'live' 진행 중 / 'wait' 아직 시작 전.
+  // 시간대는 다음 시간대 시작 전까지(뒤 쉬는시간 포함)로 봄 — 08:30~10:30 은 10:40 까지. 마지막 시간대는 조 끝(A 20:30, B 08:00)까지
+  function winStatus(i, tw) {
+    const base = state.shift === 'A' ? 480 : 1230, len = state.shift === 'A' ? 750 : 690;
+    const off = t => (((+t.slice(0, 2) * 60 + +t.slice(3, 5)) - base) % 1440 + 1440) % 1440;
+    const start = i === 0 ? 0 : off(tw[i][0]), end = i + 1 < tw.length ? off(tw[i + 1][0]) : len;
+    const [y, mo, d] = state.day.split('-').map(Number);
+    const now = (Date.now() - new Date(y, mo - 1, d, 0, base).getTime()) / 60000;
+    return now >= end ? 'done' : now >= start ? 'live' : 'wait';
+  }
+  const clockText = () => { const n = new Date(); return `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}<small>(${'일월화수목금토'[n.getDay()]})</small>`; };
+  setInterval(() => { const c = document.getElementById('clock'); if (c) c.innerHTML = clockText(); }, 1000);
+  const pct = (n, d) => d ? (n / d * 100).toFixed(2) : '0.00';
+  const fmtPct = v => v.toFixed(v < 10 ? 2 : 1) + '%';
+  const md = d => `${+d.slice(5, 7)}/${+d.slice(8)}`;
+
+  // ── 일별 통계 / 트렌드 범위 ──
+  function dayStats(day, sh) {
+    const o = DATA[day]; if (!o) return null;
+    // good = 실적(재검사 양품 포함), input·ng·불량률 = 최초 검사 기준
+    let good = 0, good1 = 0, prtGood = 0, ng = 0, opr = 0, ovr = 0;
+    for (const s of sh === 'all' ? ['A', 'B'] : [sh]) {
+      for (const w of o[s] || []) { good += w.good; good1 += w.good1; prtGood += w.prtGood; ng += w.ng; opr += w.causes.OPR || 0; ovr += w.causes.OVR || 0; }
+    }
+    const input = good1 + ng;
+    return { day, good, good1, prtGood, ng, input, opr, ovr, oprR: input ? opr / input * 100 : 0, ovrR: input ? ovr / input * 100 : 0 };
+  }
+
+  function trendSeries() {
+    const all = days.map(d => dayStats(d, trend.shift)).filter(p => p && p.input >= MIN_INPUT);
+    if (!trend.period) return all;
+    // 기본은 최신 N 생산일. 선택일이 창 밖으로 나갈 때만 선택일이 끝이 되도록 창을 옮김
+    const si = all.findIndex(p => p.day === state.day);
+    let end = all.findIndex(p => p.day === viewEnd) + 1 || all.length;
+    if (si >= 0 && (si >= end || si < end - trend.period)) end = Math.max(si + 1, Math.min(all.length, trend.period));
+    viewEnd = all[end - 1]?.day;
+    return all.slice(Math.max(0, end - trend.period), end);
+  }
+
+  function render() {
+    const wins = (DATA[state.day] || {})[state.shift];
+    const tw = META.windows[state.shift] || [];
+    const m = manual(), dft = defaults();
+    if (seedAutoIdles(m, m.ot ?? dft.ot ?? true)) store.set(key(), m);
+    const plan = m.plan || dft.plan[state.shift] || DEFAULT_PLAN;
+    const [y, mo, d] = state.day.split('-');
+    const lot = `COFTV${y.slice(2)}${mo}${d}${state.shift}1`;
+
+    let cum = 0, planSum = 0, planMaxSum = 0, ngSum = 0, good1Sum = 0, allDone = true, dueMin = 0, dueMax = 0;
+    const rtSum = { rt: 0, rtGood: 0, rtNg: 0, prt: 0, prtGood: 0, prtNg: 0 };
+    const causeSum = {};
+    // 불량 4칸: 총불량 / OPR / OVR / 기타(나머지 원인 내역). 최초 검사 기준, 비율은 시간대 최초 투입 대비
+    // win: 시간대 번호(Total 행은 -1). 수량이 있으면 눌러서 LOT 목록을 볼 수 있게 data-ng="시간대|원인" 을 붙임
+    const ngCells = (causes, ng, input, win) => {
+      if (input == null) return '<td class="ngcell"></td>'.repeat(4);
+      const c = (n, cls = '', extra = '', ck = '') => `<td class="ngcell ${cls} ${n ? '' : 'zero'}" ${n && window.PLC_UNITS ? `data-ng="${win}|${ck}" title="클릭 → LOT 목록"` : ''}><b>${n}</b><span>(${pct(n, input)}%)</span>${extra}</td>`;
+      const etcList = CAUSE_ORDER.filter(k => k !== 'OPR' && k !== 'OVR' && causes[k]);
+      const etc = etcList.reduce((a, k) => a + causes[k], 0);
+      const detail = etcList.map(k => `${k} ${causes[k]}`).join(' · ');
+      return c(ng, 'total', '', 'all') + c(causes.OPR || 0, '', '', 'OPR') + c(causes.OVR || 0, '', '', 'OVR') + c(etc, '', detail ? `<small>${detail}</small>` : '', 'etc');
+    };
+    // 불량 났는데 이 시프트 안에 재작업 투입 기록이 없는 LOT
+    const pendingLine = () => {
+      const p = SHIFT[state.day]?.[state.shift]?.pending || [];
+      if (!p.length) return '';
+      // 원인별 개수만: OPR / OVR / 기타. 누르면(LOT 목록이 있을 때) 그 원인의 미투입 LOT 목록
+      const n = { OPR: 0, OVR: 0, etc: 0 };
+      p.forEach(([, c]) => { n[c === 'OPR' || c === 'OVR' ? c : 'etc']++; });
+      const part = (k, lab) => window.PLC_UNITS && n[k] ? `<a data-pend="${k}">${lab} ${n[k]}개</a>` : `${lab} ${n[k]}개`;
+      return `<div class="r">재작업 미투입 ${p.length}개: ${part('OPR', 'OPR')}, ${part('OVR', 'OVR')}, ${part('etc', '기타')}</div>`;
+    };
+    const retestLine = r => (r.rt ? `<div class="ln r">재검사 ${r.rt}개 중 ${r.rtNg}개 불량 ${r.rtGood}개 양품</div>` : '') +
+      (r.prt ? `<div class="ln r">이전 대기품 재작업 ${r.prt}개 중 ${r.prtNg}개 불량 ${r.prtGood}개 양품 (양품 실적 포함)</div>` : '');
+    // 정시/잔업: 정시면 마지막 시간대(A 18:00~20:00 / B 06:00~08:00)는 계획·목표에서 뺌
+    const ot = m.ot ?? dft.ot ?? true;
+    // 핸드폰(check 앱 QR+)으로 옮길 표 내용 — 아래 행마다 채움
+    const etcOf = c => Object.entries(c || {}).filter(([k]) => k !== 'OPR' && k !== 'OVR').reduce((a, [, v]) => a + v, 0);
+    const txt = html => html.replace(/<\/div>/g, '\n').replace(/<[^>]+>/g, '').trim();
+    const etcDetail = c => CAUSE_ORDER.filter(k => k !== 'OPR' && k !== 'OVR' && (c || {})[k]).map(k => `${k} ${c[k]}`).join(' · ');
+    const qr = { v: 2, line: 'FTIV', d: state.day, s: state.shift, ot: ot ? 1 : 0, r: [] };
+    const rows = tw.map(([s, e], i) => {
+      const w = wins ? wins[i] : null;
+      const on = ot || i < tw.length - 1;
+      const st = winStatus(i, tw);
+      if (on && st !== 'done') allDone = false;
+      const good = w && (st !== 'wait' || w.good) ? w.good : null;   // 시작 전 시간대는 비워 둠
+      cum += good || 0;
+      const pMin = Number(plan[i]?.[0]) || 0, pMax = Number(plan[i]?.[1] ?? plan[i]?.[0]) || 0;
+      if (on) {
+        planSum += pMin; planMaxSum += pMax;
+        if (st === 'done') { dueMin += pMin; dueMax += pMax; } else if (st === 'live') dueMax += pMax;   // 달성률 도넛 색 판단용
+      }
+      // 끝난 시간대: 실적은 그 시간대 계획 범위, 누적은 누적 계획 범위 안이면 초록 / 모자라거나 넘으면 빨강. 진행 중은 파랑
+      const color = (v, lo, hi) => !on ? '' : st === 'live' ? 'live' : v >= lo && v <= hi ? 'ok' : 'bad';
+      const actCls = good == null ? '' : color(good, pMin, pMax);
+      const cumCls = good == null ? '' : color(cum, planSum, planMaxSum);
+      if (w) {
+        ngSum += w.ng; good1Sum += w.good1;
+        for (const k in rtSum) rtSum[k] += w[k];
+        for (const [k, v] of Object.entries(w.causes)) causeSum[k] = (causeSum[k] || 0) + v;
+      }
+      {
+        const shown = w && good != null, cz = shown ? w.causes : {};
+        const idles = ((m.idles || [])[i] || []).map(it => [it.k, it.s || '', it.x || '', it.e || '', it.a || '', it.c || '']);
+        if ((m.idle || [])[i] || (m.act || [])[i]) idles.unshift(['n', '', (m.idle || [])[i] || '', '', (m.act || [])[i] || '', 'k']);   // 예전 자유 입력
+        // [시간, 계획포함, 계획하한, 계획상한, 실적, 실적색, 누적, 누적색, 총불량, OPR, OVR, 기타, 최초투입, OP50, OP10, 비가동·조치, 재검사 글, 서명, 기타 내역]
+        qr.r.push([`${s}~${e}`, on ? 1 : 0, pMin, pMax, good, actCls, good == null ? null : cum, cumCls,
+          shown ? w.ng : null, cz.OPR || 0, cz.OVR || 0, etcOf(cz), shown ? w.good1 + w.ng : 0,
+          (m.who || [])[i] || '', (m.who10 || [])[i] || '', idles, w ? txt(retestLine(w)) : '',
+          (m.sign || [])[i] ? 1 : 0, etcDetail(cz)]);
+      }
+      return `
+        <tr class="${on ? '' : 'off'}">
+          <td class="pncell">${i === 0 ? `<span class="lot">${lot}</span>` : ''}
+            <div class="ops">
+              <div class="op"><em>OP50</em><span class="who" contenteditable data-k="who.${i}" data-ph="이름">${esc((m.who || [])[i] || '')}</span></div>
+              <div class="op"><em>OP10</em><span class="who" contenteditable data-k="who10.${i}" data-ph="이름">${esc((m.who10 || [])[i] || '')}</span></div>
+            </div></td>
+          <td class="timecell">${s}~${e}<small>${on ? `(${minutesOf(s, e)}분)` : '잔업 없음'}</small></td>
+          <td class="plancell">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="2" y1="98" x2="98" y2="4" stroke="#2b2f36" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>
+            <span class="plan" contenteditable data-k="plan.${i}">${esc(plan[i] ? plan[i].join('~') : '')}</span>
+            <span class="act ${actCls}">${good ?? ''}</span>
+          </td>
+          <td class="cumcell ${cumCls}">${good == null ? '' : cum}</td>
+          ${w && good != null ? ngCells(w.causes, w.ng, w.good1 + w.ng, i) : ngCells({}, 0, null)}
+          <td class="notes">${idleLines(m, i, w ? retestLine(w) : '')}</td>
+          <td class="notes">${actLines(m, i, w ? retestLine(w) : '')}</td>
+          <td class="signcell" data-k="sign.${i}" title="클릭해서 확인 서명">${(m.sign || [])[i] ? 'M' : ''}</td>
+        </tr>`;
+    }).join('');
+
+    const totalInput = good1Sum + ngSum;  // 최초 검사 투입
+    const totCls = !wins ? '' : !allDone ? 'live' : cum >= planSum && cum <= planMaxSum ? 'ok' : 'bad';
+    if (wins) {
+      const nm = m.wname || dft.wname || [m.workers ?? dft.workers ?? ''];
+      // 핸드폰에서 이 현황판 양식 그대로 다시 그릴 수 있게: 작업자(인원수만큼), 합계, 달성률 기준, 특이사항(재검사·미투입·수기)
+      qr.wc = m.wcount || dft.wcount || 1;
+      qr.w = nm.slice(0, qr.wc).map(x => x || '');
+      qr.t = [planSum, cum, totCls, ngSum, causeSum.OPR || 0, causeSum.OVR || 0, etcOf(causeSum), totalInput, etcDetail(causeSum)];
+      qr.du = [dueMin, dueMax];
+      qr.sx = [txt(retestLine(rtSum)), txt(pendingLine()), m.special || ''];
+      const n = new Date();
+      qr.at = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')} ${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+      window.FTIV_QR = qr;
+    } else window.FTIV_QR = null;
+
+    $('#board').innerHTML = `
+      <div class="top">
+        <div class="clock" id="clock">${clockText()}</div>
+        <div class="title"><h1>FTIV LINE 생산 현황 Board</h1><h2>(Fuel Tank Isolation Valve)</h2></div>
+        <button class="qrbtn" id="qrBtn" ${window.FTIV_QR && window.FTIV_QR_SVG ? '' : 'hidden'} title="눌러서 크게 → 핸드폰 check 앱 [현황판 → QR+] 로 찍기"><span id="qrMini">${window.FTIV_QR_SVG || ''}</span><b>QR</b></button>
+
+        <div class="left2">
+          <div class="field"><span class="lab">생 산 일 자</span><span class="colon">:</span><span class="val">${state.day}(${state.shift})</span>
+            <span class="otseg"><button data-ot="${ot ? 0 : 1}" class="on" title="${ot ? (state.shift === 'A' ? '20:00' : '08:00') : (state.shift === 'A' ? '17:30' : '05:30')} 까지 · 누르면 ${ot ? '정시' : '잔업'}로 바뀜">${ot ? '잔업' : '정시'}</button></span></div>
+          <div class="field"><span class="lab">작 업 자</span><span class="colon">:</span><span class="val workers">${workersHtml(m, dft)}</span></div>
+          <div class="daysum" id="daysum"></div>
+        </div>
+        <div class="trends">
+          <div class="trend donut"><div class="t-head"><span class="t-title">목표 달성률</span></div><div class="dn" id="achDonut"></div></div>
+          <div class="trend donut"><div class="t-head"><span class="t-title">불량 점유율</span></div><div class="dn" id="ngDonut"></div></div>
+          <div class="trend"><div class="t-head"><span class="t-title"><i style="background:var(--series-opr)"></i>OPR 리크 불량률 (일별)</span><span class="t-sub" id="oprSub"></span></div><svg id="oprChart"></svg></div>
+          <div class="trend"><div class="t-head"><span class="t-title"><i style="background:var(--series-ovr)"></i>OVR 리크 불량률 (일별)</span><span class="t-sub" id="ovrSub"></span></div><svg id="ovrChart"></svg></div>
+        </div>
+      </div>
+      <table class="grid">
+        <colgroup><col class="c-pn"><col class="c-time"><col class="c-plan"><col class="c-cum"><col class="c-ng"><col class="c-opr"><col class="c-ovr"><col class="c-etc"><col><col class="c-act"><col class="c-sign"></colgroup>
+        <thead>
+          <tr><th rowspan="2">Part No</th><th rowspan="2">작업시간</th><th rowspan="2">계획/실적</th><th rowspan="2">누적수량</th><th colspan="4" class="ng-head">불량 <small>수량 / %</small></th><th rowspan="2">비가동요인</th><th rowspan="2" colspan="2">조치사항</th></tr>
+          <tr><th class="sub">총불량</th><th class="sub"><i style="background:var(--series-opr)"></i>OPR</th><th class="sub"><i style="background:var(--series-ovr)"></i>OVR</th><th class="sub">기타</th></tr>
+        </thead>
+        <tbody>
+          ${rows}
+          <tr class="total-row">
+            <td class="lab" colspan="2">Total</td>
+            <td class="plancell">
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="2" y1="98" x2="98" y2="4" stroke="#2b2f36" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>
+              <span class="plan">${planSum}</span><span class="act ${totCls}">${wins ? cum : ''}</span>
+            </td>
+            <td class="cumcell ${totCls}">${wins ? cum : ''}</td>
+            ${wins ? ngCells(causeSum, ngSum, totalInput, -1) : ngCells({}, 0, null)}
+            <td class="special" colspan="3"><span class="hdr">특이사항</span>
+              <div class="body">
+                ${wins ? `${retestLine(rtSum).replace(/class="ln r"/g, 'class="r"')}
+                ${pendingLine()}` : ''}
+                <div class="k" contenteditable data-k="special" data-ph="특이사항 입력">${esc(m.special || '')}</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      ${wins ? '' : `<div class="empty-banner">${state.day} ${state.shift}조 PLC 생산 기록이 없습니다.</div>`}
+    `;
+
+    $('#board').style.setProperty('--blink-delay', -(Date.now() % 1600) + 'ms');
+    drawDonuts(wins, cum, planSum, dueMin, dueMax, causeSum, ngSum);
+    syncPairs();
+    renderEvidence(wins, tw);
+    $('#date').value = state.day;
+    document.querySelectorAll('#shiftSeg button').forEach(b => b.classList.toggle('on', b.dataset.s === state.shift));
+    try { history.replaceState(null, '', `?d=${state.day}&s=${state.shift}`); } catch (e) {}  // srcdoc 안에서는 주소를 바꿀 수 없음
+    store.set('ftiv:last-day', state.day); store.set('ftiv:last-shift', state.shift);
+    renderTrend();
+    updateQrMini();   // 트렌드·당일 집계까지 QR 에 담은 뒤에 만듦
+    fit();
+  }
+
+  // ── 작업자: 인원수 m.wcount(1~3) + 이름 m.wname[]. 예전 한 줄 입력(m.workers)은 첫 이름으로 보여 줌 ──
+  function workersHtml(m, dft) {
+    const n = m.wcount || dft.wcount || 1;
+    const names = m.wname || dft.wname || [m.workers ?? dft.workers ?? ''];
+    return `<select id="wcnt" title="작업 인원">${[1, 2, 3].map(k => `<option value="${k}" ${k === n ? 'selected' : ''}>${k}명</option>`).join('')}</select>` +
+      Array.from({ length: n }, (_, i) => `<span class="wn" contenteditable data-k="wname.${i}" data-ph="이름${n > 1 ? i + 1 : ''}">${esc(names[i] || '')}</span>`).join('');
+  }
+
+  // ── 비가동요인 + 조치사항 (한 세트): 시간대마다 [{ k: 'p' 계획 | 'u' 비계획 | 'n' 시간 없음, s: 시작, x: 내용, e: 종료(진행 중이면 ''), a: 조치, c: 글자색(시간 없음만 k/g/r) }]
+  // 비가동요인 칸 = [구분] 시작 + 내용, 조치사항 칸 = 같은 줄 높이에 ~종료(분) + 조치. 줄 높이는 render 뒤 syncPairs 가 맞춤
+  function idleLines(m, i, rt) {
+    const list = (m.idles || [])[i] || [];
+    const old = (m.idle || [])[i];   // 예전 자유 입력 글
+    const line = (it, j) => {
+      const attr = `data-idle="${i}|${j}" data-pair="${i}-${j}" title="눌러서 고치기"`;
+      if (it.k === 'n') return `<div class="ln idle ${it.c || 'k'}" ${attr}>${esc(it.x)}</div>`;
+      return `<div class="ln idle ${it.k === 'p' ? 'g' : 'r'}" ${attr}><span class="tag">${it.k === 'p' ? '계획' : '비계획'}</span>${esc(it.s)} ${esc(it.x)}</div>`;
+    };
+    return (rt ? `<div data-pair="${i}-rt">${rt}</div>` : '') + (old ? `<div class="ln k" data-pair="${i}-old">${esc(old)}</div>` : '') +
+      list.map(line).join('') + `<div class="ln idle-add" data-idle="${i}|new" data-pair="${i}-add">＋ 비가동 입력</div>`;
+  }
+  function actLines(m, i, rt) {
+    const list = (m.idles || [])[i] || [];
+    const old = (m.act || [])[i];   // 예전 조치사항 자유 입력 글
+    const line = (it, j) => {
+      const end = it.k === 'n' ? '' : it.e ? `<b>~${esc(it.e)}</b> <small>(${minutesOf(it.s, it.e)}분)</small> ` : `<span class="${it.k === 'p' ? 'g' : 'r'}">(진행 중)</span> `;
+      return `<div class="ln idle k" data-idle="${i}|${j}" data-pair="${i}-${j}" title="눌러서 고치기">${end}${esc(it.a || '')}</div>`;
+    };
+    return (rt ? `<div data-pair="${i}-rt"></div>` : '') + (m.idle?.[i] ? `<div data-pair="${i}-old"></div>` : '') +
+      list.map(line).join('') + (old ? `<div class="ln k" data-pair="${i}-add">${esc(old)}</div>` : `<div data-pair="${i}-add"></div>`);
+  }
+  // 같은 data-pair 끼리(비가동요인 줄 ↔ 조치사항 줄) 높이를 맞춤
+  function syncPairs() {
+    const g = {};
+    document.querySelectorAll('#board [data-pair]').forEach(el => { el.style.minHeight = ''; (g[el.dataset.pair] = g[el.dataset.pair] || []).push(el); });
+    Object.values(g).forEach(els => { if (els.length < 2) return; const h = Math.max(...els.map(e => e.offsetHeight)); els.forEach(e => { e.style.minHeight = h + 'px'; }); });
+  }
+  const idleKind = () => document.querySelector('#idleDlg [name=kind]:checked')?.value;
+  const syncIdleForm = () => $('#idleDlg form').classList.toggle('notime', idleKind() === 'n');
+  let idleEdit = null;   // [시간대, 순번 | 'new']
+  function openIdle(i, j) {
+    const m = manual(), it = j === 'new' ? null : ((m.idles || [])[i] || [])[+j];
+    const tw = META.windows[state.shift] || [];
+    idleEdit = [i, j];
+    $('#idleTitle').textContent = `${tw[i] ? tw[i].join('~') : ''} 비가동 ${it ? '고치기' : '입력'}`;
+    $('#idS').value = it ? it.s : (tw[i] ? tw[i][0] : '');
+    $('#idE').value = it ? it.e : '';
+    $('#idX').value = it ? it.x : '';
+    $('#idA').value = it ? it.a || '' : '';
+    document.querySelectorAll('#idleDlg [name=kind]').forEach(r => { r.checked = r.value === (it ? it.k : 'u'); });
+    document.querySelectorAll('#idleDlg [name=color]').forEach(r => { r.checked = r.value === (it && it.c || 'k'); });
+    syncIdleForm();
+    $('#idDel').hidden = !it; $('#idErr').textContent = '';
+    $('#idleDlg').showModal();
+  }
+  function saveIdle(del) {
+    const [i, j] = idleEdit, m = manual();
+    m.idles = m.idles || []; const list = (m.idles[i] = (m.idles[i] || []).slice());
+    if (del) list.splice(+j, 1);
+    else {
+      const k = idleKind(), x = $('#idX').value.trim(), a = $('#idA').value.trim();
+      if (!k) { $('#idErr').textContent = '구분을 골라 주세요.'; return; }
+      let it;
+      if (k === 'n') {
+        if (!x) { $('#idErr').textContent = '내용을 넣어 주세요.'; return; }
+        it = { k, c: document.querySelector('#idleDlg [name=color]:checked')?.value || 'k', x, a };
+      } else {
+        const s = $('#idS').value, e = $('#idE').value;   // 종료는 비워도 됨(진행 중)
+        if (!s) { $('#idErr').textContent = '시작 시각을 넣어 주세요.'; return; }
+        it = { k, s, e, x, a };
+      }
+      if (j === 'new') list.push(it); else list[+j] = it;
+      // 시간 있는 것은 시작 순, 시간 없는 글은 그 뒤(입력 순서 유지)
+      const w0 = META.windows[state.shift][i][0];
+      list.sort((a, b) => (a.k === 'n') - (b.k === 'n') || (a.k === 'n' ? 0 : minutesOf(w0, a.s) - minutesOf(w0, b.s)));
+    }
+    store.set(key(), m);
+    $('#idleDlg').close(); render();
+  }
+
+  // ── QR: 표 내용(window.FTIV_QR)을 JSON → deflate-raw 압축 → base64url 로 "FTIVQR1." 뒤에 붙여 QR 하나에 담음 ──
+  // 인터넷 없이 만들기 위해 qrcode.js(Kazuhiko Arase, MIT)를 같은 폴더에서 불러옴. 없으면(MFGreport 등) QR 버튼을 숨김
+  // 핸드폰 기본 카메라로 찍으면 이 주소가 열림 → check 앱이 #ftivqr= 뒤의 데이터로 바로 표 미리보기
+  const CHECK_QR_URL = 'https://eatonmfgkorea-maker.github.io/check/#ftivqr=';
+  async function qrString(obj) {
+    const z = new Blob([new TextEncoder().encode(JSON.stringify(obj))]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    const buf = new Uint8Array(await new Response(z).arrayBuffer());
+    let b = ''; for (let i = 0; i < buf.length; i++) b += String.fromCharCode(buf[i]);
+    return CHECK_QR_URL + 'FTIVQR1.' + btoa(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  // QR 한 개 한도(약 2,900자)를 넘으면 긴 글부터 줄여서 다시
+  async function boardQrText() {
+    let o = window.FTIV_QR; if (!o) return null;
+    // QR 이 너무 촘촘하면 잘 안 찍힘 → 2,000자를 넘으면 트렌드는 최근 30일만 담음
+    if (o.tr && o.tr.length > 30) {
+      const s = await qrString(o);
+      if (s.length <= 2000) return s;
+      o = { ...o, tr: o.tr.slice(-30) };
+    }
+    for (const cut of [0, 40, 20, 8]) {
+      if (cut) o = JSON.parse(JSON.stringify(o), (k, v) => typeof v === 'string' && v.length > cut && !/^\d{4}-|~|^ftiv/.test(v) ? v.slice(0, cut) + '…' : v);
+      const s = await qrString(o);
+      if (s.length <= 2800) return s;
+    }
+    return null;
+  }
+  function qrSvg(text) {
+    const q = qrcode(0, 'L'); q.addData(text); q.make();
+    const n = q.getModuleCount(); let p = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) p += `M${c + 4} ${r + 4}h1v1h-1z`;
+    return `<svg viewBox="0 0 ${n + 8} ${n + 8}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${p}" fill="#000"/></svg>`;
+  }
+  let qrSeq = 0;
+  async function updateQrMini() {
+    const btn = $('#qrBtn'), my = ++qrSeq;
+    if (!btn || typeof qrcode === 'undefined' || typeof CompressionStream === 'undefined' || !window.FTIV_QR) { if (btn) btn.hidden = true; return; }
+    // 작은 QR 은 처음 한 번만 그리고 그 뒤로는 그대로 둠(버튼 표시용, 작아서 어차피 안 찍힘). 최신 내용은 눌러서 크게 볼 때(openQr) 만듦
+    if (window.FTIV_QR_SVG) { btn.hidden = false; return; }
+    try {
+      const s = await boardQrText(); if (my !== qrSeq || !s) return;
+      const mini = $('#qrMini'), b = $('#qrBtn'); if (!mini || !b) return;
+      window.FTIV_QR_SVG = qrSvg(s); mini.innerHTML = window.FTIV_QR_SVG;
+      b.hidden = false;
+    } catch (e) { btn.hidden = true; }
+  }
+  async function openQr() {
+    const s = await boardQrText(); if (!s) { alert('QR 에 담기에 내용이 너무 많습니다.'); return; }
+    const o = window.FTIV_QR;
+    $('#qrBig').innerHTML = qrSvg(s);
+    $('#qrInfo').innerHTML = `핸드폰 <b>기본 카메라</b>로 찍고 뜨는 링크를 누르면 check 앱에 이 표가 열립니다 (또는 check 앱 → 현황판 → QR+) · ${esc(o.d)}(${esc(o.s)}) ${esc(o.at.slice(11))} 기준 · 닫으면 화면이 다시 갱신됩니다.`;
+    $('#qrDlg').showModal();
+  }
+
+  // ── 도넛: 목표 달성률(실적 ÷ 계획 합계) / 불량 점유율(이번 조 최초 불량 중 OPR·OVR·기타) ──
+  function donutSvg(segs, total, center, sub) {
+    const R = 64, C = 2 * Math.PI * R;
+    let off = 0, arcs = '';
+    for (const s of segs) {
+      if (!s.v || !total) continue;
+      const len = Math.min(s.v / total, 1) * C;
+      arcs += `<circle r="${R}" cx="90" cy="90" fill="none" stroke="${s.c}" stroke-width="26" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 90 90)"/>`;
+      off += len;
+    }
+    return `<svg viewBox="0 0 180 180"><circle r="${R}" cx="90" cy="90" fill="none" stroke="#e7e9ec" stroke-width="26"/>${arcs}
+      <text x="90" y="${sub ? 92 : 102}" text-anchor="middle" class="dn-c">${center}</text>${sub ? `<text x="90" y="118" text-anchor="middle" class="dn-s">${sub}</text>` : ''}</svg>`;
+  }
+  // 달성률 색: 지금까지 끝난 시간대 계획 하한 합(dueMin) 이상, 진행 중 시간대 상한까지 더한 합(dueMax) 이하면 초록, 벗어나면 빨강.
+  // 조 시작 직후엔 끝난 시간대가 없어 기준이 0 → 초록에서 시작. 조가 끝나면 Total 판정과 같아짐
+  function drawDonuts(wins, cum, planSum, dueMin, dueMax, causeSum, ngSum) {
+    const pct = planSum ? cum / planSum * 100 : 0;
+    const col = !wins ? '#b7bcc4' : cum >= dueMin && cum <= dueMax ? 'var(--green)' : 'var(--red)';
+    $('#achDonut').innerHTML = donutSvg([{ v: Math.min(cum, planSum), c: col }], planSum, `${Math.round(pct)}%`, `${cum.toLocaleString()} / ${planSum.toLocaleString()}`);
+    const etc = Object.entries(causeSum).filter(([k]) => k !== 'OPR' && k !== 'OVR').reduce((a, [, v]) => a + v, 0);
+    const segs = [{ k: 'OPR', v: causeSum.OPR || 0, c: 'var(--series-opr)' }, { k: 'OVR', v: causeSum.OVR || 0, c: 'var(--series-ovr)' }, { k: '기타', v: etc, c: '#9aa1ab' }];
+    const leg = segs.map(s => `<div class="lg-row"><i style="background:${s.c}"></i><b>${s.k}</b><span>${s.v}개</span><em>${ngSum ? (s.v / ngSum * 100).toFixed(1) : '0.0'}%</em></div>`).join('');
+    $('#ngDonut').innerHTML = donutSvg(segs, ngSum, ngSum ? `${ngSum}` : '0', ngSum ? '불량 개' : '불량 없음') + `<div class="dn-leg">${leg}</div>`;
+  }
+
+  function renderEvidence(wins, tw) {
+    $('#evidCap').textContent = `${state.day} ${state.shift}조`;
+    if (!wins) { $('#evidBody').innerHTML = '<p>해당 시프트 데이터 없음</p>'; return; }
+    const tr = wins.map((w, i) => `<tr><td>${tw[i][0]}~${tw[i][1]}</td><td>${w.good}</td><td>${w.good1 + w.ng}</td><td>${w.ng}</td><td>${w.rt ? `${w.rt} (양품 ${w.rtGood} / 불량 ${w.rtNg})` : '-'}</td><td>${w.prt ? `${w.prt} (양품 ${w.prtGood} / 불량 ${w.prtNg})` : '-'}</td><td>${w.first || '-'}~${w.last || '-'}</td><td>${Object.entries(w.causes).map(([k, v]) => `${k} ${v}`).join(', ') || '-'}</td></tr>`).join('');
+    $('#evidBody').innerHTML = `
+      <table><thead><tr><th>시간대</th><th>실적</th><th>최초 투입</th><th>최초 불량</th><th>재검사</th><th>이전 대기품</th><th>생산 기록</th><th>불량원인</th></tr></thead><tbody>${tr}</tbody></table>
+      <p>실적 = 그 시간대에 실제로 양품이 된 수량(포장 수량). 같은 시프트 재작업 양품과 이전 시프트 대기품 재작업 양품을 포함하고, 이미 양품인 제품이 또 양품으로 찍힌 중복은 제외. 휴식시간에 찍힌 실적은 직전 시간대에 포함.
+      재검사 = 이전에 검사된 적 있는 MARKING이 다시 측정된 것. 총수량(최초 투입)은 처음 검사한 시프트에만 들어가며, 총수량 = (실적 − 이전 대기품 양품) + 최종불량 + 재작업 미투입. 불량 수량·원인·불량률은 최초 검사 기준(최초 투입 대비). 불량원인은 공정 순서(코일조립 → 스프링압력 → 폴조립 → 코일저항 → 하우징리크 → OPR/OVR 리크 → 프레셔드롭) 중 측정값이 비었거나 규격을 벗어난 첫 공정으로 판정.
+      계획·작업자·비가동요인·조치사항·특이사항은 수기 입력이며 이 브라우저에 저장됩니다.</p>`;
+  }
+
+  // ── 트렌드 차트 (현황판 상단, 구 Part No 자리) ──
+  const niceMax = v => { const st = [0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100]; const t = v / 4; return (st.find(s => s >= t) || 100) * 4; };
+
+  function drawChart(svg, pts, key, color, avg) {
+    const W = svg.clientWidth || 800, H = svg.clientHeight || 230, m = { l: 52, r: 14, t: 14, b: 30 };
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const n = pts.length;
+    if (!n) { svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle">데이터 없음</text>`; return; }
+    const ymax = niceMax(Math.max(...pts.map(p => p[key])) * 1.05 || 1);
+    const x = i => m.l + (n === 1 ? (W - m.l - m.r) / 2 : i * (W - m.l - m.r) / (n - 1));
+    const y = v => m.t + (1 - v / ymax) * (H - m.t - m.b);
+    let g = '';
+    for (let k = 0; k <= 4; k++) {
+      const v = ymax * k / 4, yy = y(v).toFixed(1);
+      g += `<line x1="${m.l}" x2="${W - m.r}" y1="${yy}" y2="${yy}" stroke="${k ? 'var(--grid)' : 'var(--axis)'}" stroke-width="1"/>`;
+      g += `<text x="${m.l - 8}" y="${+yy + 5}" text-anchor="end">${v % 1 ? v.toFixed(1) : v}%</text>`;
+    }
+    // x 라벨: 짧은 기간은 일정 간격 날짜, 긴 기간은 월 시작
+    const step = Math.max(1, Math.ceil(n / 8));
+    let lastLabelX = -99;
+    pts.forEach((p, i) => {
+      const monthStart = i === 0 || p.day.slice(5, 7) !== pts[i - 1].day.slice(5, 7);
+      if ((n <= 60 ? i % step === 0 : monthStart) && x(i) - lastLabelX > 56) {
+        g += `<text x="${x(i).toFixed(1)}" y="${H - 7}" text-anchor="middle">${n <= 60 ? md(p.day) : +p.day.slice(5, 7) + '월'}</text>`;
+        lastLabelX = x(i);
+      }
+    });
+    const si = pts.findIndex(p => p.day === state.day);
+    if (si >= 0) g += `<rect x="${(x(si) - 7).toFixed(1)}" y="${m.t}" width="14" height="${H - m.t - m.b}" fill="#005eb8" opacity=".09" rx="3"/>`;
+    const ay = y(avg).toFixed(1);
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${ay}" y2="${ay}" stroke="var(--text-secondary)" stroke-width="1.2" stroke-dasharray="6 5"/>`;
+    g += `<text x="${m.l + 6}" y="${+ay - 6}" style="fill:var(--text-secondary)">평균 ${fmtPct(avg)}</text>`;
+    g += `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p[key]).toFixed(1)).join('')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    if (n <= 45) pts.forEach((p, i) => { g += `<circle cx="${x(i).toFixed(1)}" cy="${y(p[key]).toFixed(1)}" r="3.5" fill="${color}"/>`; });
+    if (si >= 0) g += `<circle cx="${x(si).toFixed(1)}" cy="${y(pts[si][key]).toFixed(1)}" r="7" fill="${color}" stroke="#fff" stroke-width="2.5"/>`;
+    g += `<line class="xh" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--text-muted)" stroke-width="1" visibility="hidden"/>`;
+    g += `<circle class="hd" r="6" fill="${color}" stroke="#fff" stroke-width="2" visibility="hidden"/>`;
+    g += `<rect class="hit" x="${m.l - 10}" y="0" width="${W - m.l - m.r + 20}" height="${H}" fill="transparent"/>`;
+    svg.innerHTML = g;
+
+    const hit = svg.querySelector('.hit'), xh = svg.querySelector('.xh'), hd = svg.querySelector('.hd'), tip = $('#tip');
+    const nearest = ev => {
+      const r = svg.getBoundingClientRect();
+      const px = (ev.clientX - r.left) * W / r.width;
+      return Math.max(0, Math.min(n - 1, Math.round(n === 1 ? 0 : (px - m.l) / ((W - m.l - m.r) / (n - 1)))));
+    };
+    hit.onpointermove = ev => {
+      const i = nearest(ev), p = pts[i];
+      xh.setAttribute('x1', x(i)); xh.setAttribute('x2', x(i)); xh.setAttribute('visibility', 'visible');
+      hd.setAttribute('cx', x(i)); hd.setAttribute('cy', y(p[key])); hd.setAttribute('visibility', 'visible');
+      tip.replaceChildren();
+      const row = (c, val, lab) => { const d = document.createElement('div'); d.className = 't-row'; const k = document.createElement('i'); k.style.background = c; const b = document.createElement('b'); b.textContent = val; const s = document.createElement('span'); s.textContent = lab; d.append(k, b, s); return d; };
+      const dt = document.createElement('div'); dt.className = 't-date'; dt.textContent = `${p.day} · 투입 ${p.input.toLocaleString()}`;
+      const hint = document.createElement('div'); hint.className = 't-hint'; hint.textContent = '클릭 → 현황판 이동';
+      tip.append(dt, row('var(--series-opr)', fmtPct(p.oprR), ` OPR ${p.opr}개`), row('var(--series-ovr)', fmtPct(p.ovrR), ` OVR ${p.ovr}개`), hint);
+      tip.style.display = 'block';
+      tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8) + 'px';
+      tip.style.top = Math.min(ev.clientY + 14, window.innerHeight - tip.offsetHeight - 8) + 'px';
+    };
+    hit.onpointerleave = () => { xh.setAttribute('visibility', 'hidden'); hd.setAttribute('visibility', 'hidden'); tip.style.display = 'none'; };
+    hit.onclick = ev => { state.day = pts[nearest(ev)].day; tip.style.display = 'none'; render(); };
+  }
+
+  function renderTrend() {
+    const pts = trendSeries();
+    const sum = k => pts.reduce((a, p) => a + p[k], 0);
+    const tin = sum('input');
+    const avgOpr = tin ? sum('opr') / tin * 100 : 0, avgOvr = tin ? sum('ovr') / tin * 100 : 0;
+    const cur = dayStats(state.day, trend.shift);
+    const label = trend.shift === 'all' ? 'A+B' : trend.shift + '조';
+    const range = pts.length ? `${md(pts[0].day)}~${md(pts[pts.length - 1].day)} ${pts.length}일` : '';
+
+    document.querySelectorAll('#periodSeg button').forEach(b => b.classList.toggle('on', +b.dataset.p === trend.period));
+    document.querySelectorAll('#trendShiftSeg button').forEach(b => b.classList.toggle('on', b.dataset.s === trend.shift));
+
+    const today = r => cur && cur.input ? `당일 ${fmtPct(r)}` : '';   // 평균은 그래프 안 점선에 표시
+    $('#oprSub').textContent = today(cur?.oprR, avgOpr);
+    $('#ovrSub').textContent = today(cur?.ovrR, avgOvr);
+    const cell = (lab, val, rate, color) => `<div class="cell"><div class="c-lab">${color ? `<i style="background:${color}"></i>` : ''}${lab}</div><div class="c-val">${val}${rate ? `<small>${rate}</small>` : ''}</div></div>`;
+    // 집계표는 현황판과 같은 날짜·시프트 기준(트렌드 시프트 설정과 무관)
+    const bs = dayStats(state.day, state.shift);
+    const sh = SHIFT[state.day]?.[state.shift];
+    $('#daysum').innerHTML = bs && (bs.input || bs.good)
+      ? `<div class="cells">
+          ${cell('총수량', bs.input.toLocaleString())}
+          ${cell('양품수량', bs.good.toLocaleString(), bs.prtGood ? `<span style="color:var(--text-secondary)">이전 대기품 ${bs.prtGood} 포함</span>` : '')}
+          ${cell('최종불량', (sh?.finalNg ?? 0).toLocaleString())}
+          ${cell('재작업 대기', (sh?.pending.length ?? 0).toLocaleString())}
+          ${cell('최초불량', bs.ng.toLocaleString(), bs.input ? fmtPct(bs.ng / bs.input * 100) : '')}
+          ${cell('OPR', bs.opr.toLocaleString(), bs.input ? fmtPct(bs.oprR) : '', 'var(--series-opr)')}
+          ${cell('OVR', bs.ovr.toLocaleString(), bs.input ? fmtPct(bs.ovrR) : '', 'var(--series-ovr)')}
+          ${cell('양품률', bs.input ? fmtPct(bs.good1 / bs.input * 100) : '-')}
+        </div>`
+      : '';
+
+    // QR 에 당일 집계·트렌드도 담음 (핸드폰에서 위쪽 집계표·그래프까지 그대로 그림)
+    if (window.FTIV_QR) {
+      const q = window.FTIV_QR, t0 = pts.length ? Date.parse(pts[0].day) : 0;
+      q.ds = bs && (bs.input || bs.good) ? [bs.input, bs.good, bs.prtGood, sh?.finalNg ?? 0, sh?.pending.length ?? 0, bs.ng, bs.opr, bs.ovr, bs.good1] : null;
+      q.tc = cur && cur.input ? [cur.input, cur.opr, cur.ovr] : null;
+      q.t0 = pts.length ? pts[0].day : '';
+      q.tr = pts.map(p => [Math.round((Date.parse(p.day) - t0) / 864e5), p.input, p.opr, p.ovr]);   // [첫날부터 며칠째, 투입, OPR, OVR]
+    }
+
+    drawChart($('#oprChart'), pts, 'oprR', 'var(--series-opr)', avgOpr);
+    drawChart($('#ovrChart'), pts, 'ovrR', 'var(--series-ovr)', avgOvr);
+
+    $('#dailyCap').textContent = `${label} · ${range}`;
+    $('#dailyBody').innerHTML = pts.slice().reverse().map(p =>
+      `<tr data-d="${p.day}" class="${p.day === state.day ? 'sel' : ''}"><td>${p.day}</td><td>${p.input.toLocaleString()}</td><td>${p.good.toLocaleString()}</td><td>${p.opr} (${fmtPct(p.oprR)})</td><td>${p.ovr} (${fmtPct(p.ovrR)})</td></tr>`).join('');
+  }
+
+  function fit() {
+    const sc = $('#scaler'), fr = sc.firstElementChild, stage = $('#stage');
+    const oneScreen = matchMedia('(min-width: 1100px)').matches;
+    const cs = getComputedStyle(stage);
+    const aw = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const ah = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    let s = Math.min(1, aw / fr.offsetWidth);
+    if (oneScreen) s = Math.min(s, ah / fr.offsetHeight);
+    sc.style.transform = `scale(${s})`;
+    sc.style.width = fr.offsetWidth * s + 'px';
+    sc.style.height = fr.offsetHeight * s + 'px';
+  }
+
+  function save(k, v) {
+    const m = manual();
+    const [name, idx] = k.split('.');
+    if (idx != null) {
+      if (name === 'plan') {
+        const p = (m.plan || defaults().plan[state.shift] || DEFAULT_PLAN).map(x => x.slice());
+        const nums = v.match(/\d+/g) || [];
+        p[+idx] = [Number(nums[0]) || 0, Number(nums[1] ?? nums[0]) || 0];
+        m.plan = p;
+        const dft = defaults(); dft.plan[state.shift] = p; store.set('ftiv:defaults', dft);
+      } else {
+        m[name] = m[name] || []; m[name][+idx] = v;
+        if (name === 'wname') { const dft = defaults(); dft.wname = m.wname.slice(); store.set('ftiv:defaults', dft); }   // 다음 날에도 이어서
+      }
+    } else {
+      m[k] = v;
+      if (k === 'workers') { const dft = defaults(); dft[k] = v; store.set('ftiv:defaults', dft); }
+    }
+    store.set(key(), m);
+  }
+
+  // 이벤트
+  $('#board').addEventListener('input', e => { const k = e.target.dataset?.k; if (k) save(k, e.target.innerText.trim()); });
+  $('#board').addEventListener('focusout', e => { if (e.target.dataset?.k?.startsWith('plan.')) render(); });
+  $('#board').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.isContentEditable) { e.preventDefault(); e.target.blur(); } });
+  $('#board').addEventListener('click', async e => {
+    const ob = e.target.closest('[data-ot]');
+    if (ob) {   // 정시 / 잔업 — 이 날짜·조에 저장하고, 다음 날의 기본값으로도 기억
+      const m = manual(), v = ob.dataset.ot === '1';
+      m.ot = v; moveAutoEnd(m, v); store.set(key(), m);
+      const dft = defaults(); dft.ot = v; store.set('ftiv:defaults', dft);
+      render(); return;
+    }
+    const idle = e.target.closest('[data-idle]');
+    if (idle) { const [i, j] = idle.dataset.idle.split('|'); openIdle(+i, j); return; }
+    // 팝업은 부모 창(MFGreport·실시간 화면)에 뜨므로 전체화면이면 먼저 빠져나옴
+    const popup = e.target.closest('a[data-lot], a[data-pend], .ngcell[data-ng]');
+    if (popup && document.fullscreenElement) { try { await document.exitFullscreen(); } catch (err) {} }
+    // 미투입 LOT → 부모 창(MFGreport)의 검사 이력 팝업
+    const a = e.target.closest('a[data-lot]');
+    if (a) { e.preventDefault(); try { window.parent.FTIV_SHOW_LOT(a.dataset.lot); } catch (err) {} return; }
+    // 특이사항 "재작업 미투입 OPR n개" → 그 원인의 미투입 LOT 목록
+    const pd = e.target.closest('a[data-pend]');
+    if (pd) {
+      const ck = pd.dataset.pend, marks = new Set((SHIFT[state.day]?.[state.shift]?.pending || []).map(p => p[0]));
+      const di = (window.PLC_DAYS || []).indexOf(state.day), sh = state.shift === 'A' ? 0 : 1, causes = window.PLC_CAUSES || [];
+      const okCause = c => ck === 'etc' ? c !== 'OPR' && c !== 'OVR' : c === ck;
+      const units = (window.PLC_UNITS || []).filter(u => u[0] === di && u[1] === sh && marks.has(u[6]) && okCause(causes[u[2]]));
+      try { window.parent.FTIV_SHOW_UNITS(`${state.day} ${state.shift}조 재작업 미투입 · ${ck === 'etc' ? '기타' : ck}`, units); } catch (err) {}
+      return;
+    }
+    // 불량 칸 → 그 시간대·원인의 LOT 목록 팝업
+    const ng = e.target.closest('.ngcell[data-ng]');
+    if (ng) {
+      const [win, ck] = ng.dataset.ng.split('|');
+      const di = (window.PLC_DAYS || []).indexOf(state.day), sh = state.shift === 'A' ? 0 : 1, causes = window.PLC_CAUSES || [];
+      const okCause = c => ck === 'all' || (ck === 'etc' ? c !== 'OPR' && c !== 'OVR' : c === ck);
+      const units = (window.PLC_UNITS || []).filter(u => u[0] === di && u[1] === sh && (win === '-1' || u[9] === +win) && okCause(causes[u[2]]));
+      const tw = META.windows[state.shift] || [];
+      const title = `${state.day} ${state.shift}조 ${win === '-1' ? '전체' : tw[+win].join('~')} · ${ck === 'all' ? '총불량' : ck === 'etc' ? '기타 불량' : ck + ' 불량'} LOT`;
+      try { window.parent.FTIV_SHOW_UNITS(title, units); } catch (err) {}
+      return;
+    }
+    const td = e.target.closest('.signcell'); if (!td) return;
+    const m = manual(); const i = +td.dataset.k.split('.')[1];
+    m.sign = m.sign || []; m.sign[i] = !m.sign[i]; store.set(key(), m); render();
+  });
+
+  function step(dir) {
+    const i = days.indexOf(state.day);
+    let j = i < 0 ? days.findIndex(d => d > state.day) : i + dir;
+    if (j >= 0 && j < days.length) { state.day = days[j]; render(); }
+  }
+  $('#prev').onclick = () => step(-1);
+  $('#next').onclick = () => step(1);
+  $('#date').min = days[0]; $('#date').max = days[days.length - 1];
+  $('#date').onchange = e => { if (e.target.value) { state.day = e.target.value; render(); } };
+  document.querySelectorAll('#shiftSeg button').forEach(b => b.onclick = () => { state.shift = b.dataset.s; render(); });
+  document.querySelectorAll('#periodSeg button').forEach(b => b.onclick = () => { trend.period = +b.dataset.p; viewEnd = null; store.set('ftiv:side', trend); renderTrend(); });
+  document.querySelectorAll('#trendShiftSeg button').forEach(b => b.onclick = () => { trend.shift = b.dataset.s; store.set('ftiv:side', trend); renderTrend(); });
+  $('#openData').onclick = () => $('#dataDlg').showModal();
+  $('#closeData').onclick = () => $('#dataDlg').close();
+  $('#dailyBody').addEventListener('click', e => { const tr = e.target.closest('tr[data-d]'); if (tr) { state.day = tr.dataset.d; render(); } });
+  $('#print').onclick = () => window.print();
+  $('#board').addEventListener('change', e => {
+    if (e.target.id !== 'wcnt') return;
+    const m = manual(), n = +e.target.value;
+    m.wcount = n; if (!m.wname) m.wname = (defaults().wname || [m.workers ?? defaults().workers ?? '']).slice();
+    store.set(key(), m);
+    const dft = defaults(); dft.wcount = n; store.set('ftiv:defaults', dft);
+    render();
+  });
+  $('#board').addEventListener('click', e => { if (e.target.closest('#qrBtn')) openQr(); });
+  $('#qrClose').onclick = () => $('#qrDlg').close();
+  $('#idleDlg form').onsubmit = e => { e.preventDefault(); saveIdle(false); };
+  $('#idDel').onclick = () => { if (confirm('이 비가동 기록을 지울까요?')) saveIdle(true); };
+  $('#idCancel').onclick = () => $('#idleDlg').close();
+  document.querySelectorAll('#idleDlg [name=kind]').forEach(r => r.onchange = syncIdleForm);
+  // 전체화면: 현황판(stage)만. 전체화면을 못 쓰는 곳(권한 없는 iframe)에서는 버튼을 숨김
+  if (!document.fullscreenEnabled) $('#full').hidden = true;
+  $('#full').onclick = () => document.fullscreenElement ? document.exitFullscreen() : $('#stage').requestFullscreen().catch(() => {});
+  document.addEventListener('fullscreenchange', () => { $('#full').textContent = document.fullscreenElement ? '전체화면 끄기' : '전체화면'; fit(); });
+  $('#reset').onclick = () => { if (confirm(`${state.day} ${state.shift}조 수기 입력을 지울까요?`)) { store.del(key()); render(); } };
+  window.addEventListener('resize', fit);
+  document.fonts?.ready.then(() => { renderTrend(); syncPairs(); fit(); });
+
+  $('#meta').textContent = `PLC ${META.from} ~ ${META.to} · ${(META.rows || 0).toLocaleString()}건 · 생성 ${META.built}`;
+  // 실시간 화면(live.html)이 새 데이터를 넣고 다시 그릴 때 씀. follow=true 면 지금 생산 중인 날짜·시프트로 이동
+  window.FTIV_GET_STATE = () => ({ day: state.day, shift: state.shift });
+  window.FTIV_SET_DATA = (d, follow) => {
+    const swap = (obj, src) => { Object.keys(obj).forEach(k => delete obj[k]); Object.assign(obj, src || {}); };
+    swap(DATA, d.data); swap(SHIFT, d.shift); swap(META, d.meta);
+    days.length = 0; days.push(...Object.keys(DATA).sort());
+    if (follow && d.cur) { state.day = d.cur.day; state.shift = d.cur.shift; }
+    if (!DATA[state.day] && days.length) state.day = days[days.length - 1];
+    $('#date').min = days[0] || ''; $('#date').max = days[days.length - 1] || '';
+    $('#meta').textContent = d.metaText || `PLC ${META.from} ~ ${META.to} · ${(META.rows || 0).toLocaleString()}건`;
+    viewEnd = null;
+    render();
+  };
+  if (days.length) render();
+})();
+</script>
+</body>
+</html>
