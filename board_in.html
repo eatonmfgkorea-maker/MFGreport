@@ -585,7 +585,7 @@
     const totalInput = good1Sum + ngSum;  // 최초 검사 투입
     const totCls = !wins ? '' : !allDone ? 'live' : cum >= planSum && cum <= planMaxSum ? 'ok' : 'bad';
     if (wins) {
-      const nm = m.wname || dft.wname || [m.workers ?? dft.workers ?? ''];
+      const nm = m.wname || [m.workers ?? ''];
       // 핸드폰에서 이 현황판 양식 그대로 다시 그릴 수 있게: 작업자(인원수만큼), 합계, 달성률 기준, 특이사항(재검사·미투입·수기)
       qr.wc = m.wcount || dft.wcount || 1;
       qr.w = nm.slice(0, qr.wc).map(x => x || '');
@@ -661,7 +661,7 @@
   // ── 작업자: 인원수 m.wcount(1~3) + 이름 m.wname[]. 예전 한 줄 입력(m.workers)은 첫 이름으로 보여 줌 ──
   function workersHtml(m, dft) {
     const n = m.wcount || dft.wcount || 1;
-    const names = m.wname || dft.wname || [m.workers ?? dft.workers ?? ''];
+    const names = m.wname || [m.workers ?? ''];
     return `<select id="wcnt" title="작업 인원">${[1, 2, 3].map(k => `<option value="${k}" ${k === n ? 'selected' : ''}>${k}명</option>`).join('')}</select>` +
       Array.from({ length: n }, (_, i) => `<span class="wn" contenteditable data-k="wname.${i}" data-ph="이름${n > 1 ? i + 1 : ''}">${esc(names[i] || '')}</span>`).join('');
   }
@@ -975,7 +975,6 @@
         const dft = defaults(); dft.plan[state.shift] = p; store.set('ftiv:defaults', dft);
       } else {
         m[name] = m[name] || []; m[name][+idx] = v;
-        if (name === 'wname') { const dft = defaults(); dft.wname = m.wname.slice(); store.set('ftiv:defaults', dft); }   // 다음 날에도 이어서
       }
     } else {
       m[k] = v;
@@ -1058,7 +1057,7 @@
   $('#board').addEventListener('change', e => {
     if (e.target.id !== 'wcnt') return;
     const m = manual(), n = +e.target.value;
-    m.wcount = n; if (!m.wname) m.wname = (defaults().wname || [m.workers ?? defaults().workers ?? '']).slice();
+    m.wcount = n; if (!m.wname) m.wname = [m.workers ?? ''];
     store.set(key(), m);
     const dft = defaults(); dft.wcount = n; store.set('ftiv:defaults', dft);
     render();
