@@ -988,6 +988,14 @@
   $('#board').addEventListener('input', e => { const k = e.target.dataset?.k; if (k) save(k, e.target.innerText.trim()); });
   $('#board').addEventListener('focusout', e => { if (e.target.dataset?.k?.startsWith('plan.')) render(); });
   $('#board').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.isContentEditable) { e.preventDefault(); e.target.blur(); } });
+  // Part No 칸 이름(OP50·OP10): Tab 은 바로 아래 이름 칸으로(Shift+Tab 은 위로). 맨 끝에서는 원래대로 넘어감
+  $('#board').addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || !e.target.classList?.contains('who')) return;
+    const all = [...document.querySelectorAll('#board .who')], to = all[all.indexOf(e.target) + (e.shiftKey ? -1 : 1)];
+    if (!to) return;
+    e.preventDefault(); to.focus();
+    const sel = getSelection(); sel.selectAllChildren(to);   // 이미 있는 이름은 통째로 잡아 바로 덮어쓸 수 있게
+  });
   $('#board').addEventListener('click', async e => {
     const ob = e.target.closest('[data-ot]');
     if (ob) {   // 정시 / 잔업 — 이 날짜·조에 저장하고, 다음 날의 기본값으로도 기억
