@@ -322,9 +322,9 @@
 <div class="toolbar">
   <span class="brand">FTIV LINE</span>
   <div class="group">
-    <button id="prev" title="이전 생산일">◀</button>
+    <button id="prev" title="이전 조 (주간 ↔ 야간 순서)">◀</button>
     <input type="date" id="date">
-    <button id="next" title="다음 생산일">▶</button>
+    <button id="next" title="다음 조 (주간 → 야간 → 다음 날 주간)">▶</button>
   </div>
   <div class="seg" id="shiftSeg">
     <button data-s="A">A조 (주간)</button>
@@ -1038,10 +1038,18 @@
     m.sign = m.sign || []; m.sign[i] = !m.sign[i]; store.set(key(), m); render();
   });
 
+  // ◀ ▶ : 주간 → 같은 날 야간 → 다음 날 주간 … 순서로 한 조씩 넘어감
   function step(dir) {
     const i = days.indexOf(state.day);
-    let j = i < 0 ? days.findIndex(d => d > state.day) : i + dir;
-    if (j >= 0 && j < days.length) { state.day = days[j]; render(); }
+    if (i < 0) { const j = days.findIndex(d => d > state.day); if (j >= 0) { state.day = days[j]; render(); } return; }
+    if (dir > 0 && state.shift === 'A') state.shift = 'B';
+    else if (dir < 0 && state.shift === 'B') state.shift = 'A';
+    else {
+      const j = i + dir;
+      if (j < 0 || j >= days.length) return;
+      state.day = days[j]; state.shift = dir > 0 ? 'A' : 'B';
+    }
+    render();
   }
   $('#prev').onclick = () => step(-1);
   $('#next').onclick = () => step(1);
