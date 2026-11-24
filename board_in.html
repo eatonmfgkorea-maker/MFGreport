@@ -164,10 +164,11 @@
   .grid th.sub { font-size: 20px; font-weight: 700; letter-spacing: 0; height: 40px; }
   .grid th.sub i { display: inline-block; width: 18px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
   .grid td { height: 108px; }
-  col.c-pn { width: 140px; } col.c-time { width: 180px; } col.c-plan { width: 200px; } col.c-cum { width: 180px; }
-  col.c-ng, col.c-opr, col.c-ovr { width: 118px; } col.c-etc { width: 124px; }
+  col.c-pn { width: 140px; } col.c-time { width: 156px; } col.c-plan { width: 200px; } col.c-cum { width: 150px; }
+  col.c-ng, col.c-opr, col.c-ovr, col.c-ca, col.c-cr { width: 108px; } col.c-etc { width: 116px; }
+  .grid th.sub small { display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); letter-spacing: -.3px; }
   /* 조치사항(입력+서명) = 비가동요인과 같은 폭 */
-  col.c-act { width: 446px; } col.c-sign { width: 60px; }
+  col.c-act { width: 420px; } col.c-sign { width: 60px; }
 
   .pncell { position: relative; text-align: center; font-size: 20px; font-weight: 500; }
   .pncell .lot { position: absolute; top: 4px; left: 5px; font-size: 14px; font-weight: 700; white-space: nowrap; }
@@ -241,7 +242,8 @@
   /* QR: 오른쪽 위 작은 QR(누르면 크게) */
   .qrbtn { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 2px solid var(--line); border-radius: 8px; background: #fff; padding: 6px 6px 3px; cursor: pointer; position: relative; z-index: 1; }
   .qrbtn:hover { border-color: var(--eaton); }
-  .qrbtn #qrMini svg { display: block; width: 96px; height: 96px; }
+  .qrbtn.photo { margin-right: 126px; }   /* 현황판 QR 왼쪽 */
+  .qrbtn #qrMini svg, .qrbtn #qrMini2 svg { display: block; width: 96px; height: 96px; }
   .qrbtn b { font-size: 14px; font-weight: 900; color: var(--text-secondary); letter-spacing: 1px; }
   /* 큰 QR: 화면 거의 전체(찍기 쉽게) */
   #qrDlg { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border: 0; border-radius: 0; }
@@ -377,7 +379,7 @@
 <div class="tip" id="tip"></div>
 
 <dialog id="qrDlg">
-  <div class="dlg-head"><b>핸드폰으로 현황판 옮기기</b><button id="qrClose">닫기</button></div>
+  <div class="dlg-head"><b id="qrTitle">핸드폰으로 현황판 옮기기</b><button id="qrClose">닫기</button></div>
   <div class="qr-body"><div id="qrBig"></div><p id="qrInfo"></p></div>
 </dialog>
 
@@ -426,6 +428,7 @@
   const days = Object.keys(DATA).sort();
   const DEFAULT_PLAN = [[122, 162], [149, 198], [143, 189], [163, 216], [143, 189]];
   // 하우징조립·미분류는 실시간(PLC 검사결과 워드) 데이터에서 쓰는 원인
+  const NG_MAIN = ['OPR', 'OVR', '코일조립', '코일저항'];   // 불량 칸을 따로 두는 원인. 나머지(프레셔드롭·하우징리크 등)는 기타
   const CAUSE_ORDER = ['OPR', 'OVR', '코일저항', '코일조립', '하우징리크', '하우징조립', '스프링압력', '폴조립', '프레셔드롭', '기타', '미분류'];
   const MIN_INPUT = 50;
 
@@ -542,19 +545,19 @@
     const rtSum = { rt: 0, rtGood: 0, rtNg: 0, prt: 0, prtGood: 0, prtNg: 0 };
     const causeSum = {}, rcSum = {};   // 원인별 불량: 최초 검사 / 재작업(재검사)
     let rwGoodCum = 0, rinSum = 0;      // 재작업 양품 누적, 재작업 투입 합계
-    // 불량 4칸: 총불량 / OPR / OVR / 기타(나머지 원인 내역). 최초 검사 기준, 비율은 시간대 최초 투입 대비
+    // 불량 6칸: 총불량 / OPR / OVR / 코일조립 / 코일저항 / 기타(프레셔드롭·하우징리크 등 나머지, 내역 표시)
     // win: 시간대 번호(Total 행은 -1). 수량이 있으면 눌러서 LOT 목록을 볼 수 있게 data-ng="시간대|원인" 을 붙임
     // 숫자 = 최초 불량 + 재작업 불량, ( ) = 그중 재작업했는데 또 불량 난 수. 비율은 전체 검사(최초 투입 + 재작업 투입) 대비
     // rc: 재작업 불량의 원인별 수, rin: 재작업 투입 수. 누르면 나오는 LOT 목록은 최초 불량분
     const ngCells = (causes, ng, input, win, rc = {}, rin = 0) => {
-      if (input == null) return '<td class="ngcell"></td>'.repeat(4);
+      if (input == null) return '<td class="ngcell"></td>'.repeat(6);
       const c = (n, r, cls = '', extra = '', ck = '') => `<td class="ngcell ${cls} ${n + r ? '' : 'zero'}" ${n && window.PLC_UNITS ? `data-ng="${win}|${ck}" title="클릭 → LOT 목록 (최초 불량)"` : ''}><b>${n + r}${r ? `<i>(${r})</i>` : ''}</b><span>(${pct(n + r, input + rin)}%)</span>${extra}</td>`;
-      const isEtc = k => k !== 'OPR' && k !== 'OVR', all = k => (causes[k] || 0) + (rc[k] || 0);
+      const isEtc = k => !NG_MAIN.includes(k), all = k => (causes[k] || 0) + (rc[k] || 0);
       const etcList = CAUSE_ORDER.filter(k => isEtc(k) && all(k));
       const etc = etcList.reduce((a, k) => a + (causes[k] || 0), 0), retc = etcList.reduce((a, k) => a + (rc[k] || 0), 0);
       const detail = etcList.map(k => `${k} ${all(k)}`).join(' · ');
       const rng = Object.values(rc).reduce((a, v) => a + v, 0);
-      return c(ng, rng, 'total', '', 'all') + c(causes.OPR || 0, rc.OPR || 0, '', '', 'OPR') + c(causes.OVR || 0, rc.OVR || 0, '', '', 'OVR') + c(etc, retc, '', detail ? `<small>${detail}</small>` : '', 'etc');
+      return c(ng, rng, 'total', '', 'all') + NG_MAIN.map(k => c(causes[k] || 0, rc[k] || 0, '', '', k)).join('') + c(etc, retc, '', detail ? `<small>${detail}</small>` : '', 'etc');
     };
     const rwTag = n => n ? `<i title="재작업해서 나온 양품">(${n})</i>` : '';
     // 불량 났는데 이 시프트 안에 재작업 투입 기록이 없는 LOT
@@ -562,17 +565,22 @@
       const p = SHIFT[state.day]?.[state.shift]?.pending || [];
       if (!p.length) return '';
       // 원인별 개수만: OPR / OVR / 기타. 누르면(LOT 목록이 있을 때) 그 원인의 미투입 LOT 목록
-      const n = { OPR: 0, OVR: 0, etc: 0 };
-      p.forEach(([, c]) => { n[c === 'OPR' || c === 'OVR' ? c : 'etc']++; });
+      const n = { etc: 0 }; NG_MAIN.forEach(k => { n[k] = 0; });
+      p.forEach(([, c]) => { n[NG_MAIN.includes(c) ? c : 'etc']++; });
       const part = (k, lab) => window.PLC_UNITS && n[k] ? `<a data-pend="${k}">${lab} ${n[k]}개</a>` : `${lab} ${n[k]}개`;
-      return `<div class="r">재작업 미투입 ${p.length}개: ${part('OPR', 'OPR')}, ${part('OVR', 'OVR')}, ${part('etc', '기타')}</div>`;
+      const parts = [part('OPR', 'OPR'), part('OVR', 'OVR')].concat(['코일조립', '코일저항'].filter(k => n[k]).map(k => part(k, k)), n.etc ? [part('etc', '기타')] : []);
+      return `<div class="r">재작업 미투입 ${p.length}개: ${parts.join(', ')}</div>`;
     };
     const retestLine = r => (r.rt ? `<div class="ln r">재검사 ${r.rt}개 중 ${r.rtNg}개 불량 ${r.rtGood}개 양품</div>` : '') +
       (r.prt ? `<div class="ln r">이전 대기품 재작업 ${r.prt}개 중 ${r.prtNg}개 불량 ${r.prtGood}개 양품 (양품 실적 포함)</div>` : '');
     // 핸드폰(check 앱 QR+)으로 옮길 표 내용 — 아래 행마다 채움
     const etcOf = c => Object.entries(c || {}).filter(([k]) => k !== 'OPR' && k !== 'OVR').reduce((a, [, v]) => a + v, 0);
     const txt = html => html.replace(/<\/div>/g, '\n').replace(/<[^>]+>/g, '').trim();
-    const etcDetail = c => CAUSE_ORDER.filter(k => k !== 'OPR' && k !== 'OVR' && (c || {})[k]).map(k => `${k} ${c[k]}`).join(' · ');
+    const etcDetail = (c, rc = {}) => CAUSE_ORDER.filter(k => k !== 'OPR' && k !== 'OVR' && ((c || {})[k] || rc[k])).map(k => `${k} ${((c || {})[k] || 0) + (rc[k] || 0)}`).join(' · ');
+    const sumOf = c => Object.values(c || {}).reduce((a, v) => a + v, 0);
+    const restOf = c => Object.entries(c || {}).filter(([k]) => !NG_MAIN.includes(k)).reduce((a, [, v]) => a + v, 0);
+    const restDetail = (c, rc = {}) => CAUSE_ORDER.filter(k => !NG_MAIN.includes(k) && ((c || {})[k] || rc[k])).map(k => `${k} ${((c || {})[k] || 0) + (rc[k] || 0)}`).join(' · ');
+    const ng6 = (c, rc = {}) => [(c || {})['코일조립'] || 0, (c || {})['코일저항'] || 0, restOf(c), rc['코일조립'] || 0, rc['코일저항'] || 0, restOf(rc), restDetail(c, rc)];
     const qr = { v: 2, line: 'FTIV', d: state.day, s: state.shift, ot: ot ? 1 : 0, r: [] };
     const rows = tw.map(([s, e], i) => {
       const w = wins ? wins[i] : null;
@@ -602,11 +610,13 @@
         const shown = w && good != null, cz = shown ? w.causes : {};
         const idles = ((m.idles || [])[i] || []).map(it => [it.k, it.s || '', it.x || '', it.e || '', it.a || '', it.c || '']);
         if ((m.idle || [])[i] || (m.act || [])[i]) idles.unshift(['n', '', (m.idle || [])[i] || '', '', (m.act || [])[i] || '', 'k']);   // 예전 자유 입력
-        // [시간, 계획포함, 계획하한, 계획상한, 실적, 실적색, 누적, 누적색, 총불량, OPR, OVR, 기타, 최초투입, OP50, OP10, 비가동·조치, 재검사 글, 서명, 기타 내역]
+        // [시간, 계획포함, 계획하한, 계획상한, 실적, 실적색, 누적, 누적색, 총불량, OPR, OVR, 기타, 최초투입, OP50, OP10, 비가동·조치, 재검사 글, 서명, 기타 내역,
+        //  재작업분 [재작업 양품 누적, 재작업 불량, OPR, OVR, 기타, 재작업 투입] (없으면 0)] — 불량 수는 최초 검사분, ( ) 로 더해 그릴 재작업분은 맨 끝에
+        const rc = shown ? w.rcauses || {} : {}, rr = shown ? [rwGoodCum, sumOf(rc), rc.OPR || 0, rc.OVR || 0, etcOf(rc), w.rt + w.prt] : [];
         qr.r.push([`${s}~${e}`, on ? 1 : 0, pMin, pMax, good, actCls, good == null ? null : cum, cumCls,
           shown ? w.ng : null, cz.OPR || 0, cz.OVR || 0, etcOf(cz), shown ? w.good1 + w.ng : 0,
           (m.who || [])[i] || '', (m.who10 || [])[i] || '', idles, w ? txt(retestLine(w)) : '',
-          (m.sign || [])[i] ? 1 : 0, etcDetail(cz)]);
+          (m.sign || [])[i] ? 1 : 0, etcDetail(cz, rc), rr.some(Boolean) ? rr : 0, shown ? ng6(cz, rc) : 0]);
       }
       return `
         <tr class="${on ? '' : 'off'}">
@@ -637,7 +647,9 @@
       // 핸드폰에서 이 현황판 양식 그대로 다시 그릴 수 있게: 작업자(인원수만큼), 합계, 달성률 기준, 특이사항(재검사·미투입·수기)
       qr.wc = m.wcount || dft.wcount || 1;
       qr.w = nm.slice(0, qr.wc).map(x => x || '');
-      qr.t = [planTot, cum, totCls, ngSum, causeSum.OPR || 0, causeSum.OVR || 0, etcOf(causeSum), totalInput, etcDetail(causeSum)];
+      qr.t = [planTot, cum, totCls, ngSum, causeSum.OPR || 0, causeSum.OVR || 0, etcOf(causeSum), totalInput, etcDetail(causeSum, rcSum)];
+      qr.tw = [rwGoodCum, sumOf(rcSum), rcSum.OPR || 0, rcSum.OVR || 0, etcOf(rcSum), rinSum];   // Total 행의 재작업분
+      qr.t6 = ng6(causeSum, rcSum);   // Total 행 6칸용(코일조립·코일저항·기타)
       qr.du = [dueMin, dueMax];
       qr.sx = [txt(retestLine(rtSum)), txt(pendingLine()), m.special || ''];
       const n = new Date();
@@ -649,7 +661,8 @@
       <div class="top">
         <div class="clock" id="clock">${clockText()}</div>
         <div class="title"><h1>FTIV LINE 생산 현황 Board</h1><h2>(Fuel Tank Isolation Valve)</h2></div>
-        <button class="qrbtn" id="qrBtn" ${window.FTIV_QR && window.FTIV_QR_SVG ? '' : 'hidden'} title="눌러서 크게 → 핸드폰 check 앱 [현황판 → QR+] 로 찍기"><span id="qrMini">${window.FTIV_QR_SVG || ''}</span><b>QR</b></button>
+        <button class="qrbtn photo" id="qrBtn2" ${window.FTIV_QR && window.FTIV_QR_SVG ? '' : 'hidden'} title="눌러서 크게 → 핸드폰 기본 카메라로 찍으면 현황판이 사진으로 저장됨"><span id="qrMini2">${window.FTIV_QR_SVG || ''}</span><b>사진 QR</b></button>
+        <button class="qrbtn" id="qrBtn" ${window.FTIV_QR && window.FTIV_QR_SVG ? '' : 'hidden'} title="눌러서 크게 → 핸드폰 check 앱 [현황판 → QR+] 로 찍기"><span id="qrMini">${window.FTIV_QR_SVG || ''}</span><b>현황판 QR</b></button>
 
         <div class="left2">
           <div class="field"><span class="lab">생 산 일 자</span><span class="colon">:</span><span class="val">${state.day}(${state.shift})</span>
@@ -665,10 +678,10 @@
         </div>
       </div>
       <table class="grid">
-        <colgroup><col class="c-pn"><col class="c-time"><col class="c-plan"><col class="c-cum"><col class="c-ng"><col class="c-opr"><col class="c-ovr"><col class="c-etc"><col><col class="c-act"><col class="c-sign"></colgroup>
+        <colgroup><col class="c-pn"><col class="c-time"><col class="c-plan"><col class="c-cum"><col class="c-ng"><col class="c-opr"><col class="c-ovr"><col class="c-ca"><col class="c-cr"><col class="c-etc"><col><col class="c-act"><col class="c-sign"></colgroup>
         <thead>
-          <tr><th rowspan="2">Part No</th><th rowspan="2">작업시간</th><th rowspan="2">계획/실적</th><th rowspan="2">누적수량<small class="rwnote">( ) 재작업 양품</small></th><th colspan="4" class="ng-head">불량 <small>수량 / % · ( ) 재작업 불량</small></th><th rowspan="2">비가동요인</th><th rowspan="2" colspan="2">조치사항</th></tr>
-          <tr><th class="sub">총불량</th><th class="sub"><i style="background:var(--series-opr)"></i>OPR</th><th class="sub"><i style="background:var(--series-ovr)"></i>OVR</th><th class="sub">기타</th></tr>
+          <tr><th rowspan="2">Part No</th><th rowspan="2">작업시간</th><th rowspan="2">계획/실적</th><th rowspan="2">누적수량<small class="rwnote">( ) 재작업 양품</small></th><th colspan="6" class="ng-head">불량 <small>수량 / % · ( ) 재작업 불량</small></th><th rowspan="2">비가동요인</th><th rowspan="2" colspan="2">조치사항</th></tr>
+          <tr><th class="sub">총불량</th><th class="sub"><i style="background:var(--series-opr)"></i>OPR</th><th class="sub"><i style="background:var(--series-ovr)"></i>OVR</th><th class="sub">코일조립</th><th class="sub">코일저항</th><th class="sub">기타<small>프레셔드롭·하우징리크</small></th></tr>
         </thead>
         <tbody>
           ${rows}
@@ -847,24 +860,25 @@
   // 인터넷 없이 만들기 위해 qrcode.js(Kazuhiko Arase, MIT)를 같은 폴더에서 불러옴. 없으면(MFGreport 등) QR 버튼을 숨김
   // 핸드폰 기본 카메라로 찍으면 이 주소가 열림 → check 앱이 #ftivqr= 뒤의 데이터로 바로 표 미리보기
   const CHECK_QR_URL = 'https://eatonmfgkorea-maker.github.io/check/#ftivqr=';
-  async function qrString(obj) {
+  const PHOTO_QR_URL = 'https://eatonmfgkorea-maker.github.io/QR/#q=';   // 사진 QR: 찍으면 현황판을 사진으로만 저장(올리기 없음)
+  async function qrString(obj, base = CHECK_QR_URL) {
     const z = new Blob([new TextEncoder().encode(JSON.stringify(obj))]).stream().pipeThrough(new CompressionStream('deflate-raw'));
     const buf = new Uint8Array(await new Response(z).arrayBuffer());
     let b = ''; for (let i = 0; i < buf.length; i++) b += String.fromCharCode(buf[i]);
-    return CHECK_QR_URL + 'FTIVQR1.' + btoa(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return base + 'FTIVQR1.' + btoa(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
   // QR 한 개 한도(약 2,900자)를 넘으면 긴 글부터 줄여서 다시
-  async function boardQrText() {
+  async function boardQrText(base) {
     let o = window.FTIV_QR; if (!o) return null;
     // QR 이 너무 촘촘하면 잘 안 찍힘 → 2,000자를 넘으면 트렌드는 최근 30일만 담음
     if (o.tr && o.tr.length > 30) {
-      const s = await qrString(o);
+      const s = await qrString(o, base);
       if (s.length <= 2000) return s;
       o = { ...o, tr: o.tr.slice(-30) };
     }
     for (const cut of [0, 40, 20, 8]) {
       if (cut) o = JSON.parse(JSON.stringify(o), (k, v) => typeof v === 'string' && v.length > cut && !/^\d{4}-|~|^ftiv/.test(v) ? v.slice(0, cut) + '…' : v);
-      const s = await qrString(o);
+      const s = await qrString(o, base);
       if (s.length <= 2800) return s;
     }
     return null;
@@ -880,19 +894,21 @@
     const btn = $('#qrBtn'), my = ++qrSeq;
     if (!btn || typeof qrcode === 'undefined' || typeof CompressionStream === 'undefined' || !window.FTIV_QR) { if (btn) btn.hidden = true; return; }
     // 작은 QR 은 처음 한 번만 그리고 그 뒤로는 그대로 둠(버튼 표시용, 작아서 어차피 안 찍힘). 최신 내용은 눌러서 크게 볼 때(openQr) 만듦
-    if (window.FTIV_QR_SVG) { btn.hidden = false; return; }
+    if (window.FTIV_QR_SVG) { btn.hidden = false; const b2 = $('#qrBtn2'); if (b2) b2.hidden = false; return; }
     try {
       const s = await boardQrText(); if (my !== qrSeq || !s) return;
-      const mini = $('#qrMini'), b = $('#qrBtn'); if (!mini || !b) return;
+      const mini = $('#qrMini'), b = $('#qrBtn'), mini2 = $('#qrMini2'), b2 = $('#qrBtn2'); if (!mini || !b) return;
       window.FTIV_QR_SVG = qrSvg(s); mini.innerHTML = window.FTIV_QR_SVG;
       b.hidden = false;
+      if (mini2 && b2) { mini2.innerHTML = window.FTIV_QR_SVG; b2.hidden = false; }
     } catch (e) { btn.hidden = true; }
   }
-  async function openQr() {
-    const s = await boardQrText(); if (!s) { alert('QR 에 담기에 내용이 너무 많습니다.'); return; }
+  async function openQr(photo) {
+    const s = await boardQrText(photo ? PHOTO_QR_URL : CHECK_QR_URL); if (!s) { alert('QR 에 담기에 내용이 너무 많습니다.'); return; }
     const o = window.FTIV_QR;
     $('#qrBig').innerHTML = qrSvg(s);
-    $('#qrInfo').innerHTML = `핸드폰 <b>기본 카메라</b>로 찍고 뜨는 링크를 누르면 check 앱에 이 표가 열립니다 (또는 check 앱 → 현황판 → QR+) · ${esc(o.d)}(${esc(o.s)}) ${esc(o.at.slice(11))} 기준 · 닫으면 화면이 다시 갱신됩니다.`;
+    $('#qrTitle').textContent = photo ? '사진 QR — 핸드폰에 현황판 사진 저장' : '현황판 QR — 핸드폰 check 앱으로 현황판 옮기기';
+    $('#qrInfo').innerHTML = photo ? `핸드폰 <b>기본 카메라</b>로 찍고 뜨는 링크를 누르면 현황판이 <b>사진으로 저장</b>됩니다 (check 앱에는 올라가지 않음) · ${esc(o.d)}(${esc(o.s)}) · 닫으면 화면이 다시 갱신됩니다.` : `핸드폰 <b>기본 카메라</b>로 찍고 뜨는 링크를 누르면 check 앱에 이 표가 열립니다 (또는 check 앱 → 현황판 → QR+) · ${esc(o.d)}(${esc(o.s)}) ${esc(o.at.slice(11))} 기준 · 닫으면 화면이 다시 갱신됩니다.`;
     $('#qrDlg').showModal();
   }
 
@@ -1114,7 +1130,7 @@
     if (pd) {
       const ck = pd.dataset.pend, marks = new Set((SHIFT[state.day]?.[state.shift]?.pending || []).map(p => p[0]));
       const di = (window.PLC_DAYS || []).indexOf(state.day), sh = state.shift === 'A' ? 0 : 1, causes = window.PLC_CAUSES || [];
-      const okCause = c => ck === 'etc' ? c !== 'OPR' && c !== 'OVR' : c === ck;
+      const okCause = c => ck === 'etc' ? !NG_MAIN.includes(c) : c === ck;
       const units = (window.PLC_UNITS || []).filter(u => u[0] === di && u[1] === sh && marks.has(u[6]) && okCause(causes[u[2]]));
       try { window.parent.FTIV_SHOW_UNITS(`${state.day} ${state.shift}조 재작업 미투입 · ${ck === 'etc' ? '기타' : ck}`, units); } catch (err) {}
       return;
@@ -1132,7 +1148,7 @@
     if (ng) {
       const [win, ck] = ng.dataset.ng.split('|');
       const di = (window.PLC_DAYS || []).indexOf(state.day), sh = state.shift === 'A' ? 0 : 1, causes = window.PLC_CAUSES || [];
-      const okCause = c => ck === 'all' || (ck === 'etc' ? c !== 'OPR' && c !== 'OVR' : c === ck);
+      const okCause = c => ck === 'all' || (ck === 'etc' ? !NG_MAIN.includes(c) : c === ck);
       const units = (window.PLC_UNITS || []).filter(u => u[0] === di && u[1] === sh && (win === '-1' || u[9] === +win) && okCause(causes[u[2]]));
       const tw = META.windows[state.shift] || [];
       const title = `${state.day} ${state.shift}조 ${win === '-1' ? '전체' : tw[+win].join('~')} · ${ck === 'all' ? '총불량' : ck === 'etc' ? '기타 불량' : ck + ' 불량'} LOT`;
@@ -1182,7 +1198,7 @@
     dft.wcount = n; store.set('ftiv:defaults', dft);
     render();
   });
-  $('#board').addEventListener('click', e => { if (e.target.closest('#qrBtn')) openQr(); });
+  $('#board').addEventListener('click', e => { if (e.target.closest('#qrBtn2')) openQr(true); else if (e.target.closest('#qrBtn')) openQr(false); });
   $('#qrClose').onclick = () => $('#qrDlg').close();
   $('#idleDlg form').onsubmit = e => { e.preventDefault(); saveIdle(false); };
   $('#idDel').onclick = () => { if (confirm('이 비가동 기록을 지울까요?')) saveIdle(true); };
