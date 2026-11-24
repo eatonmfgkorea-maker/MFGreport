@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MFG Report V206S</title>
+  <title>MFG Report V207S</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -451,7 +451,7 @@ const {
   useState,
   useMemo
 } = React;
-const VERSION_NOTES = [{ v: 'V206S', d: '2026-11-20', items: ['FTIV 현황판: 재작업분을 ( ) 로 표기 - 누적수량 49(2) 는 재작업해서 나온 양품 2개 포함, 불량 20(10) 은 재작업했는데 또 불량 난 10개 포함. 불량률은 전체 검사(최초+재작업) 대비', '기존에 올린 FTIV 데이터는 다시 올려야 재작업 불량 ( ) 가 나옴'] }, { v: 'V205S', d: '2026-11-20', items: ['FTIV 현황판: 설정 버튼 추가 - 인원(1~3명)·정시/잔업별로 시간대 최소·최대 수량과 총수량을 미리 넣어 두면 인원과 정시/잔업을 고를 때 계획 칸에 자동으로 들어감'] }, { v: 'V204S', d: '2026-11-20', items: ['FTIV 현황판: 양품(실적·누적) 숫자를 누르면 그 시간대에 양품이 된 LOT 목록 표시(최초 양품·재검사 양품·이전 대기품 재작업 구분, LOT 누르면 검사 이력)', 'FTIV 조 구분: 조가 끝난 뒤 15분(08:15 · 20:15)까지의 검사 기록은 앞 조로 집계, 그 안에 새 조 MARKING 이 처음 찍히면 그때부터 새 조 — 교대 직전 재검사가 다음 조 재작업으로 잡히던 문제 수정. 이미 저장된 집계는 다음 «PLC 엑셀 추가»·현황판 PC 파일 올리기 때 다시 계산됨'] }, { v: 'V203S', d: '2026-11-20', items: ['FTIV 현황판 날짜 옆 ◀ ▶ 버튼이 한 조씩 이동 — 20일 주간 → 20일 야간 → 21일 주간 → 21일 야간 순서'] }, { v: 'V202S', d: '2026-11-20', items: ['FTIV 현황판 작업자 이름은 그 날·그 조에 넣은 것만 표시 — 다음 날이나 야간으로 넘어가면 빈칸에서 시작(인원수 칸 수와 계획은 그대로 이어짐)'] }, { v: 'V201S', d: '2026-11-20', items: ['FTIV 현황판 Part No 칸 이름(OP50·OP10) 입력 중 Tab 을 누르면 바로 아래 이름 칸으로 이동(Shift+Tab 은 위로)'] }, { v: 'V200S', d: '2026-11-19', items: ['FTIV 현황판 비가동 입력창의 시작·종료 시각을 24시간제로 — 오전/오후 고르지 않고 13:30 처럼 바로 입력(1330 · 830 처럼 숫자만 쳐도 13:30 · 08:30 으로 맞춤)'] }, { v: 'V199S', d: '2026-11-19', items: ['FTIV 현황판을 현황판 PC(USB_현황판 board.html)와 같은 최신 양식으로 교체 — 작업자·시간대별 담당·비가동 입력 등 그대로', '현황판 수기 입력은 서버에 공유 저장(지우기 포함), ftiv_manual.txt·ftiv_db_cache.txt 올리기는 그대로'] }, { v: 'V198S', d: '2026-11-19', items: ['조직도: 조장 아래 인원 카드에는 메일 줄을 표시하지 않음'] }, { v: 'V197S', d: '2026-11-18', items: ['조직도 육아휴직: 인원 정보에 육아휴직 시작·종료일 — 기간 중에는 조직도·인원수에서 빠지고 아래 «육아휴직» 칸에 따로 표시, 종료일이 지나면 자동 복귀(하위 인원도 원래대로)', '명단 엑셀에 «육아휴직 시작»·«육아휴직 종료» 열 추가'] }, { v: 'V196S', d: '2026-11-17', items: ['조직도 순서: 같은 상위·부서 안에서 정규직 → 촉탁직 → 협력직 순, 같은 고용형태 안에서는 입사일이 빠른 순'] }, { v: 'V195S', d: '2026-11-17', items: ['FTIV PLC 데이터 저장이 서버 오류로 실패하면 자동으로 4번까지 다시 보냄, 실패 문구를 알기 쉽게'] }, { v: 'V194S', d: '2026-11-17', items: ['FTIV «PLC 데이터 올리기»: 현황판 PC 의 ftiv_db_cache.txt(PLC 기록)와 ftiv_manual.txt(작업자·계획·비가동 입력)를 올리면 반영 — 두 파일을 같이 골라도 됨, PLC 엑셀도 그대로 가능', 'FTIV 현황판의 작업자·계획·비가동·서명 입력을 서버에 저장해 로그인한 사람 모두 같은 내용을 봄 (전에는 입력한 PC 에서만 보였음)'] }, { v: 'V193S', d: '2026-11-17', items: ['조직도: 인원 정보에 «퇴사일» — 퇴사일이 되면 조직도·인원수에서 빠지고 맨 아래 «퇴사자» 목록(접었다 펴기)으로, 하위 인원은 위 사람에게 붙음', '퇴사자 목록: 이름·직급·부서·직책·입사일·퇴사일·근속, 누르면 정보·면담기록 보기, 퇴사일을 지우면 조직도로 복귀', '명단 엑셀에 «퇴사일» 열 추가(빈칸이면 기존 유지)'] }, { v: 'V192S', d: '2026-11-11', items: ['조직도 맨 왼쪽 «생일자» — 월을 누르면 그 달 생일자(날짜순, 월/일·이름·부서), 이름을 누르면 인원 정보'] }, { v: 'V191S', d: '2026-11-11', items: ['조직도 면담기록을 가운데 큰 창으로 — 왼쪽 쓰기(내용 칸 크게), 오른쪽 기록 목록'] }, { v: 'V190S', d: '2026-11-11', items: ['조직도: 인원 정보 창에 «면담기록» — 날짜·내용·첨부파일(25MB, 10개까지) 저장, 고치기·지우기는 쓴 사람/관리자', '면담기록은 로그인한 사람 누구나 쓰고, 읽기는 관리자가 «면담 열람 권한»에서 사람별로 정해 둔 대로만 (서버에서 거름, 쓴 사람은 자기 글을 봄)', '조직도 새 인원 ID 는 지운 사람 번호를 다시 쓰지 않음'] }, {
+const VERSION_NOTES = [{ v: 'V207S', d: '2026-11-24', items: ['Lot & FTFR 엑셀(QPRM): UCC·GM11.5 등 파일을 열 때 «내용에 문제가 있습니다» 복구 창이 뜨던 것 수정', 'Lot & FTFR 엑셀의 생산일이 하루 전 날짜로 들어가던 것 수정'] }, { v: 'V206S', d: '2026-11-20', items: ['FTIV 현황판: 재작업분을 ( ) 로 표기 - 누적수량 49(2) 는 재작업해서 나온 양품 2개 포함, 불량 20(10) 은 재작업했는데 또 불량 난 10개 포함. 불량률은 전체 검사(최초+재작업) 대비', '기존에 올린 FTIV 데이터는 다시 올려야 재작업 불량 ( ) 가 나옴'] }, { v: 'V205S', d: '2026-11-20', items: ['FTIV 현황판: 설정 버튼 추가 - 인원(1~3명)·정시/잔업별로 시간대 최소·최대 수량과 총수량을 미리 넣어 두면 인원과 정시/잔업을 고를 때 계획 칸에 자동으로 들어감'] }, { v: 'V204S', d: '2026-11-20', items: ['FTIV 현황판: 양품(실적·누적) 숫자를 누르면 그 시간대에 양품이 된 LOT 목록 표시(최초 양품·재검사 양품·이전 대기품 재작업 구분, LOT 누르면 검사 이력)', 'FTIV 조 구분: 조가 끝난 뒤 15분(08:15 · 20:15)까지의 검사 기록은 앞 조로 집계, 그 안에 새 조 MARKING 이 처음 찍히면 그때부터 새 조 — 교대 직전 재검사가 다음 조 재작업으로 잡히던 문제 수정. 이미 저장된 집계는 다음 «PLC 엑셀 추가»·현황판 PC 파일 올리기 때 다시 계산됨'] }, { v: 'V203S', d: '2026-11-20', items: ['FTIV 현황판 날짜 옆 ◀ ▶ 버튼이 한 조씩 이동 — 20일 주간 → 20일 야간 → 21일 주간 → 21일 야간 순서'] }, { v: 'V202S', d: '2026-11-20', items: ['FTIV 현황판 작업자 이름은 그 날·그 조에 넣은 것만 표시 — 다음 날이나 야간으로 넘어가면 빈칸에서 시작(인원수 칸 수와 계획은 그대로 이어짐)'] }, { v: 'V201S', d: '2026-11-20', items: ['FTIV 현황판 Part No 칸 이름(OP50·OP10) 입력 중 Tab 을 누르면 바로 아래 이름 칸으로 이동(Shift+Tab 은 위로)'] }, { v: 'V200S', d: '2026-11-19', items: ['FTIV 현황판 비가동 입력창의 시작·종료 시각을 24시간제로 — 오전/오후 고르지 않고 13:30 처럼 바로 입력(1330 · 830 처럼 숫자만 쳐도 13:30 · 08:30 으로 맞춤)'] }, { v: 'V199S', d: '2026-11-19', items: ['FTIV 현황판을 현황판 PC(USB_현황판 board.html)와 같은 최신 양식으로 교체 — 작업자·시간대별 담당·비가동 입력 등 그대로', '현황판 수기 입력은 서버에 공유 저장(지우기 포함), ftiv_manual.txt·ftiv_db_cache.txt 올리기는 그대로'] }, { v: 'V198S', d: '2026-11-19', items: ['조직도: 조장 아래 인원 카드에는 메일 줄을 표시하지 않음'] }, { v: 'V197S', d: '2026-11-18', items: ['조직도 육아휴직: 인원 정보에 육아휴직 시작·종료일 — 기간 중에는 조직도·인원수에서 빠지고 아래 «육아휴직» 칸에 따로 표시, 종료일이 지나면 자동 복귀(하위 인원도 원래대로)', '명단 엑셀에 «육아휴직 시작»·«육아휴직 종료» 열 추가'] }, { v: 'V196S', d: '2026-11-17', items: ['조직도 순서: 같은 상위·부서 안에서 정규직 → 촉탁직 → 협력직 순, 같은 고용형태 안에서는 입사일이 빠른 순'] }, { v: 'V195S', d: '2026-11-17', items: ['FTIV PLC 데이터 저장이 서버 오류로 실패하면 자동으로 4번까지 다시 보냄, 실패 문구를 알기 쉽게'] }, { v: 'V194S', d: '2026-11-17', items: ['FTIV «PLC 데이터 올리기»: 현황판 PC 의 ftiv_db_cache.txt(PLC 기록)와 ftiv_manual.txt(작업자·계획·비가동 입력)를 올리면 반영 — 두 파일을 같이 골라도 됨, PLC 엑셀도 그대로 가능', 'FTIV 현황판의 작업자·계획·비가동·서명 입력을 서버에 저장해 로그인한 사람 모두 같은 내용을 봄 (전에는 입력한 PC 에서만 보였음)'] }, { v: 'V193S', d: '2026-11-17', items: ['조직도: 인원 정보에 «퇴사일» — 퇴사일이 되면 조직도·인원수에서 빠지고 맨 아래 «퇴사자» 목록(접었다 펴기)으로, 하위 인원은 위 사람에게 붙음', '퇴사자 목록: 이름·직급·부서·직책·입사일·퇴사일·근속, 누르면 정보·면담기록 보기, 퇴사일을 지우면 조직도로 복귀', '명단 엑셀에 «퇴사일» 열 추가(빈칸이면 기존 유지)'] }, { v: 'V192S', d: '2026-11-11', items: ['조직도 맨 왼쪽 «생일자» — 월을 누르면 그 달 생일자(날짜순, 월/일·이름·부서), 이름을 누르면 인원 정보'] }, { v: 'V191S', d: '2026-11-11', items: ['조직도 면담기록을 가운데 큰 창으로 — 왼쪽 쓰기(내용 칸 크게), 오른쪽 기록 목록'] }, { v: 'V190S', d: '2026-11-11', items: ['조직도: 인원 정보 창에 «면담기록» — 날짜·내용·첨부파일(25MB, 10개까지) 저장, 고치기·지우기는 쓴 사람/관리자', '면담기록은 로그인한 사람 누구나 쓰고, 읽기는 관리자가 «면담 열람 권한»에서 사람별로 정해 둔 대로만 (서버에서 거름, 쓴 사람은 자기 글을 봄)', '조직도 새 인원 ID 는 지운 사람 번호를 다시 쓰지 않음'] }, {
   v: 'V189S',
   d: '2026-11-11',
   items: ['아침 생산 브리핑 팝업과 대시보드 맨 위 브리핑 줄을 없앰']
@@ -4963,6 +4963,16 @@ function App() {
   };
   React.useEffect(() => { if (activeTab === 'lotftfr' && window.__lcApply) window.__lcApply(lotFtfrNotes, updateLotFtfrNote); });
   React.useEffect(() => { window.__mfgAI = { allLogs, tcpData, feData, aggregateContribs, computeMetricsFromTotals, filterOeeLogs, productionPlan, oeeManual, activeTab, dtEq, dtSection, dtSelectedLines, dtYear, resolveLineName, getSectionDisplayLines }; });
+  // 엑셀에 넣기 전 값 다듬기: 날짜는 그 날짜 0시(UTC)로(안 그러면 한국 시간 9시간 차이로 하루 전 날짜가 됨), 숫자가 아닌 값(NaN·무한대)은 빈칸, 글자 속 제어문자 제거
+  const qprmVal = v => {
+    if (v === undefined || v === '' || v === null) return null;
+    if (v instanceof Date) return isNaN(v) ? null : new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+    if (typeof v === 'number') return isFinite(v) ? v : null;
+    if (typeof v === 'string') return v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+    return v;
+  };
+  // ExcelJS 는 «한 페이지에 맞춤» 시트를 쓸 때 sheetPr 안 순서를 틀리게 써서(pageSetUpPr 가 outlinePr 앞) Excel 이 «내용에 문제» 라며 복구를 물음 → 맞춤을 끄고 배율로만 인쇄
+  const qprmSheetFix = ws => { try { if (ws && ws.pageSetup) { ws.pageSetup.fitToPage = false; delete ws.pageSetup.fitToWidth; delete ws.pageSetup.fitToHeight; } } catch (e) {} };
   const qprmExport = async (sheetName, startRow, maxCol, dataRows, fname, renameTo) => {
     try {
       const bin = atob(window.QPRM_TEMPLATE_B64);
@@ -4974,6 +4984,7 @@ function App() {
         if (w.name !== sheetName) wb.removeWorksheet(w.id);
       });
       const ws = wb.getWorksheet(sheetName);
+      qprmSheetFix(ws);
       const tplRow = ws.getRow(startRow);
       const styles = [];
       for (let c = 1; c <= maxCol; c++) styles[c] = tplRow.getCell(c).style;
@@ -4985,7 +4996,7 @@ function App() {
           const cell = row.getCell(c);
           if (styles[c]) cell.style = JSON.parse(JSON.stringify(styles[c]));
           const v = vals[c - 1];
-          cell.value = v === undefined || v === '' ? null : v;
+          cell.value = qprmVal(v);
         }
       });
       if (renameTo) ws.name = renameTo.replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31);
@@ -5012,6 +5023,7 @@ function App() {
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buf.buffer);
         const ws = wb.getWorksheet(sp.baseSheet);
+        qprmSheetFix(ws);
         const tplRow = ws.getRow(sp.startRow);
         const styles = [];
         for (let c = 1; c <= sp.maxCol; c++) styles[c] = tplRow.getCell(c).style;
@@ -5023,7 +5035,7 @@ function App() {
             const cell = row.getCell(c);
             if (styles[c]) cell.style = JSON.parse(JSON.stringify(styles[c]));
             const v = vals[c - 1];
-            cell.value = v === undefined || v === '' ? null : v;
+            cell.value = qprmVal(v);
           }
         });
         const safeName = sp.sheetName.replace(/[\\\/\?\*\[\]:]/g, ' ').slice(0, 31);
